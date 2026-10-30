@@ -143,11 +143,11 @@ Outras observações:
 ### ERP (prêmio de risco de mercado)
 
 - `custo_capital.erp` = **5,0%**, decidido pelo usuário em 2026-10-30 como **premissa própria, sem
-  fonte externa** (opção A do `erp.md`: manter e documentar). Vale para o `brl_direto` (sobre a
+  fonte externa** (manter e documentar). Vale para o `brl_direto` (sobre a
   NTN-F em BRL, sem risco-país por cima). A revisão periódica fica a cargo do usuário.
 - Sensibilidade medida em 2026-10-30 (perfil moderado): ERP de 4% e 6% mudam o valor ponderado em
   cerca de +6,5%/−6,0% (PETR4), +4,1%/−3,9% (VALE3) e +4,0%/−3,8% (WEGE3).
-- Checagem de contexto (não insumo; `erp.md` seção 4), carteira do Ibovespa de 30/10/26 com
+- Checagem de contexto (só contexto, não insumo do Ke), carteira do Ibovespa de 30/10/26 com
   92,3% do peso (sem holdings), lucro LTM da controladora ÷ market cap: earnings yield de 9,4%
   (P/L 10,7x) contra NTN-F de 14,87%, ou seja, yield spread de −5,5 p.p. (−2 a −7 p.p. nos demais
   recortes). Não é ERP utilizável: ignora o crescimento do lucro e usa lucro de ciclo alto

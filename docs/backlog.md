@@ -12,7 +12,7 @@ Em andamento por escolha do usuário: **Fase 10 (financeiras)**. Depois, nesta o
 2. **Kd da PETR4**: fixar `custo_capital.kd: {metodo: manual, valor: ...}` no YAML dela. O piso
    do Kd na Rf muda o valor em até 18% (Kd histórico cru de 7,8% contra 14,87%): o Kd histórico
    mistura juros em dólar com variação cambial. Precisa de um valor escolhido pelo usuário.
-3. **ERP implícito do Ibovespa em BRL** (etapa B do `erp.md`, opção D): ver abaixo.
+3. **ERP implícito do Ibovespa em BRL** (opção D da decisão sobre o ERP): ver abaixo.
 4. Demais itens desta página (outras empresas, preço teto, GUI, recomendação).
 
 ## ERP implícito do Ibovespa em BRL
