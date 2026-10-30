@@ -134,6 +134,12 @@ Cobertura das 7 contas críticas: 100% em 23 companhias, 40% em BSLI4 e 91% em C
 BRBI11). BPAC3/BPAC5 cotam com volume baixo e preço defasado (BPAC3 + 2 × BPAC5 = R$ 58,05 contra
 BPAC11 a R$ 51,55 em 30/10/2026).
 
+### Units (FCA `valor_mobiliario`, 2026-10-30)
+
+A coluna `Composicao_BDR_Unit` traz a composição em texto livre: SANB11 "1 ON + 1 PN", BRBI11 "2
+ações preferenciais e 1 ação ordinária". BPAC11 vem com código 000000 (composição 1 ON + 2 PNA,
+já anotada no cadastro manual). Copiada para `acoes_por_unit` (ADR 0015).
+
 ### Cadastro (`cad_cia_aberta.csv`)
 
 - Várias linhas por CNPJ: uma por mercado (`TP_MERC`) e registros cancelados com outro `CD_CVM`

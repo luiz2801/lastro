@@ -217,3 +217,41 @@ def test_atualizar_cadastro_fca_do_ano_ainda_nao_publicado(
         agora=dt.datetime(2026, 10, 30, tzinfo=dt.UTC),
     )
     assert set(df["ticker"]) == {"BRFS3", "WEGE3"}
+
+
+def test_cadastro_manual_acoes_por_unit(
+    tmp_path: Path, cadastro_cvm: pd.DataFrame, valores_mobiliarios: pd.DataFrame
+) -> None:
+    caminho = tmp_path / "manual.csv"
+    caminho.write_text(
+        "ticker;cnpj;especie;tipo_modelo;escala_acoes;acoes_por_unit;observacao\n"
+        "ITUB11;60.872.504/0001-23;UNIT;;;3;unit fictícia\n",
+        encoding="utf-8",
+    )
+    df = cad.montar_cadastro(cadastro_cvm, valores_mobiliarios, cad.ler_cadastro_manual(caminho))
+    assert df.set_index("ticker").loc["ITUB11", "acoes_por_unit"] == 3
+    assert df.set_index("ticker").loc["ITUB4", "acoes_por_unit"] == 0
+    classes = {c.ticker: c for c in cad.empresa_por_ticker(df, "ITUB4").classes}
+    assert classes["ITUB11"].acoes_por_unit == 3 and classes["ITUB4"].acoes_por_unit == 0
+    # Arquivo antigo, sem a coluna, continua válido (CABECALHO_MANUAL dos outros testes).
+    assert (_manual(tmp_path)["acoes_por_unit"] == "").all()
+
+
+@pytest.mark.parametrize(
+    ("linha", "erro"),
+    [("ITUB11;60.872.504/0001-23;UNIT;;;1;x\n", "inteiro >= 2"), ("VALE3;;;;;3;x\n", "só vale")],
+)
+def test_cadastro_manual_acoes_por_unit_invalido(
+    tmp_path: Path,
+    cadastro_cvm: pd.DataFrame,
+    valores_mobiliarios: pd.DataFrame,
+    linha: str,
+    erro: str,
+) -> None:
+    caminho = tmp_path / "manual.csv"
+    caminho.write_text(
+        "ticker;cnpj;especie;tipo_modelo;escala_acoes;acoes_por_unit;observacao\n" + linha,
+        encoding="utf-8",
+    )
+    with pytest.raises(cad.ErroCadastro, match=erro):
+        cad.montar_cadastro(cadastro_cvm, valores_mobiliarios, cad.ler_cadastro_manual(caminho))

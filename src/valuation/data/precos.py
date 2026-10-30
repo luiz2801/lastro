@@ -281,8 +281,10 @@ def market_cap(
     """Soma `ações em circulação vezes preço` por espécie (ON e PN), sem tesouraria.
 
     `composicao` é o `composicao_capital.parquet` da companhia. A composição da CVM só separa
-    ON e PN; units não podem ser decompostas e são ignoradas. Se uma espécie com ações não
-    tiver ticker cotado, usa-se o preço da outra espécie, com aviso (aproximação).
+    ON e PN. Unit cotada com `acoes_por_unit` conhecido (cadastro manual, ADR 0015): ON e PN
+    valem preço da unit / ações por unit (a unit é o papel líquido; BPAC3/BPAC5 têm preço
+    defasado). Sem isso, units são ignoradas. Se uma espécie com ações não tiver ticker cotado,
+    usa-se o preço da outra espécie, com aviso (aproximação).
     """
     disponivel = composicao.loc[composicao["dt_refer"] <= pd.Timestamp(data_base)]
     if disponivel.empty:
@@ -292,6 +294,21 @@ def market_cap(
         "ON": int(ult["qt_acao_ordin_cap_integr"]) - int(ult["qt_acao_ordin_tesouro"]),
         "PN": int(ult["qt_acao_pref_cap_integr"]) - int(ult["qt_acao_pref_tesouro"]),
     }
+    unit = next((c for c in empresa.classes if c.acoes_por_unit > 0 and c.ticker in precos), None)
+    if unit is not None:
+        preco_acao = precos[unit.ticker] / unit.acoes_por_unit
+        pela_unit = tuple(
+            ClasseMarketCap(unit.ticker, esp, qtd, preco_acao)
+            for esp, qtd in quantidades.items()
+            if qtd > 0
+        )
+        aviso = (
+            f"ON e PN precificadas pela unit {unit.ticker} ({unit.acoes_por_unit} ações por "
+            f"unit: R$ {preco_acao:.2f} por ação)".replace(".", ",")
+        )
+        return MarketCap(
+            sum(c.acoes * c.preco for c in pela_unit), pela_unit, ult["dt_refer"].date(), (aviso,)
+        )
     cotados = {
         esp: next(
             (c.ticker for c in empresa.classes if c.especie == esp and c.ticker in precos), None

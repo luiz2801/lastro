@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.19 — 2026-10-30**
+**Versão 1.20 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -306,14 +306,15 @@ Cadeia: ticker →(FCA `valor_mobiliario`)→ CNPJ →(`cad_cia_aberta.csv`)→ 
 | `normalizar_ticker` | upper, tira `.SA` |
 | `ler_cadastro_cvm(caminho)` | 1 linha por CNPJ, preferindo `SIT == ATIVO` e `DT_INI_SIT` mais recente |
 | `ler_valores_mobiliarios(zips_fca, data_ref)` | Tickers ON/PN/UNIT em Bolsa; só o FCA (data+versão) mais recente por CNPJ; descarta lixo (`NÃO HÁ`, numéricos), regex `RE_TICKER`, e negociação encerrada antes de `data_ref`; duplicados ⇒ warning, fica o primeiro |
-| `ler_cadastro_manual(caminho)` | `ticker;cnpj;especie;tipo_modelo;escala_acoes;observacao`; valida valores; `#` comenta; campo vazio não sobrescreve |
+| `ler_cadastro_manual(caminho)` | `ticker;cnpj;especie;tipo_modelo;escala_acoes;acoes_por_unit;observacao` (`acoes_por_unit` opcional: arquivo sem a coluna vale); valida valores (`acoes_por_unit` inteiro ≥ 2); `#` comenta; campo vazio não sobrescreve |
 | `montar_cadastro(cvm, vm, manual)` | Junta; manual **sobrescreve** `especie`, `tipo_modelo`, `escala_acoes`; ticker só no manual exige `cnpj` e `especie`; CNPJ manual ≠ FCA ⇒ erro; ticker sem CD_CVM ⇒ descartado com warning |
 | `buscar(cadastro, texto)` | Contém, sem acento/caixa, em ticker+razão+nome; ≥ 4 dígitos também casam CNPJ |
 | `empresa_por_ticker(cadastro, ticker) -> Empresa` | Agrupa as classes do mesmo CNPJ. `tipo_modelo`/`escala_acoes` divergentes entre classes ⇒ `ErroCadastro` (corrija o manual) |
 | `atualizar_cadastro(*, ano, data_ref, dir_raw, dir_processed, caminho_manual, ttl, sessao, agora, forcar)` | Baixa cadastro + FCA de `ano-1` e `ano` (FCA do ano corrente pode dar 404 ⇒ ignorado), monta e grava `cadastro.parquet` |
 
 `Empresa(cnpj, cd_cvm, razao_social, nome_comercial, setor_cvm, tipo_modelo, escala_acoes, classes)`
-com `.tickers`. `ClasseAcao(ticker, especie)`.
+com `.tickers`. `ClasseAcao(ticker, especie, acoes_por_unit=0)`; `montar_cadastro` recusa
+`acoes_por_unit` em ticker que não é UNIT.
 
 **Receitas de modificação**
 - Reclassificar uma empresa (holding, financeira, escala de ações) ⇒ **editar
@@ -347,7 +348,7 @@ Divergência **não interrompe**; sobe como aviso. A decisão de política está
 | `BrapiProvider(sessao, token=None)` | Token de `BRAPI_TOKEN`. Sem token só PETR4/VALE3/MGLU3/ITUB4 (401 nos demais ⇒ `ErroPrecos`). Histórico via `range=Ny` (não validado sem token) |
 | `fechamento_ate(hist, data_base)` | Último `close` (**não ajustado**) ≤ data_base |
 | `preco_validado(ticker, data_base, principal, alternativo, *, tolerancia_rel, janela_dias=15)` | Fecha pelo principal; compara com `alternativo.cotacao` **apenas se** a data dela estiver a ≤ `TOLERANCIA_DIAS_COTACAO=4` dias do fechamento. Falha do alternativo = warning, não erro |
-| `market_cap(empresa, composicao, precos, data_base) -> MarketCap` | Última composição com `dt_refer ≤ data_base`. Qtd ON = `ordin_cap_integr − ordin_tesouro`; PN análogo. Preço = ticker cotado da espécie; se faltar, usa o da outra espécie com aviso. **UNITs são ignoradas** (a CVM só separa ON/PN). Soma `ações × preço` |
+| `market_cap(empresa, composicao, precos, data_base) -> MarketCap` | Última composição com `dt_refer ≤ data_base`. Qtd ON = `ordin_cap_integr − ordin_tesouro`; PN análogo. Preço = ticker cotado da espécie; se faltar, usa o da outra espécie com aviso. Unit cotada com `acoes_por_unit` (ADR 0015): ON e PN valem preço da unit / ações por unit, com aviso, e o preço de ON/PN avulsas é ignorado; sem isso, units são ignoradas. Soma `ações × preço` |
 
 Regra de projeto: `Close` para market cap; `Adj Close` para retornos (beta, Fase 6).
 
@@ -524,7 +525,7 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | Fase | Falta | Dica de onde conectar |
 |---|---|---|
 | 9 | gráficos (football field, cascata da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos` | `rodar` já tem tudo em memória: `ResultadoCenarios`, matrizes, `ResultadoMultiplos` (barras P/L, EV/EBITDA, P/VP pelos quartis: `implicitos.valor_p25/p75`; `mt.ROTULOS`) e `PerfilEfetivo.origem` (vai ao `meta.json`). `premissas_usadas.yaml` = serializar `Avaliacao.premissas` de cada cenário |
-| 10 | Market cap de units (BPAC11, BRBI11 viram "par ignorado"), YAMLs das financeiras em `config/empresas/`, golden das financeiras, fechamento da fase | Múltiplos financeiros já existem: `mt.fundamentos_financeira`, `MULTIPLOS_FINANCEIRA`, `regressao_pvp_roe`, `ResultadoMultiplos.nomes/regressao/valor_regressao` (ADR 0014); `cli._fundamentos` escolhe pelo tipo; setores `bancos` e `seguradoras` |
+| 10 | YAMLs das financeiras em `config/empresas/`, golden das financeiras, fechamento da fase | Múltiplos financeiros já existem: `mt.fundamentos_financeira`, `MULTIPLOS_FINANCEIRA`, `regressao_pvp_roe`, `ResultadoMultiplos.nomes/regressao/valor_regressao` (ADR 0014); `cli._fundamentos` escolhe pelo tipo; setores `bancos` e `seguradoras` |
 
 ## 13. Convenções que o código já segue (siga também)
 
@@ -637,7 +638,8 @@ vez de baixar dados reais. Sem rede nos testes.
 3a. Alguns FCA trazem o código CVM no lugar do ticker (CSN `4030`, CSN Mineração `25585`), `000000`
    para units (BPAC11) ou uma data de fim de negociação igual à de início (CEAB3), e a Marfrig
    (MBRF3) só lista o ADR: o ticker some do cadastro e entra pelo `cadastro_manual.csv` com
-   `cnpj` e `especie`. Units (BPAC11) não têm market cap (são ignoradas).
+   `cnpj` e `especie`. Unit só entra no market cap com `acoes_por_unit` no cadastro manual
+   (BPAC11, BRBI11, SANB11; o FCA traz a composição em `Composicao_BDR_Unit`).
 3b. MBRF3 foi mapeada para o CNPJ da Marfrig após a incorporação da BRF; não foi confirmado que
    as demonstrações já consolidam a BRF.
 3c. `config/universo_ibovespa.csv` vem do JSON da B3 (`GetPortfolioDay`, índice IBOV): rodar de

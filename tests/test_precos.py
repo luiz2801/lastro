@@ -1,3 +1,4 @@
+import dataclasses
 import datetime as dt
 from pathlib import Path
 
@@ -237,3 +238,25 @@ def test_market_cap_sem_preco_ou_sem_composicao() -> None:
         precos.market_cap(e, composicao(1, 1), {}, BASE)
     with pytest.raises(precos.ErroPrecos, match="composição"):
         precos.market_cap(e, composicao(1, 1), {"XXXX3": 1.0}, dt.date(2020, 1, 1))
+
+
+def test_market_cap_pela_unit() -> None:
+    # Unit = 1 ON + 2 PN a R$ 30: cada ação vale R$ 10; ON e PN cotadas (defasadas) são ignoradas.
+    e = dataclasses.replace(
+        empresa(("XXXX3", "ON"), ("XXXX4", "PN")),
+        classes=(
+            ClasseAcao("XXXX3", "ON"),
+            ClasseAcao("XXXX4", "PN"),
+            ClasseAcao("XXXX11", "UNIT", 3),
+        ),
+    )
+    mc = precos.market_cap(
+        e, composicao(100, 200, pn_tes=20), {"XXXX3": 50.0, "XXXX4": 1.0, "XXXX11": 30.0}, BASE
+    )
+    assert mc.valor == pytest.approx(280 * 10.0)
+    assert {c.especie: c.acoes for c in mc.classes} == {"ON": 100, "PN": 180}
+    assert all(c.ticker == "XXXX11" and c.preco == pytest.approx(10.0) for c in mc.classes)
+    assert "unit XXXX11" in mc.avisos[0]
+    sem_composicao = dataclasses.replace(e, classes=(ClasseAcao("XXXX11", "UNIT"),))
+    with pytest.raises(precos.ErroPrecos, match="nenhuma classe"):
+        precos.market_cap(sem_composicao, composicao(1, 1), {"XXXX11": 30.0}, BASE)

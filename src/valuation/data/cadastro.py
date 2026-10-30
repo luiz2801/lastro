@@ -60,6 +60,7 @@ COLUNAS_CADASTRO = [
     "situacao",
     "tipo_modelo",
     "escala_acoes",
+    "acoes_por_unit",
     "origem",
 ]
 
@@ -72,6 +73,7 @@ class ErroCadastro(Exception):
 class ClasseAcao:
     ticker: str
     especie: Especie
+    acoes_por_unit: int = 0  # só UNIT: ações (ON + PN) por unit; 0 = desconhecido
 
 
 @dataclass(frozen=True)
@@ -189,14 +191,25 @@ def ler_valores_mobiliarios(zips_fca: Sequence[Path], data_ref: dt.date) -> pd.D
 
 
 def ler_cadastro_manual(caminho: Path) -> pd.DataFrame:
-    """`ticker;cnpj;especie;tipo_modelo;escala_acoes;observacao` (UTF-8). Linhas com `#` no início
-    são comentários. Campos vazios não sobrescrevem nada."""
-    colunas = ["ticker", "cnpj", "especie", "tipo_modelo", "escala_acoes", "observacao"]
+    """`ticker;cnpj;especie;tipo_modelo;escala_acoes;acoes_por_unit;observacao` (UTF-8). Linhas
+    com `#` no início são comentários. Campos vazios não sobrescrevem nada. `acoes_por_unit` é
+    opcional (arquivo sem a coluna = vazia) e só vale para units (ADR 0015)."""
+    colunas = [
+        "ticker",
+        "cnpj",
+        "especie",
+        "tipo_modelo",
+        "escala_acoes",
+        "acoes_por_unit",
+        "observacao",
+    ]
     if not caminho.is_file():
         return pd.DataFrame(columns=colunas)
     df = pd.read_csv(
         caminho, sep=";", dtype=str, keep_default_na=False, comment="#", encoding="utf-8"
     )
+    if "acoes_por_unit" not in df.columns and "escala_acoes" in df.columns:
+        df.insert(list(df.columns).index("escala_acoes") + 1, "acoes_por_unit", "")
     if list(df.columns) != colunas:
         raise ErroCadastro(
             f"{caminho}: colunas esperadas {colunas}, encontradas {list(df.columns)}"
@@ -213,6 +226,15 @@ def ler_cadastro_manual(caminho: Path) -> pd.DataFrame:
     invalidos = df.loc[~df["escala_acoes"].isin(["", "1", "1000"]), "ticker"]
     if not invalidos.empty:
         raise ErroCadastro(f"{caminho}: escala_acoes deve ser 1 ou 1000 para {list(invalidos)}")
+    invalidos = df.loc[
+        (df["acoes_por_unit"] != "")
+        & ~df["acoes_por_unit"].map(lambda x: x.isdigit() and int(x) >= 2).astype(bool),
+        "ticker",
+    ]
+    if not invalidos.empty:
+        raise ErroCadastro(
+            f"{caminho}: acoes_por_unit deve ser um inteiro >= 2 para {list(invalidos)}"
+        )
     return df
 
 
@@ -240,6 +262,7 @@ def montar_cadastro(
     df["cd_cvm"] = df["cd_cvm"].astype("int64")
     df["tipo_modelo"] = df["setor_cvm"].map(classificar_tipo_modelo)
     df["escala_acoes"] = 1
+    df["acoes_por_unit"] = 0
 
     for linha in manual.to_dict("records"):
         ticker, cnpj = str(linha["ticker"]), str(linha["cnpj"])
@@ -256,6 +279,12 @@ def montar_cadastro(
             df["tipo_modelo"] = df["tipo_modelo"].mask(alvo, linha["tipo_modelo"])
         if linha["escala_acoes"]:
             df["escala_acoes"] = df["escala_acoes"].mask(alvo, int(linha["escala_acoes"]))
+        if linha["acoes_por_unit"]:
+            df["acoes_por_unit"] = df["acoes_por_unit"].mask(alvo, int(linha["acoes_por_unit"]))
+
+    nao_units = df.loc[(df["acoes_por_unit"] > 0) & (df["especie"] != "UNIT"), "ticker"]
+    if not nao_units.empty:
+        raise ErroCadastro(f"acoes_por_unit só vale para units: {list(nao_units)}")
 
     return df[COLUNAS_CADASTRO].sort_values("ticker").reset_index(drop=True)
 
@@ -300,8 +329,13 @@ def empresa_por_ticker(cadastro: pd.DataFrame, ticker: str) -> Empresa:
         tipo_modelo=cast(TipoModelo, primeira["tipo_modelo"]),
         escala_acoes=int(primeira["escala_acoes"]),
         classes=tuple(
-            ClasseAcao(str(t), cast(Especie, e))
-            for t, e in zip(da_empresa["ticker"], da_empresa["especie"], strict=True)
+            ClasseAcao(str(t), cast(Especie, e), int(n))
+            for t, e, n in zip(
+                da_empresa["ticker"],
+                da_empresa["especie"],
+                da_empresa.get("acoes_por_unit", pd.Series(0, index=da_empresa.index)),
+                strict=True,
+            )
         ),
     )
 

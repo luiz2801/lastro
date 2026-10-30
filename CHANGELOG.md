@@ -15,6 +15,14 @@
 - `CLAUDE.md`: referenciamento das regras modulares na seção 0 (regras 14 e 15) e nas seções 6, 7, 11 e 15 apontando para `docs/regras/`.
 - `CONTRIBUTING.md`, `README.md` e `guia.md`: referências atualizadas para `docs/regras/`; versão do `guia.md` atualizada para 1.19.
 
+### Fase 10 — Units no market cap
+- `data/cadastro.py`: coluna opcional `acoes_por_unit` no cadastro manual e em `ClasseAcao`.
+- `data/precos.py`: unit cotada com composição conhecida precifica ON e PN (preço da unit / ações
+  por unit).
+- `config/cadastro_manual.csv`: BPAC11 e BRBI11 (3 ações por unit) e SANB11 (2); BPAC11 e BRBI11
+  entram nos pares de bancos.
+- ADR 0015; `guia.md` 1.20.
+
 ### Fase 10 — Financeiras: múltiplos e pares
 - `modelos/multiplos.py`: `fundamentos_financeira`, `MULTIPLOS_FINANCEIRA` (P/L, P/VP, DY),
   regressão P/VP × ROE (`regressao_pvp_roe`, `valor_regressao`).
