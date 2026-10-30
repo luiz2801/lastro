@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.24 — 2026-10-30**
+**Versão 1.25 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -51,7 +51,7 @@
 | Saída | `saida/{csv,arquivos,real,graficos}.py` | ✅ CSV e matrizes, `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais e gráficos PNG (seção 19) |
 | CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar` |
 
-~10.200 linhas de código, 454 testes (11 golden pulados por motivo declarado), mypy `strict`,
+~10.200 linhas de código, 455 testes (11 golden pulados por motivo declarado), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -532,8 +532,8 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 |---|---|---|
 | 11 | Só entra se o usuário pedir: modo em lote/screening, SOTP/NAV para holdings, Monte Carlo, deck de commodities, tratamento de JCP, diluição | `rodar` é uma empresa por vez; o motor (funções puras) já aceita qualquer `PremissasEmpresa` |
 
-Também fora do código hoje: a explicação de métricas na tela, GUI, ERP implícito do Ibovespa e o
-Kd manual da PETR4 (`docs/backlog.md`).
+Também fora do código hoje: a explicação de métricas na tela, GUI, ERP implícito do Ibovespa
+(`docs/backlog.md`).
 
 ## 13. Convenções que o código já segue (siga também)
 
@@ -692,7 +692,8 @@ vez de baixar dados reais. Sem rede nos testes.
     circulante.
 23. `despesas_financeiras` (DRE `3.06.02`) inclui variação cambial e monetária: o Kd histórico bruto
     dos pilotos vai de 7,8% (PETR4) a 44% (WEGE3). O valor usado costuma ser o limite da faixa;
-    confira `kd_bruto` × `kd` no `wacc.csv`.
+    confira `kd_bruto` × `kd` no `wacc.csv`. A PETR4 usa Kd **manual** (15,60% = Rf + 0,60%, ADR
+    0017): número fixo, refazer quando a Rf mudar.
 24. Na tabela do custo de capital, `valor` é sempre `float64`: texto em `valor` quebraria o decimal
     `,` do CSV pt-BR. O mesmo vale para as colunas numéricas do `resumo.csv` (`_resumo` força
     `float64`, inclusive as vazias).

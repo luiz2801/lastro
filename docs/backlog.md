@@ -32,7 +32,7 @@ Depois, nesta ordem:
 1. ✅ **Fase 9 — Saídas** (roadmap; ADR 0016): gráficos (football field com os quartis dos múltiplos, cascata
    da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`,
    `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos`.
-2. **Kd da PETR4**: fixar `custo_capital.kd: {metodo: manual, valor: ...}` no YAML dela. O piso
+2. ✅ **Kd da PETR4** (ADR 0017, Rf + 0,60% = 15,60%): fixar `custo_capital.kd: {metodo: manual, valor: ...}` no YAML dela. O piso
    do Kd na Rf muda o valor em até 18% (Kd histórico cru de 7,8% contra 14,87%): o Kd histórico
    mistura juros em dólar com variação cambial. Precisa de um valor escolhido pelo usuário.
 3. **ERP implícito do Ibovespa em BRL** (opção D da decisão sobre o ERP): ver abaixo.
@@ -281,7 +281,7 @@ Depende das fases 7 e 8 (já concluídas) e é pré-requisito natural para GUI e
 
 *Entrega:* relatório completo e reprodutível para qualquer empresa já mapeada; base pronta para GUI.
 
-### Etapa 3 — Ajuste pontual do Kd da PETR4
+### Etapa 3 — Ajuste pontual do Kd da PETR4 ✅ (ADR 0017)
 
 Pequena, mas elimina erro metodológico que distorce o valor em até 18%.
 

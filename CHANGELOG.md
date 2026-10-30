@@ -2,6 +2,11 @@
 
 ## [Não lançado]
 
+### Kd manual da PETR4
+- `config/empresas/PETR4.yaml`: `custo_capital.kd` manual de 15,60% (Rf 15,00% + spread de 0,60%
+  do guia `kd_petrobras.md`). Valor ponderado do perfil moderado: R$ 43,36 → R$ 42,79 (−1,3%).
+- ADR 0017; `docs/fontes.md` (premissa do usuário); `guia.md` 1.25; backlog (Etapa 3 feita).
+
 ### Fase 9 concluída (saídas completas)
 - `valuation rodar` (DCF e DDM) grava também `meta.json` (versão e commit do código, comando,
   perfil, moeda, fontes com URL/data/sha256 da CVM, hash das contas padronizadas, avisos),

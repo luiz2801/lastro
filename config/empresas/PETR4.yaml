@@ -65,7 +65,9 @@ pares:
 
 custo_capital:                      # sobrescritas opcionais (Fase 6)
   beta: {metodo: regressao}          # regressao | comparaveis | manual (com valor)
-  kd: {metodo: historico}            # historico | manual (com valor)
+  # Kd marginal em BRL (ADR 0017): Rf NTN-F 15,00% (30/10/2026) + spread de crédito 0,60%
+  # (premissa do guia kd_petrobras.md; rating BBB/BB+). É número fixo: refaça se a Rf mudar.
+  kd: {metodo: manual, valor: 0.156}  # historico | manual (com valor)
 
 # Aviso: Setor de commodity (petroleo_gas): o histórico reflete o ciclo de preços; revise
 #   crescimento e margens à mão antes de confiar no resultado.

@@ -27,6 +27,7 @@ Itens `[DECIDIDO]` não mudam por ADR sem o aval do usuário (regra 7 do `CLAUDE
 | [0014](0014-multiplos-e-pares-das-financeiras.md) | Múltiplos das financeiras (P/L, P/VP, DY, sem EV), regressão P/VP × ROE, setores `bancos` (18) e `seguradoras` (4), escala de ações de 5 bancos | 11.4 | aceito |
 | [0015](0015-units-no-market-cap.md) | `acoes_por_unit` no cadastro manual; com unit cotada, ON e PN valem preço da unit / ações por unit (BPAC11, BRBI11, SANB11) | 6.2, 6.4 | aceito |
 | [0016](0016-saidas-da-fase-9.md) | Saídas da Fase 9: IPCA do Focus para deflacionar (último Focus além do horizonte), `valores_reais.csv` longo, `meta.json` com commit e hashes, `premissas_usadas.yaml`, gráficos sem `pyplot`, cascata só no DCF, DDM anualizado no gráfico, `--sem-graficos` | 11.5, 12, 13, 14 | aceito |
+| [0017](0017-kd-manual-da-petr4.md) | Kd da PETR4 manual: Rf (NTN-F) + spread de crédito de 0,60% do guia do usuário = 15,60%; número fixo; efeito de −1,3% no valor | 10.3 | aceito |
 
 ## Quando escrever um ADR
 

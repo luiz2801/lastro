@@ -111,6 +111,12 @@ def test_yamls_do_repositorio_carregam() -> None:
         assert p.pares.setor in setores
 
 
+def test_petr4_usa_kd_manual() -> None:
+    # ADR 0017: o Kd histórico da PETR4 mistura variação cambial; o marginal é fixado à mão.
+    kd = pm.carregar_premissas(pm.caminho_premissas("PETR4", DIR_EMPRESAS)).custo_capital.kd
+    assert kd.metodo == "manual" and kd.valor is not None and 0 < kd.valor < 1
+
+
 def _sugestoes() -> sg.Sugestoes:
     h = historico_anual([0.10] * 9, [0.20] * 10)
     return sg.sugerir(

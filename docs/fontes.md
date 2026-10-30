@@ -184,6 +184,15 @@ já anotada no cadastro manual). Copiada para `acoes_por_unit` (ADR 0015).
   recortes). Não é ERP utilizável: ignora o crescimento do lucro e usa lucro de ciclo alto
   (PETR4). Ver o ERP implícito do índice no `docs/backlog.md`.
 
+### Kd da PETR4 (custo marginal da dívida)
+
+- `config/empresas/PETR4.yaml > custo_capital.kd` = **15,60%** (manual), decidido pelo usuário em
+  2026-10-30: Rf (NTN-F longa, 15,00% na data-base) + **spread de crédito de 0,60%** (rating
+  BBB/BB+), que vem do guia do usuário `kd_petrobras.md` como **premissa própria, sem fonte
+  externa conferida** (yield de bonds e debêntures da Petrobras não estão nas fontes gratuitas da
+  v1). Os números de exemplo do guia (Treasury, EMBI+, NTN-F de 11,80%) não entram. Revisão
+  periódica (e a atualização quando a Rf mudar) fica a cargo do usuário. Ver ADR 0017.
+
 ### Chaves entre arquivos
 
 - `composicao_capital`: só `CNPJ_CIA` (sem `CD_CVM`). Colunas `QT_ACAO_{ORDIN,PREF,TOTAL}_CAP_INTEGR` e `QT_ACAO_{ORDIN,PREF,TOTAL}_TESOURO`.

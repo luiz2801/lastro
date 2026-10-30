@@ -175,6 +175,8 @@ Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
   P/L, P/VP e DY sem EV, regressão P/VP × ROE, pares de todos os bancos cotados.
 - **Units** ([ADR 0015](docs/decisoes/0015-units-no-market-cap.md)): ON e PN pelo preço da unit
   quando a composição está no cadastro manual (BPAC11, BRBI11, SANB11).
+- **Kd da PETR4** ([ADR 0017](docs/decisoes/0017-kd-manual-da-petr4.md)): manual, Rf + spread de
+  0,60% do guia do usuário (15,60%), número fixo; valor −1,3%.
 - **Saídas** ([ADR 0016](docs/decisoes/0016-saidas-da-fase-9.md)): valores reais pelo IPCA do Focus
   (último Focus além do horizonte), `meta.json` com commit e hashes das fontes, gráficos sem
   `pyplot`, cascata só no DCF.
