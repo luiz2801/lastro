@@ -36,7 +36,7 @@ Depois, nesta ordem:
    do Kd na Rf muda o valor em até 18% (Kd histórico cru de 7,8% contra 14,87%): o Kd histórico
    mistura juros em dólar com variação cambial. Precisa de um valor escolhido pelo usuário.
 3. **ERP implícito do Ibovespa em BRL** (opção D da decisão sobre o ERP): ver abaixo.
-4. Demais itens desta página (outras empresas, preço teto, GUI, recomendação).
+4. Demais itens desta página (outras empresas, preço teto, explicação de métricas, GUI, recomendação).
 
 ## ERP implícito do Ibovespa em BRL
 
@@ -95,13 +95,152 @@ Definir antes de implementar qual "preço teto" se quer:
 - Em qualquer caso: coluna em `resumo.csv`, linha vertical no football field e comparação com o
   preço de mercado.
 
+## Explicação do significado das métricas exibidas (glossário / legendas)
+
+Ao exibir métricas nos comandos de tela e relatórios (tabelas Rich da CLI, saídas da Fase 9 e
+eventual GUI), mostrar também de forma didática o que **todas** as métricas levadas em consideração
+significam, sua fórmula/origem e como interpretá-las no contexto de valuation:
+
+### 1. Métricas de Valuation e Modelagem (DCF, DDM, Cenários)
+- **WACC** (*Weighted Average Cost of Capital*): custo médio ponderado de capital; taxa de desconto
+  mínima exigida pelos fornecedores de capital (credores e acionistas) para remunerar o risco dos ativos operacionais.
+- **g** (taxa de crescimento na perpetuidade): taxa estimada de expansão a longo prazo dos fluxos de
+  caixa, ancorada nas projeções macroeconômicas de longo prazo (PIB + inflação da moeda de reporte).
+- **RONIC** (*Return on New Invested Capital*): retorno sobre o novo capital investido na perpetuidade;
+  mede a eficiência marginal com que novos investimentos geram lucros futuros e define a taxa de
+  reinvestimento terminal (`g / RONIC`).
+- **FCFF** (*Free Cash Flow to Firm*): fluxo de caixa livre da firma; caixa gerado pelas operações
+  disponível a todos os provedores de capital após investimentos operacionais e impostos.
+- **FCFE / Projeção de Dividendos**: fluxo de caixa disponível para os acionistas (usado no DDM das
+  instituições financeiras).
+- **Valor Terminal (VT)** e **VT / EV**: valor presente dos fluxos perpétuos além do horizonte explícito
+  e sua proporção frente ao valor total da firma (termômetro de sensibilidade e incerteza).
+- **EV** (*Enterprise Value* / Valor da Firma): valor presente operacional total do negócio (soma do
+  VP dos fluxos explícitos + VP do VT).
+- **Equity Value** (Valor do Patrimônio Líquido): valor atribuível aos acionistas após ajuste da ponte
+  (EV ajustado por caixa, dívida e passivos).
+- **Valor Justo por Ação** e **Valor Ponderado**: valor por ação resultante do modelo e sua média
+  ponderada pelos pesos dos cenários definidos no perfil do investidor.
+- **WACC Implícito** e **Ke Implícito**: taxas de desconto que igualam o valor justo ao preço atual de
+  mercado (mostram qual taxa de retorno o mercado está precificando).
+- **Lucro Residual**: geração de valor além do custo de oportunidade do capital próprio no DDM
+  (`Lucro Líquido − Ke × PL`).
+- **Margem de Segurança** e **Preço Máximo de Compra**: desconto exigido pelo perfil de risco sobre o
+  valor justo ponderado (`Valor Justo × (1 − margem)`).
+
+### 2. Custo de Capital (CAPM, Dívida e Estrutura)
+- **Rf** (taxa livre de risco): remuneração de ativo soberano de longo prazo sem risco de calote
+  (ex.: títulos do Tesouro / NTN-F).
+- **ERP** (*Equity Risk Premium*): prêmio de risco adicional exigido por investir em ações em vez de
+  renda fixa soberana.
+- **Beta ($\beta$)**: sensibilidade sistemática do retorno da ação frente ao mercado (desalavancado pelos
+  pares e realavancado pela estrutura da empresa).
+- **CRP** (*Country Risk Premium*): prêmio de risco país somado quando se utiliza taxa base internacional.
+- **Ke** (custo do capital próprio): retorno mínimo anual exigido pelos acionistas, estimado pelo CAPM.
+- **Kd** (custo da dívida bruto e líquido): taxa média de juros paga sobre empréstimos e seu custo
+  efetivo após benefício fiscal (`Kd × (1 − t)`).
+- **Pesos da Estrutura de Capital** ($D/(D+E)$ e $E/(D+E)$): proporção da dívida bruta e do equity a
+  valor de mercado no balanço da empresa.
+- **Alíquota Marginal/Operacional ($t$)**: alíquota nominal ou efetiva de IR/CSLL para o cálculo do
+  benefício fiscal dos juros.
+
+### 3. Métricas Contábeis e Operacionais (Não Financeiras)
+- **Receita Líquida**: receita operacional após deduções de vendas, devoluções e impostos indiretos.
+- **EBIT Contábil e EBIT Ajustado**: resultado operacional antes de juros e tributos; o ajustado expurga
+  não recorrentes e equivalência patrimonial (quando coligadas entram na ponte).
+- **D&A**: despesas de depreciação e amortização do período.
+- **EBITDA e EBITDA Ajustado**: lucro antes de juros, tributos, depreciação e amortização; aproximação
+  da geração bruta de caixa das operações.
+- **Margem EBITDA** e **Margem EBIT**: eficiência operacional bruta sobre a receita líquida.
+- **NOPAT** (*Net Operating Profit After Tax*): lucro operacional desprovido de alavancagem financeira,
+  tributado pela alíquota operacional.
+- **Capex**: investimentos em bens de capital (imobilizado e intangível) para manutenção e expansão.
+- **NWC** (*Net Working Capital*) e **ΔNWC**: capital de giro operacional líquido (ativos operacionais −
+  passivos operacionais) e a sua variação de caixa consumida/liberada no exercício.
+- **CFO** (Fluxo de Caixa Operacional) e **FCF Caixa**: geração de caixa das atividades operacionais
+  declarada na DFC e saldo livre após capex contábil.
+- **Dívida Bruta, Caixa & Aplicações e Dívida Líquida**: saldo de financiamentos e arrendamento (IFRS 16),
+  deduzido de disponibilidades e equivalentes.
+- **Alavancagem (Dívida Líquida / EBITDA)**: múltiplos de capacidade de solvência e cobertura de dívida.
+- **ROIC** (*Return on Invested Capital*): retorno percentual sobre o capital investido operacional médio
+  (`NOPAT / Capital Investido`), medindo o poder de geração de valor da atividade.
+- **Alíquota Efetiva vs. Alíquota Operacional**: relação real do IR/CSLL sobre o LAIR versus a alíquota
+  aplicada sobre o EBIT operacional (limitada à nominal).
+
+### 4. Métricas Contábeis de Financeiras (Bancos e Seguradoras)
+- **Lucro Líquido da Controladora**: resultado líquido final atribuível aos detentores do capital da holding.
+- **Patrimônio Líquido da Controladora**: capital próprio dos acionistas (excluídos minoritários).
+- **ROE** (*Return on Equity*): rentabilidade do capital dos acionistas (`Lucro Líquido / PL inicial`).
+- **ROA** (*Return on Assets*): rentabilidade sobre os ativos totais administrados pela instituição.
+- **Alavancagem de Balanço (Ativo / PL)**: multiplicador do capital próprio na intermediação financeira.
+- **Dividendos Pagos e Payout**: volume de proventos distribuídos e porcentagem do lucro repassada aos acionistas.
+- **ROE de Longo Prazo (ROE_LP)** e **Payout de Longo Prazo**: rentabilidade e taxa de distribuição
+  sustentáveis na perpetuidade.
+
+### 5. Itens da Ponte de Valor (EV → Equity)
+- **Caixa e Aplicações Financeiras** (incluindo caixa extra identificado nas notas).
+- **Dívida Bruta** (empréstimos e financiamentos CP/LP + arrendamento mercantil IFRS 16).
+- **Participação de Não Controladores (Minoritários)**: parcela do PL de subsidiárias não detida pela controladora.
+- **Investimentos em Coligadas/Associadas**: valor contábil de participações somado na ponte quando
+  descontado do resultado operacional.
+- **Passivos Extras (Dívida Extra)**: provisões para litígios/contingências e obrigações atuariais de
+  planos de pensão deduzidos do valor do acionista.
+
+### 6. Múltiplos de Mercado e Comparáveis
+- **P/L** (*Price to Earnings* / Preço sobre Lucro): relação entre a cotação e o lucro líquido por ação.
+- **P/VP** (*Price to Book* / Preço sobre Valor Patrimonial): relação entre o valor de mercado e o patrimônio líquido.
+- **EV/EBITDA** e **EV/EBIT**: valor da firma sobre o resultado operacional (independente da estrutura de capital).
+- **EV/Receita** e **EV/FCF**: valor da firma sobre faturamento e sobre fluxo de caixa livre.
+- **Dividend Yield**: rendimento de dividendos dos últimos 12 meses sobre a cotação atual da ação.
+- **Percentis de Comparáveis (P25, Mediana, P75)**: métricas estatísticas dos pares setoriais para
+  estimar a faixa de valor implícito.
+- **Regressão P/VP × ROE**: calibração estatística do múltiplo patrimonial justo em função da rentabilidade do banco.
+
+### Requisitos de Implementação e Apresentação
+- **CLI**:
+  - Parâmetro global ou de comando `--explicar` / `--glossario` (ou comando dedicado `valuation glossario [METRICA]`).
+  - Notas de rodapé / legendas (`caption` ou painel explicativo do Rich) nas tabelas que usam siglas e termos técnicos.
+  - Modo padrão sucinto mantido para agilidade, com explicações contextuais ativáveis pelo usuário.
+- **Fase 9 (Saídas & Relatórios)**:
+  - Documentação embutida em `meta.json` e arquivo de dicionário de dados gerado junto aos relatórios.
+  - Tooltips e legendas descritivas nos gráficos (ex.: football field, sensibilidade, cascata da ponte).
+- **Interface Gráfica (GUI)**:
+  - Tooltips informativos ao passar o mouse sobre cada cabeçalho de coluna, sigla ou gráfico.
+
+## Tickers favoritos e cache local
+
+Criar um mecanismo de watchlist (tickers favoritos) para agilizar o uso cotidiano:
+
+1. **Lista de favoritos** (`config/favoritos.yaml` ou campo em `settings.yaml`): lista de tickers
+   marcados pelo usuário. Exige decisão de formato (YAML simples vs. seção em `settings.yaml`);
+   registrar em ADR quando implementado.
+2. **Aba / view de favoritos na GUI**: quando a interface gráfica for implementada (ver seção
+   "Interface gráfica"), exibir os favoritos em destaque — tabela resumida com preço, valor justo
+   ponderado, upside e data da última avaliação.
+3. **Cache local dos dados dos favoritos** (JSON ou parquet agregado): pré-baixar e serializar os
+   dados de mercado (preço, macro, market cap) e os resultados do `rodar` para os tickers
+   favoritos, eliminando a rede como gargalo nas consultas rotineiras. Ponto de atenção: definir
+   TTL e estratégia de invalidação (flag `--atualizar-favoritos`); o cache de dados brutos CVM
+   já existe em `data/raw/` — o que falta é um snapshot dos resultados calculados (ex.:
+   `saida/{TICKER}/{data}/resumo.json`).
+
+## Monte Carlo em C++
+
+Quando a Fase 11 for iniciada, avaliar a implementação de simulação Monte Carlo para o DCF em C++:
+
+- **Motivação**: simulações com dezenas de milhares de trajetórias (distribuições de WACC, g,
+  margem e crescimento correlacionadas) tornam o gargalo a CPU, não a rede — contexto em que
+  C++ se justifica.
+- **Integração sugerida**: extensão Python via `pybind11` ou `cffi`, mantendo a CLI e a lógica
+  de negócio em Python; só o núcleo de simulação migra para C++.
+- **Pré-requisito**: definir a distribuição de cada variável de entrada (normal? triangular?
+  bootstrap do histórico?) e o que a saída representa (distribuição do valor por ação, VaR do
+  upside). Registrar em ADR antes de implementar.
+- **Alternativa de curto prazo**: `numpy`/`scipy` com vetorização (ex.: `np.random` em lote)
+  é suficiente para até ~100 k trajetórias sem C++.
+
 ## Recomendação (compra / venda)
 
-**Conflita com o `CLAUDE.md`**, que pede mensagem neutra ("preço de mercado X; abaixo/acima do
-preço máximo para o perfil Y", seção 8.4), sem recomendação de compra ou venda, e trata o projeto
-como ferramenta de estudo, não de recomendação. Para entrar:
-
-- Mudar essa regra no `CLAUDE.md`, com o aval do usuário, e registrar a decisão num ADR.
 - Definir os critérios: por exemplo, faixas de upside contra o preço teto/preço máximo, retorno
   esperado contra o hurdle do perfil e confiança (avisos de QA, poucos pares, VT/EV alto).
 - Manter o aviso de que é uso pessoal e não constitui recomendação de investimento.
