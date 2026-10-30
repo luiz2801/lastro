@@ -814,7 +814,8 @@ Modo em lote/screening, SOTP/NAV para holdings, Monte Carlo, deck de commodities
 
 ## 19. Dúvidas em aberto (o agente pergunta ao usuário quando chegar a hora)
 
-1. ERP e fonte preferida do prêmio de risco (Fase 6).
+1. ~~ERP e fonte preferida do prêmio de risco (Fase 6).~~ Respondida: 5,0% como premissa do
+   usuário, sem fonte externa (`docs/fontes.md`); ERP implícito do Ibovespa no `docs/backlog.md`.
 2. Taxa livre de risco: Tesouro Prefixado 10 anos automático ou valor manual (Fase 3/6).
 3. ~~Teto do crescimento perpétuo em termos nominais (Fase 7).~~ Respondida: 5,0% (ADR 0008).
 4. ~~Lista final de empresas do universo (Ibovespa atual) e pares por setor (Fase 8).~~ Respondida

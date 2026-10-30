@@ -151,8 +151,9 @@ Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
 - **Universo e Vale** ([ADR 0010](docs/decisoes/0010-universo-ibovespa-e-pares-da-mineracao.md)):
   universo da carteira teórica da B3 e CSNA3 como terceiro par da mineração.
 
-Os parâmetros de mercado de `config/settings.yaml` (ERP, faixa do Kd, Rf e inflação em USD)
-e o mapeamento perfil → parâmetros continuam **placeholders** até o usuário revisá-los (dúvidas em aberto na seção 19 do `CLAUDE.md`).
+O ERP (5,0%) é premissa do usuário, sem fonte externa (`docs/fontes.md`). Os demais parâmetros de
+mercado de `config/settings.yaml` (faixa do Kd, Rf e inflação em USD) e o mapeamento perfil →
+parâmetros continuam **placeholders** até o usuário revisá-los (dúvidas em aberto na seção 19 do `CLAUDE.md`).
 
 ## Riscos e limitações
 

@@ -19,7 +19,7 @@ impostos:
 custo_capital:
   metodo: brl_direto               # brl_direto | usd_crp
   rf_brl: {fonte: tesouro_prefixado_longo, override: null}
-  erp: 0.05                        # PLACEHOLDER
+  erp: 0.05                        # premissa do usuário (2026-10-30), sem fonte externa; ver docs/fontes.md
   crp: 0.0                         # só usado em usd_crp
   rf_usd: 0.04                     # PLACEHOLDER, só usd_crp
   inflacao_usd_lp: 0.02            # PLACEHOLDER, só usd_crp

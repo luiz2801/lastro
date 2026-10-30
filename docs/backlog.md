@@ -2,6 +2,38 @@
 
 Itens fora do roadmap das fases (seção 17 do `CLAUDE.md`), registrados para depois.
 
+## Ordem de prioridade (decidida em 2026-10-30)
+
+Em andamento por escolha do usuário: **Fase 10 (financeiras)**. Depois, nesta ordem:
+
+1. **Fase 9 — Saídas** (roadmap): gráficos (football field com os quartis dos múltiplos, cascata
+   da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`,
+   `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos`.
+2. **Kd da PETR4**: fixar `custo_capital.kd: {metodo: manual, valor: ...}` no YAML dela. O piso
+   do Kd na Rf muda o valor em até 18% (Kd histórico cru de 7,8% contra 14,87%): o Kd histórico
+   mistura juros em dólar com variação cambial. Precisa de um valor escolhido pelo usuário.
+3. **ERP implícito do Ibovespa em BRL** (etapa B do `erp.md`, opção D): ver abaixo.
+4. Demais itens desta página (outras empresas, preço teto, GUI, recomendação).
+
+## ERP implícito do Ibovespa em BRL
+
+Opção D da decisão sobre o ERP; hoje o `custo_capital.erp` é a premissa de 5,0% do usuário.
+
+- Módulo puro `custo_capital/erp_implicito.py` (fluxos, valor do índice, Rf e g por parâmetro; sem
+  rede nem `date.today()`), no estilo de `cenarios.taxa_implicita` (`brentq`): resolve
+  `P0 = Σ FC_t / (1 + ke)^t` e `ERP = ke − Rf`.
+- Dados já disponíveis: `config/universo_ibovespa.csv`, `metricas_ltm` (lucro, dividendos) e
+  market cap (com a escala de ações corrigida). Fluxo agregado = dividendos (e recompras, se
+  houver).
+- Ponto frágil: o crescimento esperado do índice, sem consenso de analistas (decisão 12). Usar o
+  Focus (PIB + inflação) como teto de longo prazo e o histórico no curto prazo; sair com **faixa e
+  aviso**, não número único.
+- Exige ADR, campo novo (`custo_capital.erp.fonte: manual | implicito_ibovespa`) em `config.py` e
+  `settings.yaml`, testes à mão, `guia.md` e `CHANGELOG.md`.
+- Não aplicar ERP por setor, não calibrar no preço da empresa avaliada, não somar `crp` em BRL.
+- O yield spread (earnings yield − NTN-F) fica como termômetro de contexto no `mercado` (hoje:
+  −5,5 p.p., em `docs/fontes.md`), nunca como insumo do Ke.
+
 ## Rodar o valuation em outras empresas
 
 Hoje o escopo são os pilotos PETR4, VALE3 e WEGE3. Para outras companhias da B3:

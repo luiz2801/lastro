@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.10 — 2026-10-30**
+**Versão 1.11 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
 > (Fases 0 a 8 implementadas) para que você não precise reler os módulos. Para o que ainda
@@ -199,7 +199,7 @@ validados.
 | `impostos.aliquota_nominal` | 0.34 | Teto da alíquota operacional do NOPAT histórico (`nao_financeiras.metricas`, via `historico`); alíquota usada quando LAIR ≤ 0. Limite da alíquota projetada quando `aliquota_imposto.limite_superior` do YAML é `null` |
 | `custo_capital.rf_brl.override` | null | Se numérico, `carregar_macro` não consulta Tesouro e marca Rf como `manual` |
 | `custo_capital.metodo` | brl_direto | Método do Ke; empresa que reporta em USD usa `usd_crp` de qualquer forma (aviso) |
-| `custo_capital.erp` | 0.05 | Prêmio de risco de mercado no Ke (os dois métodos) |
+| `custo_capital.erp` | 0.05 (premissa do usuário, sem fonte externa; `docs/fontes.md`) | Prêmio de risco de mercado no Ke (os dois métodos). Em `brl_direto` é sobre a NTN-F em BRL; em `usd_crp`, ERP de mercado maduro. ±1 p.p. mexe de 4% a 6,5% no valor ponderado dos pilotos |
 | `custo_capital.crp`, `rf_usd`, `inflacao_usd_lp` | 0 / 0.04 / 0.02 | Só `usd_crp`: Ke_USD = rf_usd + β × ERP + CRP; Fisher com `inflacao_usd_lp`. `rf_usd` também é a Rf do limite do Kd de quem reporta em USD |
 | `custo_capital.beta.metodo` | regressao | Método quando o YAML da empresa **não** declara `custo_capital.beta` |
 | `custo_capital.beta.janela_semanas` | 260 | Semanas da regressão e da escolha da classe mais líquida; < 52 disponíveis ⇒ erro |

@@ -2,6 +2,13 @@
 
 ## [Não lançado]
 
+### ERP e backlog
+- `custo_capital.erp` mantido em 5,0% como premissa do usuário (sem fonte externa), registrado em
+  `docs/fontes.md` com a sensibilidade e a checagem pelo yield spread do Ibovespa (−5,5 p.p.,
+  só contexto).
+- `docs/backlog.md`: ordem de prioridade (Fase 9, Kd da PETR4, ERP implícito do Ibovespa).
+- `guia.md` 1.11.
+
 ### Universo do Ibovespa e pares da mineração
 - `config/cadastro_manual.csv`: `escala_acoes` 1000 para outras 19 companhias do universo (23
   tickers; ITUB4, ABEV3, AXIA3 etc.), detectadas pela razão entre as ações da CVM e a quantidade
