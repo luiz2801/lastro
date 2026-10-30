@@ -24,8 +24,10 @@
 6. Falhe alto, não silenciosamente: validações contábeis (seção 7.5) geram erro ou aviso explícito.
 7. Em dúvida de negócio (não de código), **pergunte ao usuário** em vez de decidir sozinho. Liste as dúvidas pendentes na seção 19.
 8. Código tipado (`mypy`/`pyright` limpo), formatado com `ruff`, com testes `pytest`. Identificadores de domínio em português (`receita_liquida`, `divida_liquida`), termos genéricos de programação em inglês quando for o idioma natural da biblioteca.
-9. Commits pequenos, uma mensagem por mudança lógica. Mantenha `CHANGELOG.md`.
+9. Commits pequenos e atômicos, uma mensagem por mudança lógica, no formato `area: o quê` (ver `CONTRIBUTING.md`). **Antes de todo commit, `make lint tipos testes` passa**; se não puder rodar, não faça o commit e avise o usuário. Mantenha `CHANGELOG.md`.
 10. **Consulte o `guia.md` antes de modificar** qualquer código (leia a seção do módulo, convenções e armadilhas) e **atualize-o na mesma entrega** de toda alteração de lógica, contrato, parâmetro, arquivo ou comando, subindo a versão no topo conforme a regra de manutenção do próprio guia. O guia é uma foto do estado atual (história vai no `CHANGELOG.md`); se código e guia discordarem, o código vence e o guia deve ser corrigido no mesmo commit.
+11. **Este documento tem decisões posteriores registradas em ADR.** Antes de seguir uma seção, confira no índice `docs/decisoes/README.md` se algum ADR a alterou: o ADR aceito vence o texto daqui. Se código e este documento divergirem sem ADR, aponte a divergência ao usuário em vez de escolher um lado em silêncio.
+12. **Antes de dar uma tarefa por concluída**, siga a lista "Antes de concluir" do `CONTRIBUTING.md` (que documento atualizar para cada tipo de mudança está na tabela de lá) e diga no resumo ao usuário quais documentos foram atualizados, ou por que nenhum precisou.
 
 ---
 
@@ -77,7 +79,7 @@ Reproduzir em Python o que um analista faz em Excel para avaliar uma empresa lis
 | 18 | Universo de empresas | Componentes do Ibovespa, em arquivo versionado atualizado manualmente a cada quadrimestre. | PREMISSA |
 | 19 | Atualização de dados | Sob demanda, com cache; `valuation atualizar` força download. | PREMISSA |
 | 20 | Formato do CSV | `;` como separador, `,` decimal, `utf-8-sig` (abre direto no LibreOffice/Excel pt-BR). Opção para formato internacional. | PREMISSA |
-| 21 | Empresas-piloto | PETR4, VALE3, WEGE3 (commodity em BRL, mineradora que reporta em USD, indústria). Piloto financeiro depois: ITUB4 e/ou BBAS3. | PREMISSA |
+| 21 | Empresas-piloto | PETR4, VALE3, WEGE3 (commodity em BRL, mineradora que reporta em USD, indústria). Piloto financeiro depois: ITUB4 e/ou BBAS3. Na CVM a Vale reporta em BRL (ADR 0002). | PREMISSA |
 
 ---
 
@@ -113,7 +115,9 @@ Comandos de apoio (Makefile ou `justfile`): `setup`, `lint`, `tipos`, `testes`, 
 valuation/
 ├── pyproject.toml
 ├── README.md
-├── PROJETO.md                      # este documento
+├── CLAUDE.md                       # este documento (ADR 0001: não há PROJETO.md)
+├── CONTRIBUTING.md                 # commits, documentação a atualizar, testes, convenções
+├── guia.md                         # mapa do código no estado atual
 ├── CHANGELOG.md
 ├── Makefile
 ├── config/
@@ -135,7 +139,7 @@ valuation/
 ├── saida/                          # no .gitignore: saida/{TICKER}/{YYYY-MM-DD}/
 ├── docs/
 │   ├── fontes.md                   # o que foi validado de cada fonte
-│   ├── decisoes/                   # ADRs curtos
+│   ├── decisoes/                   # ADRs curtos (índice e modelo em README.md)
 │   └── metodologia.md              # fórmulas implementadas (gerar a partir da seção 11)
 ├── src/valuation/
 │   ├── cli.py
@@ -343,6 +347,8 @@ Os códigos acima (`3.01`, `3.05`, `2.03.09` etc.) seguem o plano de contas padr
   - converter apenas na saída final; **nunca** misturar fluxos em USD com taxa de desconto em BRL.
 - Registrar em `meta.json` a moeda de reporte e a taxa usada.
 - **Vale é o teste dessa lógica** (por isso está entre os pilotos).
+
+> **ADR 0002:** na CVM a Vale reporta em `REAL` (a versão em USD é a do 20-F, fora das fontes da v1). Ela é avaliada em BRL com `brl_direto`; a detecção de moeda e o `usd_crp` ficam implementados e testados só com dados sintéticos.
 
 ### 7.5 Controles de qualidade (`qa.py`)
 
@@ -727,7 +733,7 @@ Mensagens em PT-BR, `rich` para tabelas no terminal, códigos de saída não nul
 | Ticker | Por que | Desafios que exercita |
 |---|---|---|
 | PETR4 | Commodity, estatal, ON/PN | Várias classes de ação, ciclo de commodity, dívida/arrendamentos relevantes |
-| VALE3 | Mineração | **Reporte em USD**, método `usd_crp`, conversão cambial |
+| VALE3 | Mineração | **Reporte em USD**, método `usd_crp`, conversão cambial. Na CVM reporta em BRL: avaliada com `brl_direto` (ADR 0002) |
 | WEGE3 | Industrial de crescimento | Receitas em várias moedas, crescimento alto com fade longo |
 | ITUB4 / BBAS3 (Fase 10) | Bancos | Plano de contas financeiro, DDM, P/VP justificado |
 
@@ -735,19 +741,21 @@ Mensagens em PT-BR, `rich` para tabelas no terminal, códigos de saída não nul
 
 ## 17. Roadmap por fases (com critério de pronto)
 
-**Fase 0 — Fundação**
+> Fases concluídas levam ✅ (atualize ao fechar uma fase; o estado detalhado está no `README.md` e na seção 1 do `guia.md`).
+
+**Fase 0 — Fundação** ✅ concluída
 Repo, `pyproject.toml`, `uv`, `ruff`, `mypy`, `pytest`, Makefile, `settings.yaml`, `.gitignore` (dados, perfil, saída), `docs/` com `fontes.md` e ADRs.
 *Pronto:* `make lint testes` passa; `valuation versao` roda.
 
-**Fase 1 — Cadastro e coleta CVM**
+**Fase 1 — Cadastro e coleta CVM** ✅ concluída
 `http.py`, `cadastro.py`, `cvm.py`: baixar cadastro, DFP/ITR, composição de capital; cache e `.meta.json`; mapear ticker ↔ empresa para os pilotos.
 *Pronto:* `valuation atualizar --tickers PETR4,VALE3,WEGE3` baixa e armazena 10 anos de DFP + ITR recentes; `valuation cadastro buscar` funciona; `docs/fontes.md` com URLs validadas.
 
-**Fase 2 — Padronização contábil e QA**
+**Fase 2 — Padronização contábil e QA** ✅ concluída
 `padronizacao.py`, `periodos.py` (LTM), `moeda.py`, `qa.py`, `nao_financeiras.py`, `mapeamento_contas.yaml`.
 *Pronto:* tabela padronizada dos 3 pilotos; relatório de cobertura de contas ≥ 95% nas contas críticas; QA sem erros; **conciliação com divulgações da empresa confirmada pelo usuário** (golden tests).
 
-**Fase 3 — Preços e macro**
+**Fase 3 — Preços e macro** ✅ concluída
 `precos.py`, `macro.py` com cache e fallback.
 *Pronto:* market cap correto (multi-classe), Ibovespa e câmbio, Selic/IPCA/Focus e taxa livre de risco carregados.
 

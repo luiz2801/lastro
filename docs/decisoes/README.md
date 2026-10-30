@@ -1,0 +1,59 @@
+# Decisões de arquitetura (ADRs)
+
+Um ADR registra uma decisão com consequências duradouras que **completa ou diverge** do
+[`CLAUDE.md`](../../CLAUDE.md): um `[PREMISSA]` revisto, um `[VALIDAR]` que a fonte real
+desmentiu, um detalhe que o guia não fixava e que muda números. Antes de seguir uma seção do
+`CLAUDE.md`, confira na tabela abaixo se algum ADR a alterou: **o ADR aceito vence o texto do guia**.
+
+Itens `[DECIDIDO]` não mudam por ADR sem o aval do usuário (regra 7 do `CLAUDE.md`).
+
+## Índice
+
+| ADR | Decisão | Seções do `CLAUDE.md` afetadas | Status |
+|---|---|---|---|
+| [0001](0001-estrutura-repositorio.md) | Raiz `Lastro/`, guia só em `CLAUDE.md` (sem `PROJETO.md`), Python 3.12 via `uv`, layout `src/`, mypy strict | 4, 5 | aceito |
+| [0002](0002-moeda-da-vale.md) | Vale avaliada em BRL (`brl_direto`): na CVM ela reporta em `REAL`; `usd_crp` só com dados sintéticos | 2 (#21), 7.4, 10.2, 16 | aceito |
+| [0003](0003-escala-das-acoes.md) | Escala da quantidade de ações: `escala_acoes` no cadastro manual + correção automática de datas em milhares | 6.1, 6.2 | aceito |
+| [0004](0004-validacao-cruzada-de-apis.md) | Preço, Selic, IPCA, dólar e Rf vêm de uma fonte principal e são conferidos numa segunda | 6.2, 6.3 | aceito |
+| [0005](0005-padronizacao-contabil.md) | Reapresentações por família e período, dívida × arrendamento separados, D&A pela DFC, métricas históricas, periodicidade `S` | 7.1, 7.3, 7.6 | aceito |
+
+## Quando escrever um ADR
+
+- Um `[PREMISSA]` do `CLAUDE.md` foi trocado (regra de "Como usar este documento").
+- A inspeção de uma fonte mostrou que o guia está errado, e isso muda o desenho (o simples
+  registro do que foi observado vai em [`docs/fontes.md`](../fontes.md)).
+- Uma escolha técnica afeta várias camadas ou os dados já gravados: formato de parquet,
+  dependência nova fora da seção 4 do `CLAUDE.md`, contrato entre camadas.
+
+Não precisa de ADR: detalhe de implementação que só um módulo vê (vai no `guia.md`) e correção de
+bug que deixa o código de acordo com o guia.
+
+## Como escrever
+
+1. Crie `NNNN-titulo-curto.md` com o próximo número livre.
+2. Use o modelo abaixo; seja curto e cite os números ou arquivos observados que motivaram a decisão.
+3. Acrescente a linha na tabela do índice, com as seções do `CLAUDE.md` afetadas.
+4. Se a decisão muda o que o `CLAUDE.md` afirma num ponto que engana quem o lê (como a moeda da
+   Vale), deixe uma nota curta naquela seção apontando para o ADR.
+
+Um ADR aceito **não é reescrito**. Se a decisão mudar, o novo ADR diz qual substitui, e o antigo
+passa a `substituído por NNNN` (no cabeçalho e no índice).
+
+```markdown
+# ADR NNNN — Título da decisão
+
+- **Data:** AAAA-MM-DD
+- **Status:** aceito | substituído por NNNN
+
+## Contexto
+
+O que o guia previa, o que foi observado (dados, arquivos, números) e as alternativas consideradas.
+
+## Decisão
+
+O que passa a valer, em itens objetivos.
+
+## Consequências
+
+O que muda nos dados, nos testes e nas fases seguintes; limitações que ficam.
+```

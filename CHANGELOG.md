@@ -2,6 +2,18 @@
 
 ## [Não lançado]
 
+### Documentação
+- `CONTRIBUTING.md`: ambiente, política de commits (`make lint tipos testes` antes de cada um,
+  atômicos, formato `area: o quê`), tabela de qual documento atualizar em cada mudança, lista
+  "Antes de concluir", testes e convenções.
+- `docs/decisoes/README.md`: índice dos ADRs com as seções do `CLAUDE.md` que cada um altera,
+  modelo e regra de substituição.
+- `README.md`: mapa da documentação, comandos reunidos, estado atual por fase e resumo das decisões
+  que divergem do `CLAUDE.md`.
+- `CLAUDE.md`: regras 9, 11 e 12 (testes antes do commit, ADR vence o texto, lista de conclusão),
+  notas do ADR 0002 sobre a moeda da Vale (seções 2, 7.4 e 16), estrutura de pastas com
+  `CLAUDE.md`, `CONTRIBUTING.md` e `guia.md`, e ✅ nas Fases 0 a 3.
+
 ### Fase 2 — Padronização contábil e QA
 - `config/mapeamento_contas.yaml`: plano de contas não financeiro (DRE, DFC/DVA, BPA, BPP) com
   regras por código, prefixo, exclusão e regex sem acento; 18 contas críticas.

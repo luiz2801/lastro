@@ -5,6 +5,8 @@
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
 > (Fases 0 a 3 implementadas) para que você não precise reler os módulos. Para o que ainda
 > **não** existe, veja a seção 12.
+> Política de commits, que documento atualizar em cada mudança e ADRs: `CONTRIBUTING.md` e
+> `docs/decisoes/README.md`.
 
 > ## Regra de manutenção (obrigatória)
 >
@@ -442,8 +444,8 @@ vez de baixar dados reais. Sem rede nos testes.
 | Nova verificação de QA | gerador `_x(...) -> Iterable[Verificacao]` em `qa.py`, chamado em `verificar`; colunas lidas em `_*_USADOS` |
 | Novo valor de conciliação | `tests/golden/referencias.yaml` (R$ mi) + chave em `FLUXOS`/`SALDOS` de `test_golden.py` |
 | Registrar fonte/URL validada | `docs/fontes.md` (obrigatório pelo CLAUDE.md) |
-| Decisão que desvia do CLAUDE.md | ADR em `docs/decisoes/NNNN-*.md` |
-| Fechar uma fase | atualizar `CHANGELOG.md`, `make lint tipos testes`, resumir ao usuário |
+| Decisão que desvia do CLAUDE.md | ADR em `docs/decisoes/NNNN-*.md` + linha no índice `docs/decisoes/README.md` + item em "Decisões" do `README.md` |
+| Fechar uma fase | atualizar `CHANGELOG.md`, `README.md` (Estado atual), seções 1 e 12 deste guia e o ✅ na seção 17 do `CLAUDE.md`; `make lint tipos testes`; resumir ao usuário |
 
 ## 16. Armadilhas (resumo)
 
