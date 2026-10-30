@@ -9,7 +9,7 @@ perfil/perfil_investidor.json
 config/empresas/*.yaml.bak
 
 # Saídas de execução
-saida/
+/saida/
 
 # Python
 .venv/
