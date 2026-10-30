@@ -103,21 +103,42 @@ Valores em `tests/golden/referencias.yaml`; documentos em `referencias/` (ver o 
 
 ## Preços
 
+Cada preço é conferido em duas fontes (`yfinance` e `brapi`); ver ADR 0004. Validado em 2026-10-30.
+
 | Item | Esperado | Status | Observado |
 |---|---|---|---|
-| yfinance ações | `PETR4.SA` | ⏳ | |
-| Ibovespa | `^BVSP` | ⏳ | |
-| Dólar | `BRL=X` | ⏳ | |
+| yfinance ações | `PETR4.SA` | ✅ | `history(auto_adjust=False)` traz `Close`, `Adj Close`, `Volume`; índice com fuso `-03:00` (removido na leitura) |
+| Ibovespa | `^BVSP` | ✅ | fechamento 169.186 em 2026-10-29 |
+| Dólar | `BRL=X` | ✅ | 5,3872 em 2026-10-30; índice em UTC |
+| brapi sem token | `/api/quote/PETR4` | ✅ | funciona só para PETR4, VALE3, MGLU3 e ITUB4 (campos `regularMarketPrice`, `regularMarketTime`, `marketCap`) |
+| brapi WEGE3, `^BVSP` sem token | — | ⚠️ | HTTP 401 `MISSING_TOKEN`; defina `BRAPI_TOKEN` (cadastro gratuito) para validar os demais |
+| brapi com `range=1y&interval=1d` | `historicalDataPrice` | ⏳ | sem token não foi possível testar; implementado conforme a documentação |
+| Stooq | alternativa à brapi | ⚠️ | exige JavaScript (anti-bot); descartado |
+
+O `marketCap` da brapi não bate com ações × preço da CVM (PETR4: 716,8 bi contra 672,8 bi pelo
+preço do PN sobre todas as ações), então não é usado como checagem.
 
 ## Macro (BCB / Tesouro)
 
+Validado em 2026-10-30. Todas as chamadas são GET sem chave.
+
 | Série | Código SGS esperado | Status | Observado |
 |---|---|---|---|
-| Selic meta | 432 | ⏳ | |
-| Selic diária | 11 | ⏳ | |
-| CDI | 12 | ⏳ | |
-| IPCA mensal | 433 | ⏳ | |
-| IGP-M | 189 | ⏳ | |
-| Dólar | 1 | ⏳ | |
-| Focus (Olinda `ExpectativasMercadoAnuais`) | — | ⏳ | |
-| Tesouro Transparente (taxas do prefixado) | — | ⏳ | |
+| Selic meta | 432 | ✅ | % a.a., 13,75; a série **traz datas futuras** (até 04/11 na consulta de 30/10): filtrar por `data <= data_base` |
+| Selic diária | 11 | ✅ | % a.d. (0,050788); anualizada por `(1+d)^252-1` dá 13,65%, 0,10 p.p. abaixo da meta |
+| CDI | 12 | ⏳ | não usado na Fase 3 |
+| IPCA mensal | 433 | ✅ | % no mês, data = dia 1 do mês |
+| IPCA 12 meses | 13522 | ✅ | novo na lista; bate com a composição dos 12 últimos valores do 433 |
+| IGP-M | 189 | ⏳ | não usado na Fase 3 |
+| Dólar | 1 | ✅ | PTAX venda; idêntico ao Olinda `CotacaoDolarDia` (5,3420 em 28/10) |
+| Focus (Olinda `ExpectativasMercadoAnuais`) | — | ✅ | `$filter=Indicador eq 'IPCA' and Data le '…' and baseCalculo eq 0`; horizonte do ano corrente até +4 anos; `Mediana` em % |
+| Tesouro Transparente (taxas) | — | ✅ | CKAN `taxas-dos-titulos-ofertados-pelo-tesouro-direto`; recurso `precotaxatesourodireto.csv` (14 MB, `;`, decimal `,`), **não ordenado por data**; colunas `Tipo Titulo`, `Data Vencimento`, `Data Base`, `Taxa Compra Manha` (% a.a.) |
+
+Para o Rf usa-se a NTN-F (`Tesouro Prefixado com Juros Semestrais`) com vencimento mais próximo de
+10 anos (aceita 7 a 13) na última `Data Base` ≤ `data_base`, taxa de compra da manhã.
+Em 2026-10-28: NTN-F 01/2037 a 14,87%; NTN-B 05/2037 a 7,72% real.
+
+Validação do Rf: NTN-B real composta com o IPCA do Focus no último ano divulgado (2030: 3,50%)
+dá 11,49%, 3,4 p.p. abaixo da NTN-F. A diferença é a inflação implícita no mercado (~6,6%)
+contra a expectativa do Focus (3,5%) mais prêmios; o aviso é esperado enquanto isso durar e
+não indica erro de leitura.

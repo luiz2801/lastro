@@ -92,6 +92,17 @@ class ConfigSensibilidade(_Modelo):
     g_faixa: float = Field(gt=0)
 
 
+class ValidacaoCruzada(_Modelo):
+    """Tolerâncias da comparação entre duas fontes. Taxas em decimal (0,003 = 0,3 p.p.)."""
+
+    preco_rel: float = Field(gt=0)
+    cambio_rel: float = Field(gt=0)
+    market_cap_rel: float = Field(gt=0)
+    selic_abs: float = Field(gt=0)
+    ipca_abs: float = Field(gt=0)
+    rf_abs: float = Field(gt=0)
+
+
 class Settings(_Modelo):
     versao: Literal[1]
     data_base: Literal["hoje"] | dt.date
@@ -104,6 +115,7 @@ class Settings(_Modelo):
     terminal: ConfigTerminal
     dcf: ConfigDcf
     sensibilidade: ConfigSensibilidade
+    validacao_cruzada: ValidacaoCruzada
 
     def resolver_data_base(self, hoje: dt.date) -> dt.date:
         """Data-base efetiva. `hoje` vem de quem chama (CLI), nunca de `date.today()` aqui."""

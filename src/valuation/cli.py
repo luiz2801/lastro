@@ -24,7 +24,10 @@ from valuation.config import (
 )
 from valuation.data import cadastro as cad
 from valuation.data import cvm
+from valuation.data import macro as mac
+from valuation.data import precos as prc
 from valuation.data.http import ErroDownload, criar_sessao
+from valuation.data.validacao import ErroDadosExternos, Leitura, Validado
 
 app = typer.Typer(
     help="Valuation de ações da B3. Uso pessoal e educacional; não é recomendação de investimento.",
@@ -178,6 +181,118 @@ def atualizar(
         )
     console.print(tabela)
     console.print(f"Gravado em {DIR_PROCESSED / 'cvm'}")
+
+
+def _linha_validada(v: Validado, formato: str) -> tuple[str, ...]:
+    alt = "—" if v.valor_alt is None else f"{format(v.valor_alt, formato)} ({v.fonte_alt})"
+    cor = {"ok": "green", "divergente": "red", "sem_validacao": "yellow", "manual": "cyan"}[
+        v.status
+    ]
+    return (
+        v.nome,
+        f"{format(v.valor, formato)}",
+        v.fonte,
+        alt,
+        f"[{cor}]{v.status}[/]",
+        v.data.isoformat() if v.data else "—",
+    )
+
+
+@app.command()
+def mercado(
+    ticker: str = typer.Argument(..., help="Ex.: PETR4."),
+    data_base: str | None = typer.Option(
+        None, "--data-base", help="AAAA-MM-DD (padrão: settings)."
+    ),
+    forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+) -> None:
+    """Preço, market cap, Ibovespa, dólar, Selic, IPCA e Rf, cada um conferido em 2 fontes."""
+    agora = dt.datetime.now(dt.UTC)
+    try:
+        settings = carregar_settings()
+        base = (
+            dt.date.fromisoformat(data_base)
+            if data_base
+            else settings.resolver_data_base(agora.date())
+        )
+        tol = settings.validacao_cruzada
+        sessao = criar_sessao()
+        cadastro = _carregar_cadastro(settings, base, forcar)
+        empresa = cad.empresa_por_ticker(cadastro, ticker)
+        yf = prc.YFinanceProvider(
+            DIR_RAW / "precos",
+            dt.timedelta(hours=settings.cache_ttl_horas.precos),
+            agora,
+            forcar=forcar,
+        )
+        brapi = prc.BrapiProvider(sessao)
+
+        precos: dict[str, Validado] = {}
+        for classe in empresa.classes:
+            try:
+                precos[classe.ticker] = prc.preco_validado(
+                    classe.ticker, base, yf, brapi, tolerancia_rel=tol.preco_rel
+                )
+            except ErroDadosExternos as e:
+                console.print(f"[yellow]Aviso:[/] {classe.ticker} sem preço: {e}")
+        if not precos:
+            raise _erro(f"Nenhum preço disponível para {', '.join(empresa.tickers)}.")
+        ibov = prc.preco_validado("^BVSP", base, yf, brapi, tolerancia_rel=tol.preco_rel)
+
+        cambio_yf: Leitura | None = None
+        try:
+            d, v = prc.fechamento_ate(
+                yf.historico("BRL=X", base - dt.timedelta(days=15), base), base
+            )
+            cambio_yf = Leitura(v, "yfinance BRL=X", d)
+        except ErroDadosExternos as e:
+            console.print(f"[yellow]Aviso:[/] dólar sem segunda fonte: {e}")
+
+        macro = mac.carregar_macro(
+            base,
+            tolerancias=tol,
+            rf_override=settings.custo_capital.rf_brl.override,
+            cambio_alternativo=cambio_yf,
+            dir_raw=DIR_RAW,
+            ttl=dt.timedelta(hours=settings.cache_ttl_horas.macro),
+            sessao=sessao,
+            agora=agora,
+            forcar=forcar,
+        )
+        composicao = pd.read_parquet(
+            DIR_PROCESSED / "cvm" / str(empresa.cd_cvm) / "composicao_capital.parquet"
+        )
+        cap = prc.market_cap(empresa, composicao, {t: p.valor for t, p in precos.items()}, base)
+    except FileNotFoundError as e:
+        raise _erro(
+            f"{e.filename} não existe. Rode `valuation atualizar --tickers {ticker}`."
+        ) from e
+    except (ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroDadosExternos) as e:
+        raise _erro(str(e)) from e
+
+    tabela = Table(title=f"Mercado — {', '.join(empresa.tickers)} em {base}")
+    for coluna in ("Dado", "Valor", "Fonte principal", "Segunda fonte", "Validação", "Data"):
+        tabela.add_column(coluna)
+    for preco in precos.values():
+        tabela.add_row(*_linha_validada(preco, ".2f"))
+    tabela.add_row(*_linha_validada(ibov, ".0f"))
+    tabela.add_row(*_linha_validada(macro.cambio, ".4f"))
+    for taxa in (macro.selic, macro.ipca_12m, macro.rf_brl):
+        tabela.add_row(*_linha_validada(taxa, ".2%"))
+    console.print(tabela)
+
+    detalhe = ", ".join(
+        f"{c.acoes:,} {c.especie} a {c.preco:.2f}".replace(",", ".") for c in cap.classes
+    )
+    console.print(
+        f"Market cap: R$ {cap.valor / 1e9:,.1f} bi ({detalhe}); ações de {cap.data_acoes}"
+    )
+    if macro.ipca_esperado:
+        focus = ", ".join(f"{ano}: {x:.2%}" for ano, x in macro.ipca_esperado.items())
+        console.print(f"IPCA esperado (Focus de {macro.data_focus}): {focus}")
+    avisos = [*cap.avisos, *macro.avisos, *(a for v in (*precos.values(), ibov) if (a := v.aviso))]
+    for aviso in avisos:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
 
 
 if __name__ == "__main__":  # pragma: no cover

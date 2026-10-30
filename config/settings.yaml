@@ -40,3 +40,13 @@ sensibilidade:
   wacc_faixa: 0.02
   g_passo: 0.0025
   g_faixa: 0.01
+
+# Tolerância para aceitar que duas fontes "concordam" (ver docs/decisoes/0004).
+# Preço, câmbio e market cap: diferença relativa. Taxas: diferença absoluta em decimal.
+validacao_cruzada:
+  preco_rel: 0.02
+  cambio_rel: 0.015
+  market_cap_rel: 0.10
+  selic_abs: 0.003
+  ipca_abs: 0.0005
+  rf_abs: 0.025                    # NTN-F x (NTN-B + Focus): o spread de inflação é grande

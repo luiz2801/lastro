@@ -2,6 +2,18 @@
 
 ## [Não lançado]
 
+### Fase 3 — Preços e macro via API, com validação cruzada
+- `data/validacao.py`: compara duas fontes (`ok` / `divergente` / `sem_validacao` / `manual`); a
+  principal vence, divergência vira aviso, nenhuma fonte é erro. Tolerâncias em
+  `settings.yaml > validacao_cruzada`.
+- `data/macro.py`: Selic (SGS 432 × 11), IPCA 12m (SGS 13522 × 433), dólar (SGS 1 × `BRL=X`),
+  Rf em BRL (NTN-F × NTN-B + Focus), Focus de IPCA. Cache em `data/raw/macro/`.
+- `data/precos.py`: `PrecosProvider` com `YFinanceProvider` (cache em parquet, retry, cópia vencida
+  se falhar) e `BrapiProvider` (token opcional em `BRAPI_TOKEN`); preço validado; market cap por
+  espécie sem tesouraria.
+- CLI: `valuation mercado TICKER [--data-base] [--forcar]`.
+- `docs/fontes.md` com as APIs validadas; ADR 0004.
+
 ### Conciliação com documentos das companhias
 - `tests/golden/referencias.yaml`: valores de Petrobras, Vale e WEG conferidos contra releases,
   relatório da administração e composição acionária, todos batendo com a CVM.

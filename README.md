@@ -26,7 +26,7 @@ make lint tipos testes
 
 ## Estado
 
-Fases 0 (fundação) e 1 (cadastro e coleta CVM) concluídas. Ver [`CHANGELOG.md`](CHANGELOG.md).
+Fases 0 (fundação), 1 (cadastro e coleta CVM) e 3 (preços e macro por API) concluídas. Ver [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Riscos e limitações
 
@@ -42,3 +42,10 @@ Fases 0 (fundação) e 1 (cadastro e coleta CVM) concluídas. Ver [`CHANGELOG.md
   setores com muitos arrendamentos (varejo, aéreas) precisam de atenção.
 - **Valor por ação** ignora diluição e diferenças entre classes de ação.
 - Os parâmetros de mercado em `config/settings.yaml` são **placeholders** até serem revisados.
+
+## Preços e macro por API
+
+`valuation mercado PETR4` busca preço, Ibovespa, dólar, Selic, IPCA e taxa livre de risco, cada
+um de duas fontes gratuitas, e mostra se elas concordam. Não precisa de chave. Para validar os
+preços de qualquer ticker na brapi (sem token só PETR4, VALE3, MGLU3 e ITUB4), crie um token
+gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
