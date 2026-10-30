@@ -50,5 +50,30 @@ VALE3:
     2026-06-30: {em_circulacao: 4255762795, tesouraria: 183396969, capital_total: 4439159764}
 
 WEGE3:
-  # Pendente: nenhum documento da WEG conferido ainda.
-  periodos: {}
+  # A WEG publica em R$ mil: valores abaixo em R$ milhões com 3 casas (= exatos em milhares).
+  fonte: "Release de Resultados 3T26.pdf (Tabelas 1, 4 e 5; Anexo IV)"
+  periodos:
+    3T26: {receita_liquida: 10860.809, lucro_controladora: 1665.222, lucro_total: 1762.671, ir_csll: 341.406, da: 262.642, ebitda: 2345.167}
+    2T26: {receita_liquida: 10143.555, lucro_controladora: 1558.633, lucro_total: 1646.544, ir_csll: 335.648, da: 255.988, ebitda: 2212.631}
+    3T25: {receita_liquida: 10271.522, lucro_controladora: 1650.469, lucro_total: 1744.754, da: 238.653, ebitda: 2275.498}
+    9M26: {receita_liquida: 30472.677, lucro_controladora: 4681.042, da: 772.679, ebitda: 6660.599}
+    9M25: {receita_liquida: 30557.320, lucro_controladora: 4788.457, da: 705.858, ebitda: 6708.031}
+  # Arredondamentos do release: comparar com tolerância de 0.002 (R$ 2 mil).
+  saldos:
+    2026-09-30:
+      disponibilidades_cp: 6339.447        # BPA 1.01.01 + 1.01.02
+      aplicacoes_lp: 11.755
+      derivativos_liquidos: -56.755
+      financiamentos_cp: 1917.755          # Tabela 5 = CVM 2.01.04 (o Anexo III mostra 1.920.968)
+      financiamentos_lp: 1836.690
+      arrendamento_cp: 193.101             # CVM 2.01.05.02.07, fora de empréstimos
+      arrendamento_lp: 598.991             # CVM 2.02.02.02.05
+      caixa_liquido_companhia: 2540.002
+    2025-12-31:
+      disponibilidades_cp: 7279.865
+      aplicacoes_lp: 14.263
+      derivativos_liquidos: -51.296
+      financiamentos: 4590.822
+      arrendamento_cp: 221.934
+      arrendamento_lp: 625.219
+      caixa_liquido_companhia: 2652.010

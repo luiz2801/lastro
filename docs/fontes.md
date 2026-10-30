@@ -61,6 +61,14 @@ Valores em `tests/golden/referencias.yaml`. Resultado:
   `DS_CONTA` (ou da DVA `7.04.01`, que é conta fixa).
 - Petrobras: "disponibilidades ajustadas" (53.931) > caixa + aplicações CP da CVM (53.764). Diferença
   de títulos que a companhia soma ao caixa; candidata a `caixa_extra`.
+- WEG (release 3T26): receita, lucro, IR, resultado financeiro e EBITDA (= EBIT + D&A) de 3T26, 2T26,
+  3T25, 9M26 e 9M25 batem com a CVM (diferenças de R$ 1 mil são arredondamento do release).
+  "Caixa líquido" da WEG = disponibilidades CP + aplicações LP + derivativos líquidos − financiamentos
+  (dez/2025: 2.652.010 mil). Na DFP/ITR, D&A da WEG está na DFC (`6.01.01.02` em 2025), achada por regex.
+- ⚠️ **Arrendamento fora de empréstimos.** Na WEG, arrendamentos ficam em "Outras obrigações"
+  (`2.01.05.02.07` / `2.02.02.02.05`) e `2.01.04.03`/`2.02.01.03` existem com valor zero. Na Petrobras
+  e na Vale ficam dentro de empréstimos (`2.01.04.03`/`2.02.01.03`). O mapeamento precisa somar os
+  dois lugares sem contar duas vezes.
 
 ### Cadastro (`cad_cia_aberta.csv`)
 
