@@ -1,6 +1,6 @@
 # Dados baixados e derivados
-data/
-!data/.gitkeep
+/data/
+!/data/.gitkeep
 
 # Perfil do investidor (pessoal)
 perfil/perfil_investidor.json
