@@ -2,6 +2,27 @@
 
 ## [Não lançado]
 
+### Fase 2 — Padronização contábil e QA
+- `config/mapeamento_contas.yaml`: plano de contas não financeiro (DRE, DFC/DVA, BPA, BPP) com
+  regras por código, prefixo, exclusão e regex sem acento; 18 contas críticas.
+- `contabil/padronizacao.py`: um documento por demonstração e período (o mais recente, inclusive
+  `PENÚLTIMO`), regras em ordem por período, soma das contas de nível mais alto;
+  `contas_padronizadas.parquet` por companhia; relatório de cobertura.
+- `contabil/periodos.py`: visões anual, acumulado no ano, trimestral (por diferença de YTD) e LTM.
+- `contabil/moeda.py`: detecção da moeda (erro se mudar entre períodos) e conversão final para BRL.
+- `contabil/nao_financeiras.py`: EBITDA, EBIT ajustado, NOPAT, capex, capital de giro, FCFF,
+  dívida financeira × arrendamento, dívida líquida, ROIC; ajustes IFRS 16, coligadas e não
+  recorrentes.
+- `contabil/qa.py`: balanço, subcontas, identidades da DRE, LL atribuído, D&A ausente, fontes
+  alternativas divergentes, saltos, anos faltantes, contas críticas e contas relevantes não mapeadas;
+  `qa_{TICKER}.json`.
+- CLI: `valuation qa TICKER` (sai com 1 se houver erro), `valuation historico TICKER [--anos N]
+  [--trimestral]`, `valuation cobertura --tickers|--tudo`.
+- `tests/test_golden.py`: os 94 valores de `tests/golden/referencias.yaml` contra o pipeline (83
+  conferem; 11 pulados por definição própria da companhia ou período ainda fora da CVM).
+- Pilotos: cobertura de 100% das contas críticas em 11 exercícios e QA sem erros.
+- `docs/fontes.md` com o plano de contas validado; ADR 0005; `guia.md` 1.1.
+
 ### Fase 3 — Preços e macro via API, com validação cruzada
 - `data/validacao.py`: compara duas fontes (`ok` / `divergente` / `sem_validacao` / `manual`); a
   principal vence, divergência vira aviso, nenhuma fonte é erro. Tolerâncias em

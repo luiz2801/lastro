@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import platform
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -22,6 +23,12 @@ from valuation.config import (
     Settings,
     carregar_settings,
 )
+from valuation.contabil import ErroContabil
+from valuation.contabil import nao_financeiras as nf
+from valuation.contabil import padronizacao as pad
+from valuation.contabil import periodos as per
+from valuation.contabil import qa as qa_mod
+from valuation.contabil.moeda import detectar_moeda
 from valuation.data import cadastro as cad
 from valuation.data import cvm
 from valuation.data import macro as mac
@@ -293,6 +300,206 @@ def mercado(
     avisos = [*cap.avisos, *macro.avisos, *(a for v in (*precos.values(), ibov) if (a := v.aviso))]
     for aviso in avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
+
+
+@dataclass(frozen=True)
+class _Padronizada:
+    empresa: cad.Empresa
+    plano: pad.PlanoContas
+    selecionadas: pd.DataFrame
+    contas: pd.DataFrame
+    moeda: str
+
+
+def _padronizar(ticker: str, settings: Settings) -> _Padronizada:
+    """Padroniza as demonstrações de `ticker` e grava `contas_padronizadas.parquet`."""
+    data_base = settings.resolver_data_base(dt.date.today())
+    empresa = cad.empresa_por_ticker(_carregar_cadastro(settings, data_base, False), ticker)
+    if empresa.tipo_modelo != "nao_financeira":
+        raise ErroContabil(
+            f"{', '.join(empresa.tickers)} é {empresa.tipo_modelo}: só o plano de contas "
+            "não financeiro existe por enquanto (financeiras na Fase 10)."
+        )
+    plano = pad.carregar_mapeamento()
+    try:
+        demonstracoes = pad.ler_demonstracoes(DIR_PROCESSED, empresa.cd_cvm)
+    except FileNotFoundError as e:
+        raise ErroContabil(
+            f"{e.filename} não existe. Rode `valuation atualizar --tickers {ticker}`."
+        ) from e
+    selecionadas = pad.selecionar_reapresentacoes(demonstracoes)
+    moeda = detectar_moeda(selecionadas)
+    contas = pad.padronizar(selecionadas, plano, ticker=cad.normalizar_ticker(ticker))
+    contas.to_parquet(pad.caminho_padronizadas(DIR_PROCESSED, empresa.cd_cvm), index=False)
+    return _Padronizada(empresa, plano, selecionadas, contas, moeda)
+
+
+_COR_SEVERIDADE = {"erro": "red", "aviso": "yellow", "info": "cyan"}
+
+
+@app.command()
+def qa(ticker: str = typer.Argument(..., help="Ex.: PETR4.")) -> None:
+    """Padroniza as demonstrações e roda os controles de qualidade (sai com 1 se houver erro)."""
+    try:
+        settings = carregar_settings()
+        p = _padronizar(ticker, settings)
+        resultado = qa_mod.verificar(
+            p.selecionadas,
+            p.contas,
+            p.plano,
+            ticker=cad.normalizar_ticker(ticker),
+            moeda=p.moeda,
+            historico_anos=settings.historico_anos,
+        )
+    except (ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroContabil) as e:
+        raise _erro(str(e)) from e
+    caminho = qa_mod.gravar(
+        resultado, DIR_PROCESSED / "qa" / f"qa_{cad.normalizar_ticker(ticker)}.json"
+    )
+
+    tabela = Table(title=f"QA — {', '.join(p.empresa.tickers)} ({p.moeda})")
+    for coluna in ("Severidade", "Verificação", "Mensagem", "Períodos"):
+        tabela.add_column(coluna)
+    for v in resultado.verificacoes:
+        periodos = ", ".join(v.periodos[:6]) + (" …" if len(v.periodos) > 6 else "")
+        cor = _COR_SEVERIDADE[v.severidade]
+        tabela.add_row(f"[{cor}]{v.severidade}[/]", v.codigo, v.mensagem, periodos)
+    if resultado.verificacoes:
+        console.print(tabela)
+    else:
+        console.print("[green]Nenhum problema encontrado.[/]")
+
+    incompletas = {c: f for c, f in resultado.cobertura.items() if f < 1}
+    if incompletas:
+        texto = ", ".join(f"{c} {f:.0%}" for c, f in incompletas.items())
+        console.print(f"Cobertura das contas críticas abaixo de 100%: {texto}")
+    else:
+        console.print(f"Cobertura das {len(resultado.cobertura)} contas críticas: 100%.")
+    for item in resultado.nao_mapeadas:
+        console.print(
+            f"Não mapeada relevante: {item['demonstracao']} {item['cd_conta']} "
+            f"{item['ds_conta']} = {item['valor'] / 1e6:,.0f} mi "
+            f"({item['fracao_da_base']:.1%} da base) em {item['data']}"
+        )
+    console.print(f"Gravado em {caminho}")
+    if resultado.erros:
+        raise typer.Exit(code=1)
+
+
+_LINHAS_HISTORICO = (
+    ("receita_liquida", "Receita líquida", "mi"),
+    ("ebitda", "EBITDA", "mi"),
+    ("margem_ebitda", "Margem EBITDA", "%"),
+    ("ebit_ajustado", "EBIT ajustado", "mi"),
+    ("lucro_liquido_controladora", "Lucro controladora", "mi"),
+    ("aliquota_efetiva", "Alíquota efetiva", "%"),
+    ("da", "D&A", "mi"),
+    ("capex", "Capex", "mi"),
+    ("delta_nwc", "ΔNWC", "mi"),
+    ("fcff", "FCFF", "mi"),
+    ("divida_financeira", "Dívida financeira", "mi"),
+    ("arrendamento", "Arrendamento", "mi"),
+    ("caixa_e_aplicacoes", "Caixa e aplicações", "mi"),
+    ("divida_liquida", "Dívida líquida", "mi"),
+    ("roic", "ROIC", "%"),
+    ("dividendos_pagos", "Dividendos pagos", "mi"),
+)
+
+
+def _formatar(valor: float, unidade: str) -> str:
+    if pd.isna(valor):
+        return "—"
+    if unidade == "%":
+        return f"{valor:.1%}".replace(".", ",")
+    return f"{valor / 1e6:,.0f}".replace(",", ".")
+
+
+@app.command()
+def historico(
+    ticker: str = typer.Argument(..., help="Ex.: PETR4."),
+    anos: int = typer.Option(5, "--anos", min=1, help="Quantos exercícios mostrar."),
+    trimestral: bool = typer.Option(
+        False, "--trimestral", help="Últimos 8 trimestres em vez dos exercícios."
+    ),
+) -> None:
+    """Métricas históricas padronizadas (R$ milhões), com a coluna LTM."""
+    try:
+        settings = carregar_settings()
+        p = _padronizar(ticker, settings)
+        aliquota = settings.impostos.aliquota_nominal
+        if trimestral:
+            tabela_m = (
+                per.trimestral(p.contas)
+                .tail(8)
+                .reindex(
+                    columns=[
+                        "receita_liquida",
+                        "ebit",
+                        "da",
+                        "lucro_liquido_controladora",
+                        "capex",
+                        "dividendos_pagos",
+                    ]
+                )
+            )
+            tabela_m["ebitda"] = tabela_m["ebit"] + tabela_m["da"]
+            # Mesma convenção das métricas: saídas de caixa positivas.
+            tabela_m["capex"] = -tabela_m["capex"]
+            tabela_m["dividendos_pagos"] = -tabela_m["dividendos_pagos"]
+            colunas = [f"{d.month // 3}T{d:%y}" for d in tabela_m.index]
+        else:
+            m = nf.metricas(per.anual(p.contas), aliquota_nominal=aliquota).tail(anos)
+            ltm = nf.metricas_ltm(p.contas, aliquota_nominal=aliquota)
+            tabela_m = pd.concat([m, ltm.to_frame().T])
+            fim = pd.Timestamp(str(ltm.name))
+            colunas = [*map(str, m.index), f"LTM {fim:%m/%Y}"]
+    except (ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroContabil) as e:
+        raise _erro(str(e)) from e
+
+    tabela = Table(title=f"Histórico — {', '.join(p.empresa.tickers)} (R$ milhões, {p.moeda})")
+    tabela.add_column("Métrica")
+    for coluna in colunas:
+        tabela.add_column(coluna, justify="right")
+    for chave, rotulo, unidade in _LINHAS_HISTORICO:
+        if chave in tabela_m.columns:
+            tabela.add_row(rotulo, *(_formatar(v, unidade) for v in tabela_m[chave]))
+    console.print(tabela)
+
+
+@app.command()
+def cobertura(
+    tickers: str | None = typer.Option(
+        None, "--tickers", help="Lista separada por vírgula, ex.: PETR4,VALE3."
+    ),
+    tudo: bool = typer.Option(False, "--tudo", help="Todos os tickers do universo configurado."),
+) -> None:
+    """Fração dos exercícios com cada conta crítica mapeada, por companhia."""
+    if bool(tickers) == tudo:
+        raise _erro("Informe --tickers ou --tudo (um dos dois).")
+    try:
+        settings = carregar_settings()
+        lista = (
+            [t.strip() for t in tickers.split(",") if t.strip()]
+            if tickers
+            else _tickers_do_universo(CAMINHO_UNIVERSO)
+        )
+        colunas = {}
+        for t in lista:
+            p = _padronizar(t, settings)
+            colunas[cad.normalizar_ticker(t)] = pad.cobertura(p.contas, p.plano.criticas)
+    except (ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroContabil) as e:
+        raise _erro(str(e)) from e
+
+    matriz = pd.DataFrame(colunas)
+    tabela = Table(title="Cobertura das contas críticas (fração dos exercícios)")
+    tabela.add_column("Conta")
+    for t in matriz.columns:
+        tabela.add_column(t, justify="right")
+    for conta, linha in matriz.iterrows():
+        celulas = [f"[{'green' if f >= 0.95 else 'red'}]{f:.0%}[/]" for f in linha]
+        tabela.add_row(str(conta), *celulas)
+    console.print(tabela)
+    console.print(f"Média geral: {matriz.to_numpy().mean():.1%}")
 
 
 if __name__ == "__main__":  # pragma: no cover

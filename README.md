@@ -26,7 +26,8 @@ make lint tipos testes
 
 ## Estado
 
-Fases 0 (fundação), 1 (cadastro e coleta CVM) e 3 (preços e macro por API) concluídas. Ver [`CHANGELOG.md`](CHANGELOG.md).
+Fases 0 a 3 concluídas: fundação, cadastro e coleta CVM, padronização contábil com QA, preços e
+macro por API. Ver [`CHANGELOG.md`](CHANGELOG.md) e, para o mapa do código, [`guia.md`](guia.md).
 
 ## Riscos e limitações
 
@@ -49,3 +50,16 @@ Fases 0 (fundação), 1 (cadastro e coleta CVM) e 3 (preços e macro por API) co
 um de duas fontes gratuitas, e mostra se elas concordam. Não precisa de chave. Para validar os
 preços de qualquer ticker na brapi (sem token só PETR4, VALE3, MGLU3 e ITUB4), crie um token
 gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
+
+## Demonstrações padronizadas e QA
+
+```bash
+uv run valuation atualizar --tickers PETR4,VALE3,WEGE3
+uv run valuation qa PETR4                 # controles de qualidade; sai com 1 se houver erro
+uv run valuation historico PETR4          # métricas anuais + LTM (R$ milhões)
+uv run valuation historico PETR4 --trimestral
+uv run valuation cobertura --tickers PETR4,VALE3,WEGE3
+```
+
+O plano de contas fica em `config/mapeamento_contas.yaml`; o relatório do QA em
+`data/processed/qa/qa_{TICKER}.json`.

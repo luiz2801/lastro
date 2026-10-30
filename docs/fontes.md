@@ -70,6 +70,33 @@ Valores em `tests/golden/referencias.yaml`; documentos em `referencias/` (ver o 
   e na Vale ficam dentro de empréstimos (`2.01.04.03`/`2.02.01.03`). O mapeamento precisa somar os
   dois lugares sem contar duas vezes.
 
+### Plano de contas padronizado (Fase 2, 2026-10-30)
+
+`config/mapeamento_contas.yaml` conferido contra PETR4, VALE3 e WEGE3 (DFP 2016–2025, ITR
+2025–2026): 100% de cobertura das 18 contas críticas nos 11 exercícios (2015 vem como
+`PENÚLTIMO` da DFP 2016) e QA sem erros. Decisões em [ADR 0005](decisoes/0005-padronizacao-contabil.md).
+
+| Código do guia (seção 7.2) | Status | Observado |
+|---|---|---|
+| DRE `3.01`, `3.05`, `3.06`, `3.08`, `3.11`, `3.11.01` | ✅ | Iguais nos três pilotos e em todos os anos |
+| BPA `1.01.01`, `1.01.02`; BPP `2.03`, `2.03.09` | ✅ | Idem |
+| BPP `2.01.04` / `2.02.01` (dívida) | ⚠️ | Incluem o arrendamento (`x.03`) em Petrobras e Vale; separado em `arrendamento_*_em_emprestimos` |
+| Arrendamento por regex em `DS_CONTA` | ⚠️ | Precisa de duas contas padrão por prazo (dentro e fora de empréstimos) para não contar duas vezes |
+| D&A: DVA `7.04.01` primeiro | ⚠️ | Invertido: DFC (`6.01.01.xx` por regex) primeiro. Petrobras 2019–2022: DVA > DFC (2022: 75.121 × 68.202 mi) |
+| Capex por regex na DFC | ✅ | Restrito a `6.02` e sem linhas de venda/alienação. Vale 9M25: "Adições ao Imobilizado e investimentos". Petrobras 2019: bônus da Cessão Onerosa (`6.02.06`, 63 bi) fica fora |
+| DFC `6.01` (caixa operacional) | ✅ | Só DFC indireta (`DFC_MI`) nos pilotos |
+
+Outras observações:
+
+- **Sinal invertido na fonte**: Vale DFP 2022 traz o custo (`3.02`) positivo; a DFP 2023 reapresenta
+  2022 com sinal certo e vence pela regra do documento mais recente.
+- **Dividendos pagos** (`6.03`): WEG escreve "Juros s/ Capital Próprio". O YTD da WEG nem sempre cresce
+  ao longo do ano (1T25 −1.808,5 mi; 1S25 −1.806,6 mi; 1T26 −5 mi): é o que a companhia publicou.
+- **Pagamento de arrendamento** (`6.03`): existe em Petrobras e Vale; a WEG não tem a linha.
+- **Aplicações de longo prazo** (`1.02.01.01`–`.03`): mapeadas em `aplicacoes_financeiras_lp`, fora do caixa.
+- Vale 2019: "Aplicações financeiras de curto prazo" dentro de `1.01.08` (outros ativos), fora do caixa
+  padronizado.
+
 ### Cadastro (`cad_cia_aberta.csv`)
 
 - Várias linhas por CNPJ: uma por mercado (`TP_MERC`) e registros cancelados com outro `CD_CVM`

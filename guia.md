@@ -1,21 +1,21 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.0 — 2026-10-30**
+**Versão 1.1 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
-> (Fases 0, 1 e 3 implementadas) para que você não precise reler os módulos. Para o que ainda
-> **não** existe, veja a seção 11.
+> (Fases 0 a 3 implementadas) para que você não precise reler os módulos. Para o que ainda
+> **não** existe, veja a seção 12.
 
 > ## Regra de manutenção (obrigatória)
 >
-> **Antes de modificar:** leia deste guia a seção do módulo que vai mexer (e as seções 12 e 15,
+> **Antes de modificar:** leia deste guia a seção do módulo que vai mexer (e as seções 13 e 16,
 > convenções e armadilhas). Só abra o código-fonte para o que o guia não responder. Planeje a
 > alteração a partir daqui.
 >
 > **Ao modificar:** toda alteração de lógica, contrato, parâmetro, arquivo ou comando precisa ser
 > refletida neste guia **na mesma entrega (mesmo commit)**: função nova/removida/renomeada,
 > fórmula ou critério trocado, parâmetro de `settings.yaml` que passou a ser lido (tire o ⏳),
-> fase concluída (atualize as seções 1 e 11), armadilha descoberta (seção 15).
+> fase concluída (atualize as seções 1 e 12), armadilha descoberta (seção 16).
 >
 > **Versão (no topo):** typo sem mudança de comportamento → não muda; mudança de comportamento,
 > contrato ou arquivo → *minor* (1.1, 1.2…); mudança que invalida dados já gravados em `data/` ou
@@ -33,10 +33,12 @@
 |---|---|---|
 | Config | `config.py` | ✅ pronto |
 | Dados | `data/{http,cvm,cadastro,validacao,precos,macro}.py` | ✅ prontos |
-| CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado` |
-| `contabil`, `projecao`, `custo_capital`, `modelos`, `analise`, `perfil`, `saida` | `__init__.py` de 1 linha | ❌ vazios (Fases 2, 4–10) |
+| Contábil | `contabil/{padronizacao,periodos,moeda,qa,nao_financeiras}.py` + `config/mapeamento_contas.yaml` | ✅ prontos (só plano `nao_financeira`) |
+| CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura` |
+| `projecao`, `custo_capital`, `modelos`, `analise`, `perfil`, `saida` | `__init__.py` de 1 linha | ❌ vazios (Fases 4–10) |
 
-~2.000 linhas de código, 100 testes, mypy `strict`, ruff (linha 100).
+~3.400 linhas de código, 252 testes (11 golden pulados por motivo declarado), mypy `strict`,
+ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
 Teste focado: `uv run pytest tests/test_cvm.py -k escala -q`.
@@ -63,18 +65,29 @@ brapi ────► BrapiProvider    ├─► precos.preco_validado ──►
 SGS/Focus/Tesouro ─► macro.carregar_macro ──► Macro (Selic, IPCA12m, dólar, Rf, Focus)
                                                               │
 composicao_capital.parquet + preços ─► precos.market_cap ──► MarketCap
+
+demonstracoes.parquet ─► padronizacao.selecionar_reapresentacoes (1 documento por período)
+                     ─► padronizacao.padronizar(plano de mapeamento_contas.yaml)
+                     ─► contas_padronizadas.parquet (tabela longa por conta padrão)
+                          ├─► periodos.{anual, acumulado_no_ano, trimestral, ltm, saldos} (largas)
+                          │      └─► nao_financeiras.metricas / metricas_ltm ► EBITDA, FCFF, ROIC…
+                          └─► qa.verificar ► ResultadoQA ► data/processed/qa/qa_{TICKER}.json
 ```
 
 Todo download passa por `http.baixar` (cache em `data/raw/` + `.meta.json`). Camada superior nunca
 é importada por inferior: `data` não importa `cli`; `macro` não conhece provedores de preço
 (o câmbio alternativo entra por parâmetro); `precos` importa `cadastro.Empresa` e `validacao`.
+`contabil` não importa nada de `data`: lê `demonstracoes.parquet` pelo caminho
+(`padronizacao.ler_demonstracoes`) e só importa `config`.
 
 ## 3. Comandos da CLI (`cli.py`)
 
 Callback global: `-v/--verbose` → logging DEBUG. Erros: `_erro()` imprime em vermelho e devolve
 `typer.Exit(1)`. Funções auxiliares: `_carregar_cadastro(settings, data_base, forcar)` (chama
 `cad.atualizar_cadastro` com TTL de `cache_ttl_horas.cvm`), `_tickers_do_universo(caminho)`,
-`_linha_validada(v, formato)` (cor por status).
+`_linha_validada(v, formato)` (cor por status), `_padronizar(ticker, settings) -> _Padronizada`
+(cadastro → `ler_demonstracoes` → `selecionar_reapresentacoes` → `detectar_moeda` → `padronizar`
+→ grava `contas_padronizadas.parquet`; só `nao_financeira`, outro tipo ⇒ `ErroContabil`).
 
 | Comando | Parâmetros | O que faz | Efeito de cada parâmetro |
 |---|---|---|---|
@@ -82,12 +95,15 @@ Callback global: `-v/--verbose` → logging DEBUG. Erros: `_erro()` imprime em v
 | `cadastro buscar TEXTO` | `--forcar` | Busca por ticker/razão/nome/CNPJ no cadastro | `--forcar` ignora TTL e rebaixa cadastro+FCA |
 | `atualizar` | `--tickers A,B` ou `--tudo`; `--forcar` | Baixa DFP/ITR/composição e grava parquets por companhia | exatamente um de `--tickers`/`--tudo`. `--tudo` lê `config/universo_ibovespa.csv` (**arquivo ainda não existe**, dá `ErroConfiguracao`). Holding/não suportada: só avisa e baixa |
 | `mercado TICKER` | `--data-base AAAA-MM-DD`; `--forcar` | Preço por classe, Ibovespa, dólar, Selic, IPCA, Rf e market cap, cada um em 2 fontes | `--data-base` sobrescreve `settings.data_base`. Exige `atualizar` antes (lê `composicao_capital.parquet`; senão mensagem pedindo o comando) |
+| `qa TICKER` | — | Padroniza, roda o QA, imprime verificações, cobertura e contas não mapeadas relevantes; grava `data/processed/qa/qa_{TICKER}.json` | **Sai com 1 se houver erro de QA.** Exige `atualizar` antes |
+| `historico TICKER` | `--anos N` (5); `--trimestral` | Métricas anuais (R$ mi) + coluna LTM | `--anos` = quantos exercícios; `--trimestral` mostra os 8 últimos trimestres (receita, EBITDA, lucro, D&A, capex, dividendos) |
+| `cobertura` | `--tickers A,B` ou `--tudo` | Matriz conta crítica × ticker com a fração dos exercícios mapeados (verde ≥ 95%) | igual a `atualizar` |
 
 Observação: `mercado` usa `settings.custo_capital.rf_brl.override` como Rf manual **independentemente
 de `rf_brl.fonte`** (a regra `fonte=manual ⇒ override` está só no validador pydantic).
 
 Para adicionar um comando: função `@app.command()` em `cli.py`, capturar
-`(ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroDadosExternos, ...)` → `raise _erro(str(e)) from e`,
+`(ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroDadosExternos, ErroContabil, ...)` → `raise _erro(str(e)) from e`,
 e testar com `typer.testing.CliRunner` em `tests/test_cli.py`.
 
 ## 4. `config.py`
@@ -109,11 +125,11 @@ validados.
 | Chave | Valor atual | Impacto |
 |---|---|---|
 | `data_base` | `hoje` | Data da avaliação. Define ano dos arquivos CVM/FCA a baixar, data do preço/macro e corte de ações |
-| `historico_anos` | 10 | `cvm.anos_a_coletar`: DFP de `ano-10` até `ano` (11 zips). Aumentar ⇒ mais downloads (DFP < 2010 não existe) |
+| `historico_anos` | 10 | `cvm.anos_a_coletar`: DFP de `ano-10` até `ano` (11 zips). Aumentar ⇒ mais downloads (DFP < 2010 não existe). No QA, janela de `anos_faltantes` |
 | `moeda_saida` | BRL | ⏳ |
 | `csv.*` | `;` `,` `utf-8-sig` | ⏳ (Fase 9) |
 | `cache_ttl_horas.cvm/precos/macro` | 168 / 12 / 12 | TTL do cache de CVM+cadastro / preços yfinance / macro. Dentro do TTL não há rede |
-| `impostos.aliquota_nominal` | 0.34 | ⏳ |
+| `impostos.aliquota_nominal` | 0.34 | Teto da alíquota operacional do NOPAT histórico (`nao_financeiras.metricas`, via `historico`); alíquota usada quando LAIR ≤ 0 |
 | `custo_capital.rf_brl.override` | null | Se numérico, `carregar_macro` não consulta Tesouro e marca Rf como `manual` |
 | `custo_capital.*` (resto) | — | ⏳ (Fase 6) |
 | `terminal.*`, `dcf.*`, `sensibilidade.*` | — | ⏳ (Fase 7) |
@@ -247,17 +263,129 @@ aceito 7–13 (`PRAZO_RF_*`), `DIAS_UTEIS_ANO=252`.
 `Macro(data_base, selic, ipca_12m, cambio, rf_brl, ipca_esperado, data_focus)` + `.avisos`.
 `rf_brl` é a **fonte principal para Ke** na Fase 6 (NTN-F, nominal; não somar risco-país por cima).
 
-## 11. O que NÃO existe ainda (não procure no código)
+## 11. `contabil/` — padronização, períodos, QA e métricas
+
+Decisões e porquês: ADR 0005. Exceção da camada: `ErroContabil` (em `contabil/__init__.py`).
+
+### `config/mapeamento_contas.yaml` + `padronizacao.py`
+
+YAML: `nao_financeira: {conta_padrao: [regras]}` e `contas_criticas: {nao_financeira: [...]}`.
+Regra (`RegraMapeamento`, pydantic `extra=forbid`): `dem` (`BPA|BPP|DRE|DFC|DVA`; `DFC` casa
+`DFC_MI` e `DFC_MD`), `cd` (exato), `cd_prefixo` (só **descendentes**, texto ou lista),
+`cd_excluir` (o código e descendentes), `ds_regex`/`ds_excluir` (sobre `DS_CONTA` **minúscula e sem
+acento**: escreva `aplicacoes`, não `aplicações`), `sinal` (1/-1). Exige `cd` ou `ds_regex`.
+
+| Símbolo | O que faz | Detalhe que costuma morder |
+|---|---|---|
+| `carregar_mapeamento(caminho, tipo="nao_financeira", extra=None) -> PlanoContas` | Lê e valida; `extra` (= `mapeamento_extra` da empresa) entra **antes** das regras padrão e pode criar conta | Conta que mistura saldo e fluxo, crítica sem regra, regex inválida ⇒ `ErroConfiguracao` |
+| `PlanoContas(tipo, contas, criticas)`, `.eh_saldo(conta)` | — | — |
+| `selecionar_reapresentacoes(demonstracoes, *, consolidado=True)` | Filtra consolidado e BPA/BPP/DRE/DFC/DVA; por (`familia`, `dt_ini`, `dt_fim`) fica **um** documento: maior (`dt_refer`, `versao`). DFC_MD sai se o mesmo período tem DFC_MI. Acrescenta a coluna `familia` | É o que corrige o sinal da Vale 2022 (vale o `PENÚLTIMO` da DFP 2023). DMPL/DRA são descartadas |
+| `avaliar_regra(selecionadas, regra)` | Valor da regra por período: soma das contas casadas **de nível mais alto** (subconta de outra casada é ignorada), × `sinal` | Usado também pelo QA para comparar regras |
+| `padronizar(selecionadas, plano, *, ticker)` | Por conta e período, vence a **primeira regra que casa**. Saída `COLUNAS_PADRONIZADAS` | Conta sem casamento num período simplesmente não aparece (sem NaN) |
+| `periodicidade(dt_ini, dt_fim)` | `S` saldo, `A` 12 meses, `T` 3 meses, `YTD` 6/9 meses | 1T (jan–mar) é `T` mas também é o YTD de março |
+| `cobertura(contas, criticas)` | Fração dos exercícios (31/12) com cada conta | — |
+| `ler_demonstracoes(dir_processed, cd_cvm)`, `caminho_padronizadas(...)` | Caminhos `data/processed/cvm/{cd_cvm}/…` | Arquivo ausente ⇒ `FileNotFoundError` |
+
+**Esquema de `contas_padronizadas.parquet`**: `cd_cvm, ticker, dt_refer, dt_ini, dt_fim,
+periodicidade, demonstracao, conta_padrao, valor, moeda, escala_aplicada, versao, fonte_arquivo,
+regra` (índice da regra usada), `cd_contas` (códigos somados, `;`). Valores em unidades, sinal da
+fonte principal (DRE/DFC como na CVM: despesa e saída negativas; D&A positiva).
+
+Contas padrão hoje (nao_financeira): DRE `receita_liquida, custo_vendas, resultado_bruto,
+despesas_operacionais, impairment, equivalencia_patrimonial, ebit, resultado_financeiro,
+receitas_financeiras, despesas_financeiras, lair, ir_csll, lucro_operacoes_continuadas,
+lucro_liquido, lucro_liquido_controladora, lucro_liquido_minoritarios`; DFC/DVA `da, cfo, capex,
+pagamento_arrendamento, dividendos_pagos`; BPA `ativo_total, ativo_circulante, caixa,
+aplicacoes_financeiras, contas_a_receber, estoques, ativo_nao_circulante, aplicacoes_financeiras_lp,
+investimentos, imobilizado, intangivel`; BPP `passivo_total, passivo_circulante, fornecedores,
+emprestimos_cp, arrendamento_cp_em_emprestimos, arrendamento_cp_outros, passivo_nao_circulante,
+emprestimos_lp, arrendamento_lp_em_emprestimos, arrendamento_lp_outros, provisoes_lp,
+patrimonio_liquido_total, minoritarios`.
+
+### `periodos.py` (visões largas, índice = data ou ano)
+
+Tudo parte do **acumulado no ano** (fluxo com `dt_ini` = 1º/jan do ano de `dt_fim`); o trimestre
+isolado da DRE é ignorado. Exercício social jan–dez suposto.
+
+| Função | Saída |
+|---|---|
+| `saldos(contas)` | Saldos por `dt_fim` |
+| `acumulado_no_ano(contas)` | YTD por `dt_fim` (dezembro = exercício) |
+| `anual(contas)` | Fluxos jan–dez + saldos 31/12; índice `ano` (int) |
+| `trimestral(contas)` | Fluxo do trimestre = YTD − YTD do trimestre anterior do mesmo ano (sem o anterior ⇒ NaN) + saldos |
+| `data_mais_recente(contas)` | Última data com YTD **e** balanço |
+| `ltm(contas, dt_fim=None) -> Series` | Exercício anterior + YTD − YTD de 1 ano antes (dezembro ⇒ o próprio exercício) + saldos na data; `name` = data. Componente ausente ⇒ `ErroContabil` |
+
+### `moeda.py`
+
+`detectar_moeda(demonstracoes, moeda_relatorio="auto") -> "BRL"|"USD"`: `MOEDAS_CVM` (`REAL→BRL`,
+`DOLAR→USD`); mais de uma moeda ou moeda desconhecida ⇒ `ErroContabil`; override ≠ `auto` vence.
+`converter_para_brl(valor, moeda, cambio)`: só para o valor final (fluxos e taxa ficam na moeda de
+reporte).
+
+### `nao_financeiras.py`
+
+`metricas(largo, *, aliquota_nominal, ajustes=None) -> DataFrame` (linhas consecutivas a 12 meses;
+ΔNWC/ROIC da 1ª linha = NaN) e `metricas_ltm(contas, *, aliquota_nominal, dt_fim=None, ajustes=None)
+-> Series` (ΔNWC/ROIC contra o balanço de 12 meses antes; sem ele ⇒ `ErroContabil`).
+`AjustesContabeis(ifrs16="divida", capex_equivalente_arrendamento=True,
+coligadas="somar_investimento_contabil", nao_recorrentes=())`, `NaoRecorrente(ano, valor, descricao)`
+(ganho positivo, perda negativa; só casa índice inteiro = visão anual). Contas em `OPCIONAIS`
+ausentes = 0; demais ausentes ⇒ `ErroContabil`.
+
+| Métrica | Fórmula |
+|---|---|
+| `ebitda` | EBIT contábil + D&A (= releases) |
+| `ebit_ajustado` | EBIT − não recorrentes [− equivalência se `coligadas=somar_investimento_contabil`]; `ebitda_ajustado` = + D&A |
+| `aliquota_efetiva` / `aliquota_operacional` | −IR/LAIR (NaN se LAIR ≤ 0) / limitada a [0, nominal], nominal se NaN |
+| `nopat` | `ebit_ajustado × (1 − aliquota_operacional)` |
+| `capex`, `pagamento_arrendamento`, `dividendos_pagos` | Sinal trocado (positivos = saída) |
+| `divida_financeira` | empréstimos CP + LP − arrendamento dentro de empréstimos |
+| `arrendamento` (`arrendamento_cp`) | dentro + fora de empréstimos |
+| `divida_bruta` | financeira [+ arrendamento se `ifrs16=divida`] |
+| `caixa_e_aplicacoes`, `divida_liquida` | caixa + aplicações CP; bruta − caixa |
+| `nwc`, `delta_nwc` | (AC − caixa − aplic.) − (PC − dívida financeira CP − arrendamento CP) |
+| `fcff` | NOPAT + D&A − capex − ΔNWC [− pagamento de arrendamento se `ifrs16=divida` e `capex_equivalente_arrendamento`] |
+| `fcf_caixa` | CFO − capex |
+| `capital_investido`, `roic` | PL total + dívida líquida; NOPAT / média do capital (NaN se ≤ 0) |
+
+### `qa.py`
+
+`verificar(selecionadas, contas, plano, *, ticker, moeda, historico_anos) -> ResultadoQA`
+(`.erros`, `.avisos`, `.para_dict()`, `cobertura`, `nao_mapeadas`), ordenado erro → aviso → info;
+`gravar(resultado, caminho)`. Tolerâncias são constantes no topo do módulo (`TOL_*`, `SALTO_ANUAL`,
+`LIMIAR_*`).
+
+| Código | Severidade | Regra |
+|---|---|---|
+| `balanco_fecha` | erro | ativo × (PC + PNC + PL) e × passivo total, > 0,1% |
+| `subcontas` | aviso | `1, 1.01, 1.02, 2, 2.01, 2.02` × soma das filhas diretas, > 0,5% |
+| `receita_positiva` | erro | receita anual ≤ 0 |
+| `ebit_consistente` | erro | EBIT × receita + custo + despesas operacionais, > 0,5% da receita, em todo período de fluxo (pega sinal invertido) |
+| `lair_consistente` / `lucro_atribuido` | aviso | LAIR × EBIT + financeiro; LL × controladora + minoritários |
+| `da_ausente` | aviso | D&A nula com imobilizado > 20% do ativo |
+| `fontes_divergentes` | aviso | Regras alternativas da mesma conta divergem > 5% (hoje: D&A DFC × DVA da Petrobras 2019–2022) |
+| `salto_anual` | aviso | receita, ativo, PL ou imobilizado variam > 50% a/a |
+| `anos_faltantes` | aviso (erro se nenhum) | exercícios ausentes nos últimos `historico_anos` |
+| `conta_critica_ausente` | aviso | crítica sem valor num exercício |
+| `escala_varia` | info | `MIL` e `UNIDADE` misturadas (já normalizado) |
+
+`contas_nao_mapeadas`: contas x.yy.zz do último exercício fora do mapeamento (nem ancestral nem
+descendente de conta usada com ≥ 2 pontos) com |valor| ≥ 5% do ativo (BPA/BPP, sem PL) ou da
+receita (só `3.04.03–05`, candidatas a não recorrente).
+
+## 12. O que NÃO existe ainda (não procure no código)
 
 | Fase | Falta | Dica de onde conectar |
 |---|---|---|
-| 2 | `contabil/*`, `config/mapeamento_contas.yaml`, `qa.py`, golden tests | Entrada: `data/processed/cvm/{cd_cvm}/demonstracoes.parquet`. Valores de conferência: `tests/golden/referencias.yaml` (R$ milhões!) |
+| 2 | `contabil/financeiras.py` e seção `financeira:` do mapeamento | Fase 10, após inspecionar ITUB4/BBAS3. `_padronizar` da CLI recusa tipo ≠ `nao_financeira` |
+| 5 | Leitura do YAML da empresa (`ajustes`, `mapeamento_extra`, `caixa_extra`, `divida_extra`, `moeda_relatorio`) | `AjustesContabeis`/`NaoRecorrente` e `carregar_mapeamento(extra=…)` já aceitam; hoje a CLI usa os padrões |
 | 4 | Perfil/questionário | `perfil/perfil_investidor.json` (gitignored) |
 | 5–10 | projeção, beta/CAPM/WACC, DCF, DDM, múltiplos, sensibilidade, saídas CSV/PNG | Parâmetros já validados em `Settings` |
 | — | `config/universo_ibovespa.csv`, `config/setores.yaml`, `config/empresas/*.yaml` | `--tudo` falha sem o universo |
-| — | comandos `perfil`, `qa`, `premissas`, `rodar`, `comparar` | seção 14 do `CLAUDE.md` |
+| — | comandos `perfil`, `premissas`, `rodar`, `comparar` | seção 14 do `CLAUDE.md` |
 
-## 12. Convenções que o código já segue (siga também)
+## 13. Convenções que o código já segue (siga também)
 
 - **Funções puras** recebem `agora`/`data_base` por parâmetro; `date.today()`/`datetime.now()` só na
   CLI (`cli.py`).
@@ -267,14 +395,14 @@ aceito 7–13 (`PRAZO_RF_*`), `DIAS_UTEIS_ANO=252`.
   corrigida). Taxas em **decimal** (0,1375, não 13,75).
 - Exceções em português `ErroX` (N818 ignorado no ruff). Hierarquia: `ErroDownload ⊃
   ArquivoNaoEncontrado`; `ErroDadosExternos ⊃ ErroPrecos`; `ErroCadastro`, `ErroDadosCVM`,
-  `ErroConfiguracao`.
+  `ErroConfiguracao`, `ErroContabil`.
 - Dataclasses `frozen=True` para objetos trocados entre camadas; pydantic só para configuração.
 - Identificadores de domínio em português; mensagens ao usuário em PT-BR.
 - Dependência opcional pesada (`yfinance`) é importada **dentro** da função (`_baixar`).
 - Não usar `QUOTE_NONE` ⇒ quebra; não reordenar `COLUNAS_*` sem revisar parquets existentes
   (apague `data/processed/` e rode `atualizar --forcar` se mudar esquema).
 
-## 13. Testes
+## 14. Testes
 
 | Arquivo | Cobre | Fixtures |
 |---|---|---|
@@ -282,15 +410,23 @@ aceito 7–13 (`PRAZO_RF_*`), `DIAS_UTEIS_ANO=252`.
 | `test_cvm.py` | parsing, escala, versões, `coletar` | `zip_cvm("dfp_cia_aberta_2025")` etc. |
 | `test_cadastro.py` | FCA, manual, classificação, busca | `tests/fixtures/cvm/*` |
 | `test_validacao.py`, `test_precos.py`, `test_macro.py` | `cruzar`, providers falsos, market cap, SGS/Focus/Tesouro | respostas sintéticas |
-| `test_config.py`, `test_cli.py` | YAML real, `CliRunner` | — |
+| `test_config.py`, `test_cli.py` | YAML real, `CliRunner` (`qa`/`historico`/`cobertura` sobre DFP sintética) | `ambiente_offline`, `weg_sintetica` |
+| `test_padronizacao.py`, `test_periodos.py`, `test_moeda.py`, `test_nao_financeiras.py`, `test_qa.py` | regras, reapresentação, LTM/trimestre, métricas calculadas à mão, cada verificação do QA | `tests/sintetico.py` |
+| `test_golden.py` | 94 valores de `tests/golden/referencias.yaml` contra o pipeline | **dados reais** em `data/processed/cvm/`; pulado se ausentes |
 
 `conftest.py`: `SessaoFalsa` (rotas URL → `(status, bytes, headers)`; devolve 304 se
 `If-Modified-Since == Last-Modified`; 404 para rota ausente), `resposta()`, `montar_zip()`,
 fixture `zip_cvm`. Pytest roda com `pythonpath=tests` (importa `conftest` direto).
+`sintetico.py`: `documento(contas, dem=, dt_fim=, dt_ini=, dt_refer=, fonte=, versao=, ordem=, …)`
+(linhas no formato de `demonstracoes.parquet`), `dfp_completa(ano, **trocas)` (DFP consistente com
+todas as críticas; `trocas={"DRE": {"3.02": 60}}`, `None` remove), `contas_padronizadas(registros)`
+com `ano()`, `ytd()`, `saldo()`.
+`test_golden.py`: chaves da referência → métrica em `FLUXOS`/`SALDOS`; definições próprias das
+companhias em `NAO_COMPARAVEIS`; período ainda não publicado na CVM é pulado.
 Fixtures CVM são amostras minúsculas (uma empresa, 2025/2026): ao mudar parsing, atualize-as em
 vez de baixar dados reais. Sem rede nos testes.
 
-## 14. Receitas rápidas
+## 15. Receitas rápidas
 
 | Quero… | Mexa em… |
 |---|---|
@@ -300,11 +436,16 @@ vez de baixar dados reais. Sem rede nos testes.
 | Nova fonte de preço | classe que satisfaz `PrecosProvider`; passe-a a `preco_validado`; a camada de modelos não muda |
 | Mais anos de histórico | `settings.historico_anos` (DFP antes de 2010 não existe; composição de capital só ≥ 2020) |
 | Corrigir escala de ações de uma empresa | `cadastro_manual.csv > escala_acoes` (1 ou 1000) |
+| Mapear conta nova ou corrigir regra | `config/mapeamento_contas.yaml` (+ crítica em `contas_criticas` se for o caso); confira com `valuation cobertura --tickers …` e `valuation qa` |
+| Caso particular de uma empresa | `mapeamento_extra` → `carregar_mapeamento(extra=…)` (YAML da empresa só na Fase 5) |
+| Nova métrica histórica | `nao_financeiras.metricas` (+ `OPCIONAIS` se a conta pode faltar) + linha em `cli._LINHAS_HISTORICO` + teste à mão |
+| Nova verificação de QA | gerador `_x(...) -> Iterable[Verificacao]` em `qa.py`, chamado em `verificar`; colunas lidas em `_*_USADOS` |
+| Novo valor de conciliação | `tests/golden/referencias.yaml` (R$ mi) + chave em `FLUXOS`/`SALDOS` de `test_golden.py` |
 | Registrar fonte/URL validada | `docs/fontes.md` (obrigatório pelo CLAUDE.md) |
 | Decisão que desvia do CLAUDE.md | ADR em `docs/decisoes/NNNN-*.md` |
 | Fechar uma fase | atualizar `CHANGELOG.md`, `make lint tipos testes`, resumir ao usuário |
 
-## 15. Armadilhas (resumo)
+## 16. Armadilhas (resumo)
 
 1. `CD_CVM` com zero à esquerda na DFP/ITR, sem no cadastro ⇒ sempre `normalizar_cd_cvm`.
 2. `MOEDA` na CVM é `REAL` até para a Vale (ADR 0002): detecção de moeda não vem do campo hoje.
@@ -318,3 +459,13 @@ vez de baixar dados reais. Sem rede nos testes.
 8. brapi sem token: só 4 tickers; `marketCap` da brapi não bate com ações × preço (não usar).
 9. `golden/referencias.yaml` está em **R$ milhões**; os parquets estão em **unidades**.
 10. `data/`, `perfil/perfil_investidor.json`, `saida/`, `referencias/**` estão no `.gitignore`.
+11. Regex do mapeamento roda sobre `DS_CONTA` **sem acento e minúscula**: regex com acento nunca casa.
+12. `cd_prefixo` casa só descendentes (`"2.01"` não casa `2.01`). Regex sem prefixo pega a conta em
+    qualquer seção (ex.: "amortiza" casaria "Amortizações de principal" em `6.03`).
+13. Na tabela padronizada a conta some do período sem regra que case; nas métricas, conta fora de
+    `OPCIONAIS` ausente é erro. Concatenar DataFrame vazio de `documento()` vira coluna `object` e
+    quebra `.dt` (nos testes, não gere documento sem contas).
+14. Sinais: DRE/DFC como na CVM (despesa/saída negativa), D&A positiva; nas **métricas** capex,
+    dividendos e pagamento de arrendamento ficam positivos. IR do `golden` é positivo.
+15. Dividendos YTD da WEG nem sempre crescem ao longo do ano (dado da companhia): trimestre pode
+    sair estranho sem ser bug.

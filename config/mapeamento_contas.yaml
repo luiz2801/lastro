@@ -1,0 +1,159 @@
+# Plano de contas padronizado: CVM (DFP/ITR consolidados) -> conta padrão.
+#
+# Cada conta padrão tem uma lista de regras avaliadas em ordem, por período: a primeira regra que
+# encontra alguma conta naquele período vence. Campos de uma regra:
+#   dem         BPA | BPP | DRE | DFC (DFC_MI ou DFC_MD) | DVA
+#   cd          código exato da conta
+#   cd_prefixo  só contas abaixo destes códigos (lista ou texto; "6.01.01" casa 6.01.01.xx)
+#   cd_excluir  exclui contas abaixo destes códigos (e os próprios)
+#   ds_regex    regex sobre DS_CONTA, comparada em minúsculas e sem acentos ("aplicacoes")
+#   ds_excluir  regex que descarta a conta
+#   sinal       1 (padrão) ou -1
+# Quando várias contas casam, somam-se só as de nível mais alto (subconta de conta já casada é
+# ignorada, para não contar duas vezes).
+#
+# Convenção de sinal: a da fonte principal de cada conta (DRE e DFC como na CVM: despesa e saída
+# de caixa negativas). D&A é positiva (como na DFC); a DVA traz D&A negativa, daí `sinal: -1`.
+#
+# Códigos e regex conferidos contra PETR4, VALE3 e WEGE3 (DFP 2016-2025, ITR 2025-2026); ver
+# docs/fontes.md. Contas que não se aplicam a todas as companhias (arrendamento fora de
+# empréstimos, aplicações de longo prazo, equivalência) ficam vazias quando não existem e as
+# métricas as tratam como zero.
+
+nao_financeira:
+  # --- DRE -------------------------------------------------------------------------------------
+  receita_liquida:
+    - {dem: DRE, cd: "3.01"}
+  custo_vendas:
+    - {dem: DRE, cd: "3.02"}
+  resultado_bruto:
+    - {dem: DRE, cd: "3.03"}
+  despesas_operacionais:
+    - {dem: DRE, cd: "3.04"}
+  # Perdas por impairment: candidatas a não recorrente (ajustes.nao_recorrentes da empresa).
+  impairment:
+    - {dem: DRE, cd: "3.04.03"}
+  equivalencia_patrimonial:
+    - {dem: DRE, cd: "3.04.06"}
+    - {dem: DRE, cd_prefixo: "3.04", ds_regex: "equivalencia patrimonial"}
+  ebit:
+    - {dem: DRE, cd: "3.05"}
+  resultado_financeiro:
+    - {dem: DRE, cd: "3.06"}
+  receitas_financeiras:
+    - {dem: DRE, cd: "3.06.01"}
+  despesas_financeiras:
+    - {dem: DRE, cd: "3.06.02"}
+  lair:
+    - {dem: DRE, cd: "3.07"}
+  ir_csll:
+    - {dem: DRE, cd: "3.08"}
+  lucro_operacoes_continuadas:
+    - {dem: DRE, cd: "3.09"}
+  lucro_liquido:
+    - {dem: DRE, cd: "3.11"}
+  lucro_liquido_controladora:
+    - {dem: DRE, cd: "3.11.01"}
+  lucro_liquido_minoritarios:
+    - {dem: DRE, cd: "3.11.02"}
+
+  # --- DFC / DVA -------------------------------------------------------------------------------
+  # D&A: a DFC é a fonte principal (é o valor que a companhia soma de volta ao caixa). O código
+  # muda entre trimestres (Vale: 6.01.01.05 x 6.01.01.06), por isso regex dentro de 6.01.01. Na
+  # Petrobras 2019-2023 a DVA traz valor maior que a DFC (o QA avisa a diferença).
+  da:
+    - {dem: DFC, cd_prefixo: "6.01.01", ds_regex: "deprecia|amortiza|exaust",
+       ds_excluir: "aliena|baixa|perda|ganho|resultado|venda"}
+    - {dem: DVA, cd: "7.04.01", sinal: -1}
+  cfo:
+    - {dem: DFC, cd: "6.01"}
+  # Aquisições de imobilizado e intangível (negativo = saída). Recebimentos de venda ficam de
+  # fora. Petrobras 2019: o bônus da Cessão Onerosa (6.02.06) não entra (aquisição de direito
+  # exploratório, item não recorrente).
+  capex:
+    - {dem: DFC, cd_prefixo: "6.02", ds_regex: "imobilizad|intang",
+       ds_excluir: "venda|aliena|recebiment|resultado|baixa|perda|ganho"}
+  pagamento_arrendamento:
+    - {dem: DFC, cd_prefixo: "6.03", ds_regex: "arrendamento", ds_excluir: "capta|adicoes"}
+  dividendos_pagos:
+    - {dem: DFC, cd_prefixo: "6.03", ds_regex: "dividendo|juros s(obre|/) ?(o )?capital|jcp",
+       ds_excluir: "nao controlador|minorit|recebid"}
+
+  # --- BPA -------------------------------------------------------------------------------------
+  ativo_total:
+    - {dem: BPA, cd: "1"}
+  ativo_circulante:
+    - {dem: BPA, cd: "1.01"}
+  caixa:
+    - {dem: BPA, cd: "1.01.01"}
+  aplicacoes_financeiras:
+    - {dem: BPA, cd: "1.01.02"}
+  contas_a_receber:
+    - {dem: BPA, cd: "1.01.03"}
+  estoques:
+    - {dem: BPA, cd: "1.01.04"}
+  ativo_nao_circulante:
+    - {dem: BPA, cd: "1.02"}
+  aplicacoes_financeiras_lp:
+    - {dem: BPA, cd_prefixo: "1.02.01", ds_regex: "^aplicacoes financeiras"}
+  investimentos:
+    - {dem: BPA, cd: "1.02.02"}
+  imobilizado:
+    - {dem: BPA, cd: "1.02.03"}
+  intangivel:
+    - {dem: BPA, cd: "1.02.04"}
+
+  # --- BPP -------------------------------------------------------------------------------------
+  # Empréstimos (2.01.04 / 2.02.01) incluem o arrendamento na Petrobras e na Vale (x.03) e não na
+  # WEG (arrendamento em "Outras obrigações"). As métricas separam:
+  #   dívida financeira = empréstimos - arrendamento_em_emprestimos
+  #   arrendamento      = arrendamento_em_emprestimos + arrendamento_outros
+  passivo_total:
+    - {dem: BPP, cd: "2"}
+  passivo_circulante:
+    - {dem: BPP, cd: "2.01"}
+  fornecedores:
+    - {dem: BPP, cd: "2.01.02"}
+  emprestimos_cp:
+    - {dem: BPP, cd: "2.01.04"}
+  arrendamento_cp_em_emprestimos:
+    - {dem: BPP, cd_prefixo: "2.01.04", ds_regex: "arrendamento"}
+  arrendamento_cp_outros:
+    - {dem: BPP, cd_prefixo: "2.01", cd_excluir: "2.01.04", ds_regex: "arrendamento"}
+  passivo_nao_circulante:
+    - {dem: BPP, cd: "2.02"}
+  emprestimos_lp:
+    - {dem: BPP, cd: "2.02.01"}
+  arrendamento_lp_em_emprestimos:
+    - {dem: BPP, cd_prefixo: "2.02.01", ds_regex: "arrendamento"}
+  arrendamento_lp_outros:
+    - {dem: BPP, cd_prefixo: "2.02", cd_excluir: "2.02.01", ds_regex: "arrendamento"}
+  provisoes_lp:
+    - {dem: BPP, cd: "2.02.04"}
+  patrimonio_liquido_total:
+    - {dem: BPP, cd: "2.03"}
+  minoritarios:
+    - {dem: BPP, cd: "2.03.09"}
+
+# Contas sem as quais as métricas principais não saem. O relatório de cobertura mede estas; o QA
+# avisa quando faltam em algum exercício.
+contas_criticas:
+  nao_financeira:
+    - receita_liquida
+    - ebit
+    - lair
+    - ir_csll
+    - lucro_liquido
+    - lucro_liquido_controladora
+    - da
+    - cfo
+    - capex
+    - ativo_total
+    - ativo_circulante
+    - caixa
+    - aplicacoes_financeiras
+    - passivo_circulante
+    - emprestimos_cp
+    - emprestimos_lp
+    - patrimonio_liquido_total
+    - minoritarios

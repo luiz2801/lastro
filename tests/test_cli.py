@@ -7,6 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from conftest import DIR_FIXTURES_CVM, SessaoFalsa
+from sintetico import dfp_completa, juntar
 from valuation import __version__, cli
 from valuation.cli import app
 from valuation.config import Settings, carregar_settings
@@ -98,3 +99,54 @@ def test_atualizar_exige_uma_opcao() -> None:
     resultado = CliRunner().invoke(app, ["atualizar"])
     assert resultado.exit_code == 1
     assert "--tickers ou --tudo" in resultado.output
+
+
+@pytest.fixture
+def weg_sintetica(ambiente_offline: Path) -> Path:
+    """WEGE3 baixada pela fixture e com as demonstrações trocadas por uma DFP sintética completa."""
+    assert CliRunner().invoke(app, ["atualizar", "--tickers", "WEGE3"]).exit_code == 0
+    pasta = ambiente_offline / "processed" / "cvm" / "5410"
+    dados = juntar(dfp_completa(2024, cd_cvm=5410), dfp_completa(2025, cd_cvm=5410))
+    dados.to_parquet(pasta / "demonstracoes.parquet", index=False)
+    return ambiente_offline
+
+
+def test_qa(weg_sintetica: Path) -> None:
+    resultado = CliRunner().invoke(app, ["qa", "WEGE3"])
+    assert resultado.exit_code == 0, resultado.output
+    assert "Nenhum problema encontrado" in resultado.output
+    assert "100%" in resultado.output
+    assert (weg_sintetica / "processed" / "qa" / "qa_WEGE3.json").is_file()
+    assert (weg_sintetica / "processed" / "cvm" / "5410" / "contas_padronizadas.parquet").is_file()
+
+
+def test_qa_com_erro_sai_com_1(weg_sintetica: Path) -> None:
+    pasta = weg_sintetica / "processed" / "cvm" / "5410"
+    dados = juntar(dfp_completa(2024, cd_cvm=5410), dfp_completa(2025, cd_cvm=5410, BPA={"1": 999}))
+    dados.to_parquet(pasta / "demonstracoes.parquet", index=False)
+    resultado = CliRunner().invoke(app, ["qa", "WEGE3"])
+    assert resultado.exit_code == 1
+    assert "balanco_fecha" in resultado.output
+
+
+def test_qa_sem_dados(ambiente_offline: Path) -> None:
+    resultado = CliRunner().invoke(app, ["qa", "WEGE3"])
+    assert resultado.exit_code == 1
+    assert "valuation atualizar --tickers WEGE3" in " ".join(resultado.output.split())
+
+
+def test_historico(weg_sintetica: Path) -> None:
+    resultado = CliRunner().invoke(app, ["historico", "WEGE3", "--anos", "2"])
+    assert resultado.exit_code == 0, resultado.output
+    assert "LTM 12/2025" in resultado.output
+    assert "Receita líquida" in resultado.output
+    trimestral = CliRunner().invoke(app, ["historico", "WEGE3", "--trimestral"])
+    assert trimestral.exit_code == 0, trimestral.output
+    assert "4T25" in trimestral.output
+
+
+def test_cobertura(weg_sintetica: Path) -> None:
+    resultado = CliRunner().invoke(app, ["cobertura", "--tickers", "WEGE3"])
+    assert resultado.exit_code == 0, resultado.output
+    assert "Média geral: 100.0%" in resultado.output
+    assert CliRunner().invoke(app, ["cobertura"]).exit_code == 1
