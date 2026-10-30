@@ -2,6 +2,18 @@
 
 ## [Não lançado]
 
+### Glossário das métricas (Etapa 7 do backlog)
+- `valuation glossario [TERMO]`: 37 termos (WACC, Ke, g, RONIC, VT/EV, múltiplos, hurdle…) com o
+  que é, como se calcula e como ler; busca sem distinguir caixa, acento ou símbolos.
+- `--explicar` em `wacc`, `comparar` e `rodar` (DCF e DDM) imprime a legenda dos termos mostrados;
+  o modo padrão continua sucinto.
+- `meta.json` ganha a chave `glossario` (dicionário de dados). Código em `saida/glossario.py`.
+- Fica de fora: legendas nos PNG e GUI.
+
+### ERP implícito do Ibovespa: ADR 0018 proposto
+- Regra de crescimento esperado (histórico no curto prazo, teto PIB + IPCA do Focus no longo,
+  faixa ±1 p.p.) escrita como ADR **proposto**; nenhum código até o usuário aprovar.
+
 ### Kd manual da PETR4
 - `config/empresas/PETR4.yaml`: `custo_capital.kd` manual de 15,60% (Rf 15,00% + spread de 0,60%
   do guia `kd_petrobras.md`). Valor ponderado do perfil moderado: R$ 43,36 → R$ 42,79 (−1,3%).

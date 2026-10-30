@@ -867,3 +867,31 @@ def test_acoes_do_papel_conta_units() -> None:
     )
     assert cli._acoes_do_papel(empresa, cap, "XXXX11") == 100  # 300 ações = 100 units
     assert cli._acoes_do_papel(empresa, cap, "XXXX4") == 300
+
+
+def test_explicar_so_aparece_quando_pedido(mercado_falso: Path, caminho_perfil: Path) -> None:
+    saida = mercado_falso / "saida"
+    base = ["rodar", "WEGE3", "--perfil", "moderado", "--sem-graficos", "--saida", str(saida)]
+    sucinto = CliRunner().invoke(app, base)
+    assert sucinto.exit_code == 0, sucinto.output
+    assert "Legenda" not in sucinto.output
+    explicado = CliRunner().invoke(app, [*base, "--explicar"])
+    assert explicado.exit_code == 0, explicado.output
+    assert "Legenda" in explicado.output
+    assert "Como se calcula" in explicado.output
+    meta = json.loads((saida / "WEGE3" / "2026-10-30" / "meta.json").read_text("utf-8"))
+    assert meta["glossario"]["wacc"]["sigla"] == "WACC"
+
+
+def test_explicar_no_wacc_e_no_rodar_financeira(
+    mercado_falso: Path, mercado_banco: Path, caminho_perfil: Path
+) -> None:
+    r = CliRunner().invoke(
+        app, ["wacc", "WEGE3", "--explicar", "--saida", str(mercado_falso / "saida")]
+    )
+    assert r.exit_code == 0, r.output
+    assert "Legenda" in r.output
+    argumentos = ["rodar", "WEGE3", "--perfil", "moderado", "--sem-graficos", "--explicar"]
+    r = CliRunner().invoke(app, [*argumentos, "--saida", str(mercado_banco / "saida")])
+    assert r.exit_code == 0, r.output
+    assert "Legenda" in r.output

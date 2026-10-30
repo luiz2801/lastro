@@ -322,7 +322,7 @@ Agrupa dois itens relacionados; exige decisão de negócio antes de codar.
 Melhora a robustez da premissa de ERP sem depender de fontes pagas; mais elaborado que os itens
 anteriores, por isso fica aqui.
 
-1. ADR descrevendo a escolha de crescimento esperado (Focus PIB + inflação como teto).
+1. ADR descrevendo a escolha de crescimento esperado (Focus PIB + inflação como teto): **escrito como proposto (ADR 0018), aguarda aprovação do usuário antes de codar**.
 2. Módulo puro `custo_capital/erp_implicito.py` (ver detalhes na seção "ERP implícito" deste
    backlog).
 3. Campo `custo_capital.erp.fonte: manual | implicito_ibovespa` em `config.py` e `settings.yaml`.
@@ -330,7 +330,7 @@ anteriores, por isso fica aqui.
 
 *Entrega:* calibração do ERP baseada em dados locais, saindo com faixa e aviso (não número único).
 
-### Etapa 7 — Glossário / explicação de métricas na CLI
+### Etapa 7 — ✅ Glossário / explicação de métricas na CLI (feito: comando, `--explicar` e `meta.json`; faltam legendas nos PNG e a GUI)
 
 Melhora a usabilidade sem alterar nenhum modelo.
 

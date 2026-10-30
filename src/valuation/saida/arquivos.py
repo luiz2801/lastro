@@ -25,7 +25,7 @@ import yaml
 from valuation.modelos import dcf, ddm
 from valuation.modelos import multiplos as mt
 from valuation.modelos import ponte as pt
-from valuation.saida import real
+from valuation.saida import glossario, real
 
 
 @dataclass(frozen=True)
@@ -198,6 +198,7 @@ def montar_meta(
         "hash_contas_padronizadas": hash_contas,
         "arquivos": list(arquivos),
         "avisos": list(avisos),
+        "glossario": glossario.dicionario(),
     }
 
 

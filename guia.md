@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.25 — 2026-10-30**
+**Versão 1.26 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -48,10 +48,10 @@
 | Custo de capital | `custo_capital/{beta,capm,kd,wacc}.py` | ✅ prontos (seção 19), inclusive beta por comparáveis, estrutura do setor e Ke das financeiras |
 | Modelos | `modelos/{dcf,ponte,multiplos,ddm}.py` | ✅ DCF do FCFF, ponte EV → equity, múltiplos dos pares e DDM com lucro residual (seção 20) |
 | Análise | `analise/{cenarios,sensibilidade}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade, FCFF e DDM (seção 20) |
-| Saída | `saida/{csv,arquivos,real,graficos}.py` | ✅ CSV e matrizes, `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais e gráficos PNG (seção 19) |
-| CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar` |
+| Saída | `saida/{csv,arquivos,real,graficos,glossario}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG e glossário das métricas (seção 19) |
+| CLI | `cli.py` | `versao`, `glossario`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar` |
 
-~10.200 linhas de código, 455 testes (11 golden pulados por motivo declarado), mypy `strict`,
+~10.200 linhas de código, 470 testes (11 golden pulados por motivo declarado), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -185,7 +185,12 @@ mediana de 5a), `_resumo` (linha do `resumo.csv`), `_mostrar_valuation`. Finance
 | `wacc TICKER` | `--data-base AAAA-MM-DD`; `--forcar`; `--saida DIR`; `--formato-csv br\|intl` | Beta, Ke, Kd, estrutura e WACC na moeda de reporte; tabela no terminal e `{saida}/{TICKER}/{data-base}/wacc.csv` (`componente;valor;detalhe`, avisos em linhas `aviso`). Financeira: só beta e Ke (sem Kd, estrutura nem WACC) e a data do balanço | `--saida` muda a raiz (padrão `saida/`); `intl` grava `,`/`.`/utf-8. **WACC ≤ g terminal ⇒ sai com 1.** Exige `atualizar` antes; consulta preços e macro como `mercado`. Mede os pares só se o beta for por comparáveis ou a estrutura for `setor` |
 | `comparar TICKER` | `--data-base`; `--saida DIR`; `--formato-csv br\|intl`; `--forcar` | Múltiplos LTM do alvo e dos pares (P/L, EV/EBITDA, EV/EBIT, EV/Receita, P/VP, EV/FCF, dividend yield), P25/mediana/P75 dos pares e valor por ação implícito do alvo; grava `multiplos_pares.csv` e `multiplos_implicitos.csv` em `{saida}/{TICKER}/{data-base}/` | **Nenhum par medido ⇒ sai com 1** (par sem dados vira aviso). Exige `atualizar` do alvo e dos pares (`--com-pares`) |
 | `rodar TICKER` | `--cenario base\|pessimista\|otimista\|todos` (todos); `--perfil P`; `--data-base`; `--saida DIR`; `--formato-csv br\|intl`; `--forcar`; `--sem-graficos` | DCF por cenário (VP dos fluxos, VP do terminal, EV, VT/EV, EV/EBITDA terminal, equity, valor por ação), checagens de g/WACC/RONIC, valor ponderado, preço máximo de compra, upside, Ke implícito × hurdle e WACC implícito × WACC, projeção do cenário de referência e matriz WACC × g; mensagem neutra contra o preço máximo do perfil. Também mede os pares (múltiplos, valor implícito pela mediana, g implícito no EV/EBITDA mediano dos pares). Grava em `{saida}/{TICKER}/{data-base}/`: `resumo.csv`, `wacc.csv`, `projecao_{cenario}.csv`, `ponte_ev_equity.csv` (coluna por cenário), `sensibilidade_wacc_g.csv`, `sensibilidade_margem_crescimento.csv` e, com pares medidos, `multiplos_pares.csv` e `multiplos_implicitos.csv`. **Complementos (DCF e DDM, seção 19)**: `historico.csv`, `qa.json`, `valores_reais.csv`, `premissas_usadas.yaml`, `meta.json` (por último) e, sem `--sem-graficos`, `football_field.png`, `ponte_ev_equity.png` (só DCF), `sensibilidade_heatmap.png` (+ `_margem_crescimento` no DCF, `_roe_ke` no DDM), `historico_vs_projecao.png` e `composicao_valor.png` | **Exige perfil válido ou `--perfil`** (senão sai com 1); o perfil dá pesos, margem, hurdle e, com `horizonte_anos: perfil`, o horizonte. `--cenario X` avalia só X (peso 100%, referência do preço máximo e da sensibilidade). Exige `atualizar`; consulta preços e macro como `mercado`. **Financeira**: DDM por cenário (VP dos dividendos, VP do terminal, valor, VT/valor, P/VP justificado, lucro residual, valor por ação), checagens (Ke > g, ROE de longo prazo, lucro residual − DDM), Ke implícito × hurdle, projeção e matriz Ke × g; grava `resumo.csv` (`modelo = ddm`), `wacc.csv` (só Ke), `projecao_{cenario}.csv` (com tau, fator, VP e lucro residual), `sensibilidade_ke_g.csv` e `sensibilidade_roe_ke.csv` e, com pares medidos, os CSVs de múltiplos |
+| `glossario [TERMO]` | — | Sem argumento, lista os termos por grupo (custo de capital, modelos, múltiplos, perfil e decisão) com o que é, como se calcula e como ler; com `TERMO` (sigla ou nome, sem distinguir caixa, acento ou símbolos: `p/vp`, `ev ebitda`), explica só os que casam. Termo inexistente ⇒ sai com 1 | Dados estáticos de `saida/glossario.py`; não lê configuração nem rede |
 | `perfil` | `--mostrar` ou `--refazer` | Sem perfil (ou vencido): roda o questionário (resposta = número da alternativa; inválida ⇒ pergunta de novo), grava `CAMINHO_PERFIL` e mostra perfil + parâmetros. Com perfil válido: só mostra | `--mostrar` só mostra (sem perfil ⇒ sai com 1); `--refazer` responde de novo mesmo válido e aceita JSON corrompido (sem ele, JSON inválido ⇒ sai com 1). Os dois juntos ⇒ erro. Validade conferida contra `date.today()`, **não** contra `data_base` |
+
+`--explicar` (em `wacc`, `comparar` e `rodar`, DCF e DDM; `EXPLICAR` e `_legenda(chaves)`) imprime no fim a tabela
+"Legenda" dos termos mostrados (`gl.LEGENDA_WACC`, `LEGENDA_DCF`, `LEGENDA_DDM`, `legenda_multiplos(nomes)`); sem
+ele a saída continua sucinta. `_Execucao.explicar` leva a flag ao `rodar`.
 
 Observação: `mercado` usa `settings.custo_capital.rf_brl.override` como Rf manual **independentemente
 de `rf_brl.fonte`** (a regra `fonte=manual ⇒ override` está só no validador pydantic).
@@ -532,8 +537,8 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 |---|---|---|
 | 11 | Só entra se o usuário pedir: modo em lote/screening, SOTP/NAV para holdings, Monte Carlo, deck de commodities, tratamento de JCP, diluição | `rodar` é uma empresa por vez; o motor (funções puras) já aceita qualquer `PremissasEmpresa` |
 
-Também fora do código hoje: a explicação de métricas na tela, GUI, ERP implícito do Ibovespa
-(`docs/backlog.md`).
+Também fora do código hoje: legendas nos gráficos PNG, GUI, ERP implícito do Ibovespa (ADR 0018,
+proposto; `docs/backlog.md`).
 
 ## 13. Convenções que o código já segue (siga também)
 
@@ -809,6 +814,7 @@ nada consulta rede. Importa `config` (não importa `data`, `projecao` nem a CLI)
 | `saida/real.py` | `IpcaProjetado(por_ano, ipca_12m).taxa(ano)`, `fator_acumulado(data_base, anos_a_frente, ipca)`, `FluxosCenario`, `fisher_real`, `tabela(data_base, ipca, cenarios) -> DataFrame` | Formato longo `cenario, item, ano, ipca_ano, deflator, nominal, real`; itens `fluxo`, `valor_terminal`, `valor_por_acao` (deflator 1), `taxa_desconto`, `g_terminal`. Fator = IPCA de cada ano civil elevado aos dias do trecho / 365 |
 | `saida/arquivos.py` | `CenarioSaida`, `cenario_dcf(av)`, `cenario_ddm(av)`, `serializavel`, `gravar_json`, `gravar_yaml`, `sha256_arquivo`, `commit_git`, `fontes_cvm(dir_raw)`, `montar_meta(...)`, `tabela_historico(anual, ltm)`, `Faixa`, `faixas_football(...)`, `faixa_52_semanas(historico, base)` | Camada de I/O (a única que chama `git`). `CenarioSaida` uniformiza DCF e DDM (`fluxos` com `fluxo` e `tau`, `projecao`, VP dos fluxos e do terminal, `ponte` só no DCF) |
 | `saida/graficos.py` | `football_field`, `cascata_ponte`, `heatmap`, `historico_vs_projecao` (com `Painel`), `composicao_valor`; `br`, `reais`, `pct` | `Figure` direto (sem `pyplot`), 150 dpi, superfície `#fcfcfb`, cores na ordem azul/laranja/verde-água, texto em tinta neutra. Cada função devolve o caminho do PNG |
+| `saida/glossario.py` | `Termo(chave, sigla, nome, grupo, definicao, formula, interpretacao)`, `TERMOS`, `GRUPOS`, `buscar(texto)`, `termos(chaves)`, `dicionario(chaves=None)`, `LEGENDA_*`, `legenda_multiplos(nomes)` | Dados estáticos, sem I/O. Chaves minúsculas sem acento (`p_vp`, `ev_ebitda`); `termos` levanta `KeyError` em chave desconhecida (teste garante que legendas e `mt.MULTIPLOS` têm termo). `montar_meta` grava `dicionario()` na chave `glossario` do `meta.json`. Ao criar métrica nova exibida, acrescente o termo |
 | `saida/csv.py` | `gravar_csv(df, caminho, config_csv, formato="br")`, `gravar_matriz(matriz, ...)`, `INTERNACIONAL` | `br` = `settings.csv`; `intl` = `,` `.` utf-8. Cria os diretórios; sem índice. `gravar_matriz`: 1ª coluna = índice (cabeçalho `linha\coluna`), rótulos das colunas com 4 casas e o decimal do formato |
 
 Complementos na CLI (`_gravar_complementos`, comum a DCF e DDM, chamada depois do `resumo.csv`):

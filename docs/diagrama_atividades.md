@@ -211,9 +211,9 @@ flowchart TD
   - `ponte_ev_equity.csv`: Conciliação minuciosa dos itens da ponte patrimonial.
   - `sensibilidade_*.csv`: Tabelas completas de estresse de parâmetros.
   - `historico.csv`, `qa.json`, `valores_reais.csv` (fluxos e valor terminal deflacionados pelo IPCA do Focus) e `premissas_usadas.yaml`.
-  - `meta.json`: versão e commit do código, perfil, moeda, fontes (URL, data e sha256 da CVM), hash das contas padronizadas e avisos; gravado por último.
+  - `meta.json`: versão e commit do código, perfil, moeda, fontes (URL, data e sha256 da CVM), hash das contas padronizadas, avisos e o glossário das métricas (`glossario`); gravado por último.
   - Gráficos PNG (omitidos com `--sem-graficos`): `football_field`, `ponte_ev_equity` (só DCF), `sensibilidade_heatmap*`, `historico_vs_projecao` e `composicao_valor`.
-- **Terminal:** Apresentação formatada das recomendações e métricas de valuation com destaques visuais.
+- **Terminal:** Apresentação formatada das recomendações e métricas de valuation com destaques visuais. `--explicar` (em `wacc`, `comparar` e `rodar`) acrescenta a legenda dos termos mostrados; `valuation glossario [TERMO]` explica qualquer métrica.
 
 ---
 

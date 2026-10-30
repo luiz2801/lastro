@@ -32,6 +32,8 @@ make lint tipos testes                       # ruff, mypy strict e pytest (sem r
 make cobertura                               # testes com cobertura por linha
 
 uv run valuation versao
+uv run valuation glossario wacc             # explica uma métrica (sem argumento, lista todas)
+uv run valuation glossario wacc             # explica uma métrica (sem argumento, lista todas)
 uv run valuation cadastro buscar petrobras   # ticker, razão social ou CNPJ
 make atualizar                               # = valuation atualizar --tickers PETR4,VALE3,WEGE3
 uv run valuation qa PETR4                    # controles de qualidade; sai com 1 se houver erro

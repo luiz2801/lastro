@@ -64,6 +64,7 @@ from valuation.projecao import premissas as pm
 from valuation.projecao import projetor as pj
 from valuation.projecao import sugestor as sg
 from valuation.saida import arquivos as arq
+from valuation.saida import glossario as gl
 from valuation.saida import graficos as gr
 from valuation.saida import real
 from valuation.saida.csv import FormatoCsv, gravar_csv, gravar_matriz
@@ -96,6 +97,45 @@ def principal(
 def versao() -> None:
     """Mostra a versão do programa e do Python."""
     console.print(f"valuation {__version__} (Python {platform.python_version()})")
+
+
+@app.command()
+def glossario(
+    metrica: str | None = typer.Argument(
+        None, help="Sigla ou nome (ex.: wacc, p/vp, ev ebitda). Sem argumento, lista tudo."
+    ),
+) -> None:
+    """Explica as métricas exibidas: o que são, como se calculam e como interpretar."""
+    if metrica is None:
+        for grupo in gl.GRUPOS:
+            tabela = Table(title=grupo)
+            for coluna in ("Termo", "O que é", "Como se calcula", "Como ler"):
+                tabela.add_column(coluna, overflow="fold")
+            for t in (t for t in gl.TERMOS if t.grupo == grupo):
+                tabela.add_row(f"[bold]{t.sigla}[/]", t.definicao, t.formula, t.interpretacao)
+            console.print(tabela)
+        return
+    achados = gl.buscar(metrica)
+    if not achados:
+        raise _erro(f"Termo “{metrica}” não encontrado. Rode `valuation glossario` para a lista.")
+    for t in achados:
+        console.print(f"[bold]{t.sigla}[/] — {t.nome}  [dim]({t.grupo})[/]")
+        console.print(f"  O que é: {t.definicao}")
+        console.print(f"  Como se calcula: {t.formula}")
+        console.print(f"  Como ler: {t.interpretacao}")
+
+
+EXPLICAR = typer.Option(False, "--explicar", help="Explica as siglas mostradas (glossário).")
+
+
+def _legenda(chaves: tuple[str, ...]) -> None:
+    """Legenda didática dos termos mostrados (`--explicar`); o modo padrão fica sucinto."""
+    tabela = Table(title="Legenda", show_lines=False)
+    for coluna in ("Termo", "O que é", "Como se calcula", "Como ler"):
+        tabela.add_column(coluna, overflow="fold")
+    for t in gl.termos(chaves):
+        tabela.add_row(f"[bold]{t.sigla}[/]", t.definicao, t.formula, t.interpretacao)
+    console.print(tabela)
 
 
 def _erro(mensagem: str) -> typer.Exit:
@@ -1482,6 +1522,7 @@ def wacc(
         None, "--saida", help="Diretório raiz da saída (padrão: saida/)."
     ),
     formato_csv: str = typer.Option("br", "--formato-csv", help="br | intl."),
+    explicar: bool = EXPLICAR,
 ) -> None:
     """Beta, Ke, Kd e WACC; grava saida/{TICKER}/{data-base}/wacc.csv."""
     agora = dt.datetime.now(dt.UTC)
@@ -1530,6 +1571,10 @@ def wacc(
     gravar_csv(tab, caminho, settings.csv, cast(FormatoCsv, formato_csv))
     for aviso in [*avisos_cc, *(comps.avisos if comps else ()), *m.avisos]:
         console.print(f"[yellow]Aviso:[/] {aviso}")
+    if explicar:
+        _legenda(gl.LEGENDA_WACC)
+    if explicar:
+        _legenda(gl.LEGENDA_WACC)
     console.print(f"Gravado em {caminho}")
 
 
@@ -1784,6 +1829,7 @@ def comparar(
     ),
     formato_csv: str = typer.Option("br", "--formato-csv", help="br | intl."),
     forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+    explicar: bool = EXPLICAR,
 ) -> None:
     """Múltiplos LTM do alvo e dos pares e valores implícitos por múltiplo (sem DCF)."""
     agora = dt.datetime.now(dt.UTC)
@@ -1823,6 +1869,8 @@ def comparar(
     _gravar_multiplos(r, raiz, settings, cast(FormatoCsv, formato_csv))
     for aviso in [*r.avisos, *m.avisos]:
         console.print(f"[yellow]Aviso:[/] {aviso}")
+    if explicar:
+        _legenda(gl.legenda_multiplos(r.nomes))
     console.print("Estudo pessoal; não é recomendação de investimento.")
     console.print(f"Gravado em {raiz}")
 
@@ -1845,6 +1893,7 @@ def rodar(
     formato_csv: str = typer.Option("br", "--formato-csv", help="br | intl."),
     forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
     sem_graficos: bool = typer.Option(False, "--sem-graficos", help="Não gera os PNG."),
+    explicar: bool = EXPLICAR,
 ) -> None:
     """Valuation por DCF: cenários ponderados pelo perfil, ponte EV -> equity e sensibilidade."""
     hoje = dt.date.today()
@@ -1881,6 +1930,7 @@ def rodar(
             forcar,
             graficos=not sem_graficos,
             comando=comando,
+            explicar=explicar,
         )
         if p.plano.tipo == "financeira":
             raiz = (Path(saida) if saida else DIR_SAIDA) / p.premissas.ticker / base.isoformat()
@@ -2049,6 +2099,8 @@ def rodar(
     for aviso in avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
     console.print(cen.mensagem(r, normalizado))
+    if execucao.explicar:
+        _legenda((*gl.LEGENDA_DCF, *(gl.legenda_multiplos(multiplos.nomes) if multiplos else ())))
     console.print("Estudo pessoal; não é recomendação de investimento.")
     console.print(f"Gravado em {raiz}")
 
@@ -2307,6 +2359,7 @@ class _Execucao:
     forcar: bool
     graficos: bool = True
     comando: str = ""
+    explicar: bool = False
 
 
 def _rodar_financeira(
@@ -2445,6 +2498,8 @@ def _rodar_financeira(
     for aviso in avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
     console.print(cen.mensagem(r, ticker))
+    if e.explicar:
+        _legenda((*gl.LEGENDA_DDM, *(gl.legenda_multiplos(multiplos.nomes) if multiplos else ())))
     console.print("Estudo pessoal; não é recomendação de investimento.")
     console.print(f"Gravado em {raiz}")
 
