@@ -15,6 +15,15 @@ uv run valuation versao
 make lint tipos testes
 ```
 
+## Estrutura
+
+- `src/valuation/`: código (camadas `data` → `contabil` → … → `saida`, ver `CLAUDE.md`).
+- `config/`: parâmetros (`settings.yaml`) e cadastro manual.
+- `docs/`: fontes validadas (`fontes.md`) e decisões (`decisoes/`).
+- `tests/`: testes; `tests/golden/referencias.yaml` tem valores conferidos com documentos das companhias.
+- `referencias/`: PDFs e planilhas das companhias (fora do git; índice em `referencias/README.md`).
+- `data/`, `saida/`, `perfil/`: gerados localmente, fora do git.
+
 ## Estado
 
 Fases 0 (fundação) e 1 (cadastro e coleta CVM) concluídas. Ver [`CHANGELOG.md`](CHANGELOG.md).

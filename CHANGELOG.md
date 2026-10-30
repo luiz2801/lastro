@@ -2,6 +2,13 @@
 
 ## [Não lançado]
 
+### Conciliação com documentos das companhias
+- `tests/golden/referencias.yaml`: valores de Petrobras, Vale e WEG conferidos contra releases,
+  relatório da administração e composição acionária, todos batendo com a CVM.
+- `referencias/`: documentos das companhias organizados por ticker (fora do git, com índice).
+- `docs/fontes.md`: códigos de conta que mudam entre trimestres, arrendamentos fora de empréstimos
+  (WEG) e significado variável da quantidade de ações na composição do capital (Vale).
+
 ### Fase 1 — Cadastro e coleta CVM
 - `data/http.py`: download com cache em `data/raw/`, `.meta.json` (URL, datas, sha256,
   `Last-Modified`), TTL, revalidação com `If-Modified-Since`, retry e uso de cópia vencida se a

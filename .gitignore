@@ -23,3 +23,8 @@ build/
 
 # Ambiente
 .env
+
+# Documentos das companhias (grandes; só o índice é versionado)
+/referencias/**
+!/referencias/
+!/referencias/README.md

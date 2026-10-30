@@ -51,7 +51,7 @@ Legenda: ✅ confirmado · ⚠️ diferente do guia · ⏳ pendente
 
 ### Conciliação com documentos das companhias (2026-10-30)
 
-Valores em `tests/golden/referencias.yaml`. Resultado:
+Valores em `tests/golden/referencias.yaml`; documentos em `referencias/` (ver o índice lá). Resultado:
 
 - Receita, lucro (controladora e total) e EBITDA (= EBIT + D&A) batem **exatamente** com a CVM para
   Petrobras (1S26, 2T26, 1S25) e Vale (1T25, 4T25, 1T26, 2T26; 4T25 = DFP − ITR 9M25).

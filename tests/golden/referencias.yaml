@@ -11,7 +11,7 @@
 # - lucro_controladora = DRE 3.11.01; lucro_total = DRE 3.11
 
 PETR4:
-  fonte: "Desempenho Financeiro Petrobras 2T26.pdf (Tabelas 1 e 10; Endividamento)"
+  fonte: "referencias/PETR4/2T26_desempenho_brl.pdf (Tabelas 1 e 10; Endividamento)"
   periodos:
     1S26: {receita_liquida: 293216, lucro_controladora: 85108, lucro_total: 85256, da: 43117, ebitda: 156743}
     2T26: {receita_liquida: 169530, lucro_controladora: 52445, lucro_total: 52495}
@@ -28,10 +28,10 @@ PETR4:
 
 VALE3:
   fontes:
-    - "Relatório da Administração 2025.pdf (Destaques; Indicadores financeiros; Gestão de dívidas)"
-    - "Desempenho da Vale no 1T26 - BRGAAP.pdf (Indicadores; Reconciliação LAJIDA)"
-    - "vale_brgaap_3q26.pdf (Indicadores; Reconciliação LAJIDA)"
-    - "August_Shareholder Structure_p.pdf (Composição acionária em 31/08/2026)"
+    - "referencias/VALE3/2025_relatorio_administracao.pdf (Destaques; Indicadores financeiros; Gestão de dívidas)"
+    - "referencias/VALE3/1T26_desempenho_brgaap.pdf (Indicadores; Reconciliação LAJIDA)"
+    - "referencias/VALE3/3T26_desempenho_brgaap.pdf (Indicadores; Reconciliação LAJIDA)"
+    - "referencias/VALE3/2026-08-31_composicao_acionaria.pdf"
   periodos:
     "2025": {receita_liquida: 213595}
     1T25: {receita_liquida: 47411, lucro_controladora: 8164, lucro_total: 8173, da: 4105, ebitda: 14991}
@@ -51,7 +51,7 @@ VALE3:
 
 WEGE3:
   # A WEG publica em R$ mil: valores abaixo em R$ milhões com 3 casas (= exatos em milhares).
-  fonte: "Release de Resultados 3T26.pdf (Tabelas 1, 4 e 5; Anexo IV)"
+  fonte: "referencias/WEGE3/3T26_release.pdf (Tabelas 1, 4 e 5; Anexo IV)"
   periodos:
     3T26: {receita_liquida: 10860.809, lucro_controladora: 1665.222, lucro_total: 1762.671, ir_csll: 341.406, da: 262.642, ebitda: 2345.167}
     2T26: {receita_liquida: 10143.555, lucro_controladora: 1558.633, lucro_total: 1646.544, ir_csll: 335.648, da: 255.988, ebitda: 2212.631}
