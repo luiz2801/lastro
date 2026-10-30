@@ -38,13 +38,15 @@ uv run valuation perfil                      # questionário de perfil (--mostra
 uv run valuation premissas sugerir PETR4     # sugestões × histórico e projeção base
 uv run valuation premissas sugerir PETR4 --escrever   # regenera config/empresas/PETR4.yaml
 uv run valuation wacc PETR4                 # beta, Ke, Kd e WACC; grava saida/PETR4/{data}/wacc.csv
+uv run valuation atualizar --tickers PETR4 --com-pares   # baixa também os pares do setor
+uv run valuation comparar PETR4             # múltiplos dos pares e valor implícito
 uv run valuation rodar PETR4                # DCF por cenário, valor ponderado pelo perfil, sensibilidade
 make rodar TICKER=PETR4                      # o mesmo
 ```
 
-`atualizar` precisa rodar antes de `qa`, `historico`, `cobertura`, `mercado`, `premissas`, `wacc`
-e `rodar`; `rodar` também exige um perfil válido (`valuation perfil`) ou `--perfil`. O comando
-`comparar` ainda não existe (Fase 8). Parâmetros e efeitos de cada comando: seção 3 do
+`atualizar` precisa rodar antes de `qa`, `historico`, `cobertura`, `mercado`, `premissas`, `wacc`,
+`comparar` e `rodar` (com `--com-pares` para os múltiplos); `rodar` também exige um perfil válido
+(`valuation perfil`) ou `--perfil`. Parâmetros e efeitos de cada comando: seção 3 do
 [`guia.md`](guia.md).
 
 Para validar o preço de qualquer ticker na brapi (sem token, só PETR4, VALE3, MGLU3 e ITUB4), crie
@@ -65,7 +67,8 @@ um token gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
 
 ## Estado atual
 
-**Fases 0 a 7 concluídas** (seção 17 do `CLAUDE.md`). Próxima: Fase 8, múltiplos e comparáveis.
+**Fases 0 a 8 concluídas** (seção 17 do `CLAUDE.md`). Próxima: Fase 9, saídas (gráficos,
+`meta.json`, relatório real).
 Pilotos: PETR4, VALE3 e WEGE3.
 
 - **Coleta CVM** (Fase 1): cadastro, DFP de 10 anos, ITR dos dois últimos anos e composição do
@@ -100,10 +103,14 @@ Pilotos: PETR4, VALE3 e WEGE3.
   ponderados pelo perfil com preço máximo de compra, Ke implícito no preço contra o hurdle e WACC
   implícito, matrizes WACC × g e margem × crescimento; `valuation rodar TICKER` grava resumo,
   projeções, ponte e sensibilidades em `saida/{TICKER}/{data}/`.
-- **Testes**: 387 (376 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
+- **Múltiplos e comparáveis** (Fase 8): pares por setor em `config/setores.yaml`, medidos com o
+  mesmo pipeline do alvo; P/L, EV/EBITDA, EV/EBIT, EV/Receita, P/VP, EV/FCF e dividend yield com
+  winsorização, quartis, aviso de poucos pares e de escala implausível; valor implícito do alvo;
+  beta por comparáveis, estrutura-alvo do setor, minoritários pelo P/VP e g implícito no múltiplo
+  de saída; `valuation comparar TICKER` e múltiplos no `rodar`.
+- **Testes**: 402 (391 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
 - **Ainda não**: plano de contas de financeiras, universo do Ibovespa (`atualizar --tudo` falha
-  sem ele), múltiplos e beta por comparáveis (precisam dos pares), gráficos e demais saídas da
-  Fase 9, DDM. Lista completa na seção 12 do `guia.md`.
+  sem ele), gráficos e demais saídas da Fase 9, DDM. Lista completa na seção 12 do `guia.md`.
 
 ## Decisões que completam ou divergem do `CLAUDE.md`
 
@@ -135,6 +142,10 @@ Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
   sai em duas leituras (Ke implícito no preço, comparado ao hurdle, e WACC implícito); teto do g
   perpétuo em 5,0%; valor terminal descontado no meio do último ano com a convenção de meio
   período; ponte com o balanço dos pesos do WACC; `rodar` entra já na Fase 7 com saída parcial.
+- **Múltiplos e comparáveis** ([ADR 0009](docs/decisoes/0009-multiplos-e-comparaveis.md)): pares
+  decididos pelo usuário (petróleo só E&P, mineração separada da siderurgia, lista ampla de
+  máquinas); EV como inverso da ponte e EBITDA ajustado; winsorização 10/90 com valor pela
+  mediana e faixa P25–P75; par com P/VP implausível é excluído (escala das ações).
 
 Os parâmetros de mercado de `config/settings.yaml` (ERP, faixa do Kd, Rf e inflação em USD)
 e o mapeamento perfil → parâmetros continuam **placeholders** até o usuário revisá-los (dúvidas em aberto na seção 19 do `CLAUDE.md`).

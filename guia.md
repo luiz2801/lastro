@@ -1,9 +1,9 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.7 — 2026-10-30**
+**Versão 1.8 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
-> (Fases 0 a 7 implementadas) para que você não precise reler os módulos. Para o que ainda
+> (Fases 0 a 8 implementadas) para que você não precise reler os módulos. Para o que ainda
 > **não** existe, veja a seção 12.
 > Política de commits, que documento atualizar em cada mudança e ADRs: `CONTRIBUTING.md` e
 > `docs/decisoes/README.md`.
@@ -38,13 +38,13 @@
 | Contábil | `contabil/{padronizacao,periodos,moeda,qa,nao_financeiras}.py` + `config/mapeamento_contas.yaml` | ✅ prontos (só plano `nao_financeira`) |
 | Perfil | `perfil/{questionario,pontuacao,registro,parametros}.py` | ✅ prontos (seção 17) |
 | Projeção | `projecao/{premissas,sugestor,projetor,escrita}.py` + `config/empresas/*.yaml` + `config/setores.yaml` | ✅ prontos (seção 18) |
-| Custo de capital | `custo_capital/{beta,capm,kd,wacc}.py` | ✅ prontos (seção 19); beta por comparáveis e estrutura do setor esperam os pares (Fase 8) |
-| Modelos | `modelos/{dcf,ponte}.py` | ✅ DCF do FCFF e ponte EV → equity (seção 20); DDM e múltiplos nas Fases 8 e 10 |
+| Custo de capital | `custo_capital/{beta,capm,kd,wacc}.py` | ✅ prontos (seção 19), inclusive beta por comparáveis e estrutura do setor |
+| Modelos | `modelos/{dcf,ponte,multiplos}.py` | ✅ DCF do FCFF, ponte EV → equity e múltiplos dos pares (seção 20); DDM na Fase 10 |
 | Análise | `analise/{cenarios,sensibilidade}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade (seção 20) |
 | Saída | `saida/csv.py` | CSV e matrizes (seção 19); gráficos, `meta.json` e demais arquivos na Fase 9 |
-| CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `rodar` |
+| CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar` |
 
-~6.700 linhas de código, 387 testes (11 golden pulados por motivo declarado), mypy `strict`,
+~7.500 linhas de código, 402 testes (11 golden pulados por motivo declarado), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -96,6 +96,12 @@ PremissasResolvidas + deltas ─► cenarios.analisar ─► dcf.avaliar por cen
     projetor.projetar ─► dcf.descontar (WACC, g, RONIC) ─► ponte.ponte (saldos do balanço do WACC)
   ─► valor por ação (BRL) ─► ponderação pelo perfil, preço máximo, Ke e WACC implícitos no preço
 dcf.avaliar repetido ─► sensibilidade.wacc_x_g / margem_x_crescimento ─► sensibilidade_*.csv
+
+setores.yaml pares + YAML (incluir/excluir) ─► cli._coletar_pares: por par, _padronizar +
+    _mercado_par (market cap) + _fundamentos (metricas_ltm, itens da ponte, em BRL)
+  ─► multiplos.avaliar(alvo, pares) ─► tabela_pares, estatisticas (winsorizadas), implicitos
+  ─► multiplos_*.csv, colunas do resumo, P/VP dos minoritários, g implícito (dcf.g_implicito);
+      os mesmos pares alimentam o beta por comparáveis e a estrutura do setor
 ```
 
 Todo download passa por `http.baixar` (cache em `data/raw/` + `.meta.json`). Camada superior nunca
@@ -118,10 +124,20 @@ Callback global: `-v/--verbose` → logging DEBUG. Erros: `_erro()` imprime em v
 `_setor(chave)` (chave ausente de `setores.yaml` ⇒ `ErroConfiguracao`), `_horizonte(premissas,
 settings, hoje, override)` (inteiro do YAML ou horizonte do perfil via `resolver_perfil`).
 `_mercado(ticker, settings, base, agora, forcar) -> _Mercado(empresa, precos, ibov, macro, cap, yf)`
-(coleta comum a `mercado` e `wacc`; `.avisos`). `_custo_capital(p, m, settings, base) ->
-wc.CustoCapital` (seção 19; reaproveitar no `rodar`), com `_beta` (precedência YAML > settings) e
-`_data_balanco` (última data ≤ data-base com YTD e balanço; aviso acima de
-`DEFASAGEM_AVISO_DIAS = 140`). `_sugerir(p, settings, base) -> (histórico, setor, Sugestoes)`
+(coleta comum a `mercado`, `wacc`, `comparar` e `rodar`; `.avisos`), que usa
+`_cotacoes(empresa, settings, base, yf, brapi) -> (precos, MarketCap)` (sem preço ou sem
+composição ⇒ `ErroDadosExternos`). `_padronizar(ticker, settings, cadastro=None)` aceita o
+cadastro já carregado (pares). `_custo_capital(p, m, settings, base, comps=None) ->
+wc.CustoCapital` (seção 19), com `_beta` (precedência YAML > settings, `_metodo_beta`;
+`_regressao` da classe mais líquida; comparáveis sobre `comps.pares`),
+`_divida_sobre_capital_setor` e `_data_balanco` (última data ≤ data-base com YTD e balanço; aviso
+acima de `DEFASAGEM_AVISO_DIAS = 140`). Pares (seção 20): `_tickers_pares(premissas, proprios)`
+(setor + `incluir` − `excluir` − classes do alvo), `_pares_do_yaml(ticker)` (para
+`atualizar --com-pares`), `_coletar_pares(p, m, settings, base) -> _Comparaveis(pares, avisos)`
+(cada `_Par(padronizada, cap, fundamentos)`; par com erro vira aviso), `_mercado_par` (market cap
+do par; trocado nos testes), `_fundamentos` (LTM + itens da ponte com minoritários contábeis, em
+BRL), `_multiplos` (`None` sem pares), `_precisa_pares` (beta por comparáveis, estrutura `setor` ou
+`multiplo_pvp`), `_mostrar_pares`, `_mostrar_implicitos`, `_gravar_multiplos`. `_sugerir(p, settings, base) -> (histórico, setor, Sugestoes)`
 (métricas dos exercícios < data-base) e `_resolver(p, settings, sugestoes, base, horizonte)`
 (premissas do cenário base) servem a `premissas sugerir` e a `rodar`. Do `rodar`:
 `_dados_avaliacao` (itens da ponte no balanço de `CustoCapital.data_balanco`, ações =
@@ -132,14 +148,15 @@ mediana de 5a), `_resumo` (linha do `resumo.csv`), `_mostrar_valuation`.
 |---|---|---|---|
 | `versao` | — | Imprime versão e Python | — |
 | `cadastro buscar TEXTO` | `--forcar` | Busca por ticker/razão/nome/CNPJ no cadastro | `--forcar` ignora TTL e rebaixa cadastro+FCA |
-| `atualizar` | `--tickers A,B` ou `--tudo`; `--forcar` | Baixa DFP/ITR/composição e grava parquets por companhia | exatamente um de `--tickers`/`--tudo`. `--tudo` lê `config/universo_ibovespa.csv` (**arquivo ainda não existe**, dá `ErroConfiguracao`). Holding/não suportada: só avisa e baixa |
+| `atualizar` | `--tickers A,B` ou `--tudo`; `--com-pares`; `--forcar` | Baixa DFP/ITR/composição e grava parquets por companhia | exatamente um de `--tickers`/`--tudo`. `--tudo` lê `config/universo_ibovespa.csv` (**arquivo ainda não existe**, dá `ErroConfiguracao`). `--com-pares` acrescenta os pares de cada ticker que tem YAML em `config/empresas/` (par fora do cadastro só avisa). Holding/não suportada: só avisa e baixa |
 | `mercado TICKER` | `--data-base AAAA-MM-DD`; `--forcar` | Preço por classe, Ibovespa, dólar, Selic, IPCA, Rf e market cap, cada um em 2 fontes | `--data-base` sobrescreve `settings.data_base`. Exige `atualizar` antes (lê `composicao_capital.parquet`; senão mensagem pedindo o comando) |
 | `qa TICKER` | — | Padroniza, roda o QA, imprime verificações, cobertura e contas não mapeadas relevantes; grava `data/processed/qa/qa_{TICKER}.json` | **Sai com 1 se houver erro de QA.** Exige `atualizar` antes |
 | `historico TICKER` | `--anos N` (5); `--trimestral` | Métricas anuais (R$ mi) + coluna LTM | `--anos` = quantos exercícios; `--trimestral` mostra os 8 últimos trimestres (receita, EBITDA, lucro, D&A, capex, dividendos) |
 | `cobertura` | `--tickers A,B` ou `--tudo` | Matriz conta crítica × ticker com a fração dos exercícios mapeados (verde ≥ 95%) | igual a `atualizar` |
 | `premissas sugerir TICKER` | `--escrever`; `--perfil P`; `--data-base AAAA-MM-DD` | Sugere as premissas a partir dos exercícios encerrados antes da data-base e imprime "premissas sugeridas × histórico" (último ano, medianas 5a/10a, sugerido, valor no YAML), CAGR 3/5/10a, deltas dos cenários e a **projeção base** (R$ mi). Avisos: setor de commodity, setor não definido, ano-ponte sem DFP, histórico curto | `--escrever` regenera `config/empresas/{TICKER}.yaml` comentado (anterior em `.yaml.bak`; sem ele, só avisa que o YAML não existe). `--perfil` só define o horizonte quando o YAML usa `horizonte_anos: perfil`; sem perfil válido nem `--perfil`, mostra as sugestões e pula a projeção (sai com 0). `--data-base` corta o histórico e define a fração do ano corrente. Exige `atualizar` antes |
-| `wacc TICKER` | `--data-base AAAA-MM-DD`; `--forcar`; `--saida DIR`; `--formato-csv br\|intl` | Beta, Ke, Kd, estrutura e WACC na moeda de reporte; tabela no terminal e `{saida}/{TICKER}/{data-base}/wacc.csv` (`componente;valor;detalhe`, avisos em linhas `aviso`) | `--saida` muda a raiz (padrão `saida/`); `intl` grava `,`/`.`/utf-8. **WACC ≤ g terminal ⇒ sai com 1.** Exige `atualizar` antes; consulta preços e macro como `mercado` |
-| `rodar TICKER` | `--cenario base\|pessimista\|otimista\|todos` (todos); `--perfil P`; `--data-base`; `--saida DIR`; `--formato-csv br\|intl`; `--forcar` | DCF por cenário (VP dos fluxos, VP do terminal, EV, VT/EV, EV/EBITDA terminal, equity, valor por ação), checagens de g/WACC/RONIC, valor ponderado, preço máximo de compra, upside, Ke implícito × hurdle e WACC implícito × WACC, projeção do cenário de referência e matriz WACC × g; mensagem neutra contra o preço máximo do perfil. Grava em `{saida}/{TICKER}/{data-base}/`: `resumo.csv`, `wacc.csv`, `projecao_{cenario}.csv`, `ponte_ev_equity.csv` (coluna por cenário), `sensibilidade_wacc_g.csv`, `sensibilidade_margem_crescimento.csv` | **Exige perfil válido ou `--perfil`** (senão sai com 1); o perfil dá pesos, margem, hurdle e, com `horizonte_anos: perfil`, o horizonte. `--cenario X` avalia só X (peso 100%, referência do preço máximo e da sensibilidade). Exige `atualizar`; consulta preços e macro como `mercado`. Falta da Fase 9: gráficos, `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais |
+| `wacc TICKER` | `--data-base AAAA-MM-DD`; `--forcar`; `--saida DIR`; `--formato-csv br\|intl` | Beta, Ke, Kd, estrutura e WACC na moeda de reporte; tabela no terminal e `{saida}/{TICKER}/{data-base}/wacc.csv` (`componente;valor;detalhe`, avisos em linhas `aviso`) | `--saida` muda a raiz (padrão `saida/`); `intl` grava `,`/`.`/utf-8. **WACC ≤ g terminal ⇒ sai com 1.** Exige `atualizar` antes; consulta preços e macro como `mercado`. Mede os pares só se o beta for por comparáveis ou a estrutura for `setor` |
+| `comparar TICKER` | `--data-base`; `--saida DIR`; `--formato-csv br\|intl`; `--forcar` | Múltiplos LTM do alvo e dos pares (P/L, EV/EBITDA, EV/EBIT, EV/Receita, P/VP, EV/FCF, dividend yield), P25/mediana/P75 dos pares e valor por ação implícito do alvo; grava `multiplos_pares.csv` e `multiplos_implicitos.csv` em `{saida}/{TICKER}/{data-base}/` | **Nenhum par medido ⇒ sai com 1** (par sem dados vira aviso). Exige `atualizar` do alvo e dos pares (`--com-pares`) |
+| `rodar TICKER` | `--cenario base\|pessimista\|otimista\|todos` (todos); `--perfil P`; `--data-base`; `--saida DIR`; `--formato-csv br\|intl`; `--forcar` | DCF por cenário (VP dos fluxos, VP do terminal, EV, VT/EV, EV/EBITDA terminal, equity, valor por ação), checagens de g/WACC/RONIC, valor ponderado, preço máximo de compra, upside, Ke implícito × hurdle e WACC implícito × WACC, projeção do cenário de referência e matriz WACC × g; mensagem neutra contra o preço máximo do perfil. Também mede os pares (múltiplos, valor implícito pela mediana, g implícito no EV/EBITDA mediano dos pares). Grava em `{saida}/{TICKER}/{data-base}/`: `resumo.csv`, `wacc.csv`, `projecao_{cenario}.csv`, `ponte_ev_equity.csv` (coluna por cenário), `sensibilidade_wacc_g.csv`, `sensibilidade_margem_crescimento.csv` e, com pares medidos, `multiplos_pares.csv` e `multiplos_implicitos.csv` | **Exige perfil válido ou `--perfil`** (senão sai com 1); o perfil dá pesos, margem, hurdle e, com `horizonte_anos: perfil`, o horizonte. `--cenario X` avalia só X (peso 100%, referência do preço máximo e da sensibilidade). Exige `atualizar`; consulta preços e macro como `mercado`. Falta da Fase 9: gráficos, `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais |
 | `perfil` | `--mostrar` ou `--refazer` | Sem perfil (ou vencido): roda o questionário (resposta = número da alternativa; inválida ⇒ pergunta de novo), grava `CAMINHO_PERFIL` e mostra perfil + parâmetros. Com perfil válido: só mostra | `--mostrar` só mostra (sem perfil ⇒ sai com 1); `--refazer` responde de novo mesmo válido e aceita JSON corrompido (sem ele, JSON inválido ⇒ sai com 1). Os dois juntos ⇒ erro. Validade conferida contra `date.today()`, **não** contra `data_base` |
 
 Observação: `mercado` usa `settings.custo_capital.rf_brl.override` como Rf manual **independentemente
@@ -189,7 +206,7 @@ validados.
 | `custo_capital.beta.ajuste_blume` | true | Beta do Ke = 0,67 β + 0,33 |
 | `custo_capital.beta.min_r2_aviso` | 0.10 | R² abaixo ⇒ aviso |
 | `custo_capital.kd.spread_min/spread_max` | 0 / 0.05 | Kd histórico limitado a [Rf + min, Rf + max] (ADR 0007); fora ⇒ limite + aviso |
-| `custo_capital.estrutura_alvo.metodo` | mercado_atual | `mercado_atual` = D/(D+E) de hoje; `manual` usa `divida_sobre_capital` e realavanca o beta da regressão; `setor` ⇒ erro até a Fase 8 |
+| `custo_capital.estrutura_alvo.metodo` | mercado_atual | `mercado_atual` = D/(D+E) de hoje; `manual` usa `divida_sobre_capital` e `setor` a mediana de D/(D+E) dos pares (sem pares ⇒ erro); nos dois, o beta da regressão é realavancado |
 | `custo_capital.estrutura_alvo.divida_sobre_capital` | null | D/(D+E) alvo, obrigatório com `manual` |
 | `terminal.g_nominal_max` | 0.05 (decidido pelo usuário, ADR 0008) | g terminal quando o YAML da empresa tem `g_nominal: null`: fim da trajetória de crescimento sugerida e g da perpetuidade (`projetor.g_terminal`). `g_nominal` do YAML acima dele ⇒ `ErroProjecao` |
 | `terminal.ronic` | wacc | RONIC da perpetuidade quando o YAML da empresa tem `terminal.ronic: null`: `wacc` (acompanha a taxa de cada cálculo), `roic_historico` (mediana de 5a) ou número. RONIC ≤ g ⇒ erro |
@@ -198,6 +215,8 @@ validados.
 | `dcf.alerta_tv_sobre_ev` | 0.75 | VP do terminal / EV acima ⇒ aviso |
 | `sensibilidade.wacc_{passo,faixa}`, `g_{passo,faixa}` | 0.005/0.02, 0.0025/0.01 | Eixos da matriz WACC × g (centro = WACC e g do cálculo; 9 × 9) |
 | `sensibilidade.margem_{passo,faixa}`, `crescimento_{passo,faixa}` | 0.01/0.03, 0.01/0.03 | Deltas da matriz margem × crescimento (somados a todos os anos explícitos; 7 × 7) |
+| `multiplos.min_pares` | 3 | Menos pares válidos num múltiplo ⇒ `confianca = baixa` e aviso |
+| `multiplos.winsorizar.{inferior,superior}` | 0.10 / 0.90 | Percentis aos quais os múltiplos dos pares são limitados antes das estatísticas (0 e 1 desligam) |
 | `validacao_cruzada.preco_rel` | 0.02 | Tolerância relativa de preço (principal × alternativa) |
 | `validacao_cruzada.cambio_rel` | 0.015 | Idem dólar (PTAX × `BRL=X`) |
 | `validacao_cruzada.market_cap_rel` | 0.10 | ⏳ (declarado, sem uso) |
@@ -451,12 +470,9 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | Fase | Falta | Dica de onde conectar |
 |---|---|---|
 | 2 | `contabil/financeiras.py` e seção `financeira:` do mapeamento | Fase 10, após inspecionar ITUB4/BBAS3. `_padronizar` da CLI recusa tipo ≠ `nao_financeira` |
-| 8 | múltiplos e comparáveis (`modelos/multiplos.py`), `pares` de `setores.yaml` e `pares.incluir/excluir`, coluna de múltiplos no `resumo.csv` | listas vazias hoje. Mesmo pipeline contábil para alvo e pares (seção 11.4 do `CLAUDE.md`) |
-| 8 | beta por `comparaveis`, `estrutura_alvo: setor`, `minoritarios: multiplo_pvp`, g implícito num múltiplo de saída | `beta.comparaveis(pares, ...)` pronto; falta montar `{ticker: (beta, D/E)}` dos pares em `cli._beta`. `ponte.itens_do_balanco` recusa `multiplo_pvp` |
-| 9 | gráficos (football field, cascata da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos` | `rodar` já tem tudo em memória: `ResultadoCenarios`, matrizes e `PerfilEfetivo.origem` (vai ao `meta.json`). `premissas_usadas.yaml` = serializar `Avaliacao.premissas` de cada cenário |
+| 9 | gráficos (football field, cascata da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos` | `rodar` já tem tudo em memória: `ResultadoCenarios`, matrizes, `ResultadoMultiplos` (barras P/L, EV/EBITDA, P/VP pelos quartis: `implicitos.valor_p25/p75`; `mt.ROTULOS`) e `PerfilEfetivo.origem` (vai ao `meta.json`). `premissas_usadas.yaml` = serializar `Avaliacao.premissas` de cada cenário |
 | 10 | DDM, lucro residual, P/VP justificado | `rodar` só aceita `nao_financeira` (via `_padronizar`) |
 | — | `config/universo_ibovespa.csv` | `--tudo` falha sem o universo |
-| — | comando `comparar` | seção 14 do `CLAUDE.md` (Fase 8) |
 
 ## 13. Convenções que o código já segue (siga também)
 
@@ -485,7 +501,7 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | `test_cvm.py` | parsing, escala, versões, `coletar` | `zip_cvm("dfp_cia_aberta_2025")` etc. |
 | `test_cadastro.py` | FCA, manual, classificação, busca | `tests/fixtures/cvm/*` |
 | `test_validacao.py`, `test_precos.py`, `test_macro.py` | `cruzar`, providers falsos, market cap, SGS/Focus/Tesouro | respostas sintéticas |
-| `test_config.py`, `test_cli.py` | YAML real, `CliRunner` (`qa`/`historico`/`cobertura`/`premissas sugerir` sobre DFP sintética; `perfil` com `input=`; `wacc` e `rodar` com `_mercado` trocado por `mercado_falso`: 90 ações a R$ 10). `ambiente_offline` aponta `DIR_EMPRESAS` para `tmp_path` | `ambiente_offline`, `weg_sintetica`, `caminho_perfil` |
+| `test_config.py`, `test_cli.py` | YAML real, `CliRunner` (`qa`/`historico`/`cobertura`/`premissas sugerir` sobre DFP sintética; `perfil` com `input=`; `wacc` e `rodar` com `_mercado` trocado por `mercado_falso`: 90 ações a R$ 10; `comparar`, `rodar` com pares, beta/estrutura dos pares e `atualizar --com-pares` com `com_par`: PETR4 com as mesmas demonstrações e market cap 1.800, logo todo valor implícito = R$ 20). `ambiente_offline` aponta `DIR_EMPRESAS` para `tmp_path` | `ambiente_offline`, `weg_sintetica`, `mercado_falso`, `com_par`, `caminho_perfil` |
 | `test_perfil.py` | questionário (10 perguntas, 1–5 pontos, vetos), faixas, vetos, validade, JSON ida e volta e adulterado, `resolver_perfil`, parâmetros do settings | `respostas(padrao, **trocas)` |
 | `test_premissas.py` | esquema do YAML (padrões, manual, listas, inválidos), carga e ticker, conferência com o cadastro, conversão dos ajustes, YAMLs do repositório, escrita ida e volta | `MINIMO`, `historico_anual` |
 | `test_sugestor.py` | sugestões calculadas à mão (medianas, reversão da margem, desvios e limites), resumo, histórico curto e com buraco, commodity | `historico_anual` |
@@ -493,6 +509,7 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | `test_beta.py`, `test_capm.py`, `test_kd.py`, `test_wacc.py` | regressão em série sintética com beta exato, Blume, Hamada, comparáveis, classe mais líquida; Ke dos dois métodos e coerência por Fisher; Kd com dívida média, buracos e limites; WACC à mão, estrutura, realavancagem, `validar_g`, tabela e CSV br/intl | `precos(retornos)` (sextas) |
 | `test_padronizacao.py`, `test_periodos.py`, `test_moeda.py`, `test_nao_financeiras.py`, `test_qa.py` | regras, reapresentação, LTM/trimestre, métricas calculadas à mão, cada verificação do QA | `tests/sintetico.py` |
 | `test_dcf.py` | DCF à mão (fim e meio de período, RONIC numérico, ano parcial, ano-ponte), erros de convergência, avisos, `resolver_ronic`, `avaliar` à mão (com câmbio), ponte à mão e `itens_do_balanco` | `projecao()`, `HISTORICO`, `PREMISSAS`, `ITENS` (reusados pelos dois seguintes) |
+| `test_multiplos.py` | EV e múltiplos à mão, indefinidos, conversão para BRL e PL da controladora, winsorização, estatísticas (P25/mediana/P75 à mão), valor implícito por EV/P/L/P/VP/DY, `avaliar` (alvo fora dos pares, baixa confiança, escala implausível), `dcf.g_implicito` (RONIC = WACC e numérico) | `ALVO`, `PARES`, `par()` |
 | `test_cenarios.py`, `test_sensibilidade.py` | pesos, ponderação, `taxa_implicita`, `analisar` (valor no Ke e no WACC implícitos = preço; um cenário; preço inalcançável), mensagem; eixos, matrizes (centro = valor base, NaN com g ≥ WACC, monotonia) e `gravar_matriz` | `custo_capital()` monta um `CustoCapital` manual |
 | `test_golden.py` | 94 valores de `tests/golden/referencias.yaml` contra o pipeline | **dados reais** em `data/processed/cvm/`; pulado se ausentes |
 
@@ -530,6 +547,9 @@ vez de baixar dados reais. Sem rede nos testes.
 | Mudar ERP, faixa do Kd, Blume, janela do beta | `settings.yaml > custo_capital` (sem código) |
 | Novo componente no `wacc.csv` | linha em `wacc.tabela` (valor numérico; texto em `detalhe`) |
 | Novo setor | `config/setores.yaml` (`descricao`, `tipo_modelo`, `commodity`, `pares`) |
+| Mudar pares de uma empresa ou setor | `config/setores.yaml > pares` ou `config/empresas/{TICKER}.yaml > pares.incluir/excluir`; depois `valuation atualizar --tickers TICKER --com-pares` e `valuation comparar TICKER`. Par com market cap de poucos milhões: `escala_acoes: 1000` no cadastro manual |
+| Mudar winsorização ou mínimo de pares | `settings.yaml > multiplos` (sem código) |
+| Novo múltiplo | `DEFINICOES`, `ROTULOS` e `NomeMultiplo` em `modelos/multiplos.py` (métrica nova também em `Fundamentos`/`fundamentos`) + teste à mão; o resumo e os CSVs o pegam sozinhos |
 | Nova métrica histórica | `nao_financeiras.metricas` (+ `OPCIONAIS` se a conta pode faltar) + linha em `cli._LINHAS_HISTORICO` + teste à mão |
 | Nova verificação de QA | gerador `_x(...) -> Iterable[Verificacao]` em `qa.py`, chamado em `verificar`; colunas lidas em `_*_USADOS` |
 | Novo valor de conciliação | `tests/golden/referencias.yaml` (R$ mi) + chave em `FLUXOS`/`SALDOS` de `test_golden.py` |
@@ -603,6 +623,15 @@ vez de baixar dados reais. Sem rede nos testes.
     os `valor_*` dos outros cenários ficam vazios no `resumo.csv`.
 28. Ke e WACC implícitos são procurados entre o g terminal e 100% a.a.: preço baixo demais (ou
     valor negativo) dá "sem solução", com aviso.
+29. Múltiplos: EBITDA/EBIT são os **ajustados** e o EV desconta coligadas; podem diferir dos
+    múltiplos de sites e releases. Os pares usam o próprio YAML se existir (ajustes deles), senão
+    as premissas padrão.
+30. Pares com balanço de datas diferentes (ITR de junho × setembro) são comparados assim mesmo;
+    a coluna `data_balanco` de `multiplos_pares.csv` mostra a defasagem.
+31. Com RONIC = WACC, o g implícito no múltiplo de saída é `K x WACC - 1` e costuma não existir
+    (múltiplo dos pares acima do alcance do terminal): é a matemática, não bug.
+32. No dividend yield, P25 dá o maior valor implícito (relação inversa); o terminal mostra a
+    faixa já ordenada.
 
 ## 17. `perfil/` — perfil do investidor
 
@@ -665,26 +694,30 @@ nada consulta rede. Importa `config` (não importa `data`, `projecao` nem a CLI)
 | `beta.py` | `regressao(acao, indice, *, data_base, janela_semanas, ajuste_blume, min_r2_aviso, ticker=None) -> ResultadoBeta`, `precos_semanais`, `classe_mais_liquida(historicos, data_base, janela)`, `blume`, `desalavancar`, `realavancar`, `comparaveis(pares, *, divida_sobre_equity_alvo, aliquota)`, `manual(valor)` | Preço de sexta (`W-FRI`) até a data-base, retornos simples, últimas N semanas, OLS com constante (`statsmodels`). `MIN_SEMANAS = 52` (menos ⇒ erro). Avisos: R² < mínimo, janela incompleta, > `LIMIAR_SEMANAS_PARADAS` (10%) de semanas sem variação. `ResultadoBeta.beta` é o usado (Blume aplicado); `beta_bruto` é o da OLS (nos comparáveis, a mediana desalavancada) |
 | `capm.py` | `custo_capital_proprio(*, metodo, moeda, beta, erp, rf_brl, rf_usd, crp, inflacao_usd, inflacao_brl) -> CustoCapitalProprio`, `metodo_efetivo(metodo, moeda)`, `converter_taxa(taxa, pi_destino, pi_origem)` | `brl_direto` só com moeda BRL. `usd_crp` em BRL exige `inflacao_brl` (a CLI usa o Focus do ano mais distante) |
 | `kd.py` | `historico(despesas_financeiras, divida_bruta, *, piso, teto, janela=3) -> ResultadoKd`, `taxas_anuais`, `manual(valor)` | Despesas no sinal da DRE (negativas); dívida média de anos consecutivos; mediana dos últimos `JANELA_KD_ANOS`; sem nenhum ano ⇒ erro pedindo Kd manual |
-| `wacc.py` | `estrutura(*, metodo, divida, equity, divida_sobre_capital_alvo=None) -> Estrutura`, `beta_na_estrutura(beta, estrutura, aliquota)`, `wacc(ke, kd, aliquota, peso_divida)`, `montar(...) -> CustoCapital`, `validar_g(taxa, g, nome="WACC")`, `tabela(cc) -> DataFrame` | Só o beta da **regressão** é realavancado (comparáveis já saem no alvo; manual é tomado como dado). `CustoCapital(data_base, beta, beta_regressao, ke, kd, aliquota, estrutura, wacc, data_balanco, avisos)`, `.kd_liquido` |
+| `wacc.py` | `estrutura(*, metodo, divida, equity, divida_sobre_capital_alvo=None) -> Estrutura` (`manual` e `setor` exigem o alvo), `beta_na_estrutura(beta, estrutura, aliquota)`, `wacc(ke, kd, aliquota, peso_divida)`, `montar(...) -> CustoCapital`, `validar_g(taxa, g, nome="WACC")`, `tabela(cc) -> DataFrame` | Só o beta da **regressão** é realavancado (comparáveis já saem no alvo; manual é tomado como dado). `CustoCapital(data_base, beta, beta_regressao, ke, kd, aliquota, estrutura, wacc, data_balanco, avisos)`, `.kd_liquido` |
 | `saida/csv.py` | `gravar_csv(df, caminho, config_csv, formato="br")`, `gravar_matriz(matriz, ...)`, `INTERNACIONAL` | `br` = `settings.csv`; `intl` = `,` `.` utf-8. Cria os diretórios; sem índice. `gravar_matriz`: 1ª coluna = índice (cabeçalho `linha\coluna`), rótulos das colunas com 4 casas e o decimal do formato |
 
 Montagem na CLI (`_custo_capital`): moeda da padronização → `metodo_efetivo`; balanço =
 `_data_balanco` → `metricas_ltm(dt_fim=…)["divida_bruta"]`; equity = `MarketCap.valor` (÷ dólar se
 USD); beta (`_beta`) → `beta_na_estrutura`; Ke com `Macro.rf_brl`; Kd do YAML manual ou histórico
 dos exercícios encerrados com piso/teto = Rf da moeda + `kd.spread_*`; alíquota =
-`impostos.aliquota_nominal`; por fim `validar_g` contra `projetor.g_terminal`.
+`impostos.aliquota_nominal`; por fim `validar_g` contra `projetor.g_terminal`. Beta por
+comparáveis: regressão de cada par medido (Blume conforme `settings`), D/E = dívida bruta /
+market cap do par, `bt.comparaveis` realavanca no D/E da estrutura do alvo (par sem 52 semanas de
+preço vira aviso). `estrutura_alvo: setor` = mediana de D/(D+E) dos pares.
 
 ## 20. `modelos/` e `analise/` — DCF, ponte, cenários e sensibilidade
 
-Seções 8.4, 11.1, 11.2 e 12 do `CLAUDE.md` e ADR 0008. Funções puras; nada consulta rede.
+Seções 8.4, 11.1, 11.2, 11.4 e 12 do `CLAUDE.md` e ADRs 0008 e 0009. Funções puras; nada consulta rede.
 `modelos` importa `projecao`; `analise` importa `modelos`, `custo_capital.wacc` (Ke → WACC) e
 `perfil.parametros`. Exceção: `ErroModelo` (`modelos/__init__.py`). Valores na moeda de reporte
 até o valor por ação, que sai em BRL (× câmbio).
 
 | Módulo | Símbolos | Detalhe |
 |---|---|---|
-| `modelos/dcf.py` | `descontar(projecao, *, wacc, g, ronic, data_base, meio_periodo, alerta_tv_sobre_ev) -> ResultadoDCF`, `prazos`, `resolver_ronic(escolha, *, roic_historico) -> Ronic`, `DadosAvaliacao(historico, ponte, data_base, meio_periodo, alerta_tv_sobre_ev, cambio=1)`, `avaliar(premissas, dados, *, wacc, ronic) -> Avaliacao`, `tabela(av)` | `Ronic` = `"wacc"` (acompanha a taxa) ou número. `ResultadoDCF.fluxos` só tem anos com fração > 0 (`fracao, fcff, fluxo, tau, fator, vp`); `.ev`, `.tv_sobre_ev` (NaN se EV ≤ 0). `Avaliacao(premissas, projecao, dcf, ponte, cambio)`, `.valor_por_acao` em BRL. Erros: WACC ≤ g, RONIC ≤ g, nenhum ano por vir. Avisos: NOPAT_T+1 ≤ 0, EV ≤ 0, VT/EV acima do alerta |
-| `modelos/ponte.py` | `ItensPonte(divida_bruta, caixa_e_aplicacoes, minoritarios, investimentos, divida_extra, acoes, data_balanco)`, `itens_do_balanco(balanco, *, acoes, data_balanco, coligadas, minoritarios)`, `ponte(ev, itens) -> ResultadoPonte(ev, itens, equity, valor_por_acao)`, `tabela(r)` | `balanco` = `metricas_ltm` na data do balanço; NaN conta 0. `investimentos` só com `somar_investimento_contabil`. `multiplo_pvp` e ações ≤ 0 ⇒ erro. `tabela` traz cada item com o sinal com que entra no equity |
+| `modelos/dcf.py` | `descontar(projecao, *, wacc, g, ronic, data_base, meio_periodo, alerta_tv_sobre_ev) -> ResultadoDCF`, `prazos`, `g_implicito(multiplo_saida, *, ebitda_t, nopat_t, wacc, ronic) -> float \| None`, `resolver_ronic(escolha, *, roic_historico) -> Ronic`, `DadosAvaliacao(historico, ponte, data_base, meio_periodo, alerta_tv_sobre_ev, cambio=1)`, `avaliar(premissas, dados, *, wacc, ronic) -> Avaliacao`, `tabela(av)` | `Ronic` = `"wacc"` (acompanha a taxa) ou número. `ResultadoDCF.fluxos` só tem anos com fração > 0 (`fracao, fcff, fluxo, tau, fator, vp`); `.ev`, `.tv_sobre_ev` (NaN se EV ≤ 0). `Avaliacao(premissas, projecao, dcf, ponte, cambio)`, `.valor_por_acao` em BRL. Erros: WACC ≤ g, RONIC ≤ g, nenhum ano por vir. Avisos: NOPAT_T+1 ≤ 0, EV ≤ 0, VT/EV acima do alerta |
+| `modelos/ponte.py` | `ItensPonte(divida_bruta, caixa_e_aplicacoes, minoritarios, investimentos, divida_extra, acoes, data_balanco)`, `itens_do_balanco(balanco, *, acoes, data_balanco, coligadas, minoritarios, pvp_pares=None)`, `ponte(ev, itens) -> ResultadoPonte(ev, itens, equity, valor_por_acao)`, `tabela(r)` | `balanco` = `metricas_ltm` na data do balanço; NaN conta 0. `investimentos` só com `somar_investimento_contabil`. `multiplo_pvp`: minoritários × `pvp_pares` (sem P/VP positivo ⇒ erro). Ações ≤ 0 ⇒ erro. `tabela` traz cada item com o sinal com que entra no equity |
+| `modelos/multiplos.py` | `Fundamentos(ticker, market_cap, itens, lucro_liquido, ebitda, ebit, receita_liquida, patrimonio_liquido, fcff, dividendos)` com `.ev`, `.metrica(nome)`; `fundamentos(ticker, ltm, *, itens, market_cap, cambio=1)`; `multiplo(f, nome)`; `tabela_pares`, `winsorizar`, `estatisticas`, `valor_por_acao(alvo, nome, x)`, `valores_implicitos`, `celula(df, linha, coluna)`; `avaliar(alvo, pares, *, inferior, superior, min_pares) -> ResultadoMultiplos(alvo, pares, estatisticas, implicitos, avisos)` com `.mediana(nome)`; `DEFINICOES`, `MULTIPLOS`, `ROTULOS`, `ESTATISTICAS`, `PVP_MINIMO_PLAUSIVEL = 0.05` | Tudo em BRL. Múltiplo com numerador ou denominador ≤ 0 (ou NaN) = NaN, fora das estatísticas. `estatisticas`: `n, mediana, media, p25, p75, minimo, maximo` após winsorizar, `confianca`. `avaliar` tira o alvo e os pares com P/VP implausível (aviso); sem pares ⇒ `ErroModelo` |
 | `analise/cenarios.py` | `avaliar_cenarios`, `pesos(parametros, cenarios)`, `ponderar`, `taxa_implicita(valor_em, alvo, *, minimo, maximo=1.0)`, `analisar(base, deltas, dados, *, custo_capital, ronic, perfil, preco, selic, cenarios) -> ResultadoCenarios`, `mensagem(r, ticker)` | `ResultadoCenarios(avaliacoes, pesos, perfil, preco, hurdle, valor_ponderado, ke_implicito, wacc_implicito)`, `.preco_maximo_compra`, `.upside`, `.avisos` (por cenário, sem repetição). Busca com `brentq` entre g + `FOLGA_G` e `TAXA_MAXIMA` (100%); no Ke, o mínimo é o Ke que dá WACC = g + folga. Pesos: os do perfil com os três cenários; 1 com um só |
 | `analise/sensibilidade.py` | `eixo(centro, passo, faixa)`, `wacc_x_g(...)`, `margem_x_crescimento(...)` | Matrizes de valor por ação (BRL). WACC × g troca só `g_terminal` (projeção explícita igual). Margem × crescimento usa `aplicar_cenario` com deltas; rótulos = margem do último ano e crescimento médio. Erro de modelo/projeção na célula ⇒ NaN |
 
@@ -697,3 +730,7 @@ até o valor por ação, que sai em BRL (× câmbio).
 | Ponte | EV − dívida bruta + caixa e aplicações − minoritários + investimentos − `divida_extra` |
 | Perfil | ponderado = Σ peso × valor; preço máximo = ponderado × (1 − margem); upside = ponderado / preço − 1 |
 | Implícitos | Ke: valor ponderado com WACC(Ke, Kd, t, pesos) = preço; WACC: valor ponderado com essa taxa = preço |
+| EV dos múltiplos | market cap + dívida bruta − caixa e aplicações + minoritários − investimentos + `divida_extra` (inverso da ponte) |
+| Múltiplos | P/L = market cap / LL controladora; EV/EBITDA, EV/EBIT (ajustados), EV/Receita, EV/FCF (FCFF); P/VP = market cap / PL controladora; DY = dividendos pagos / market cap |
+| Valor implícito | EV: múltiplo × métrica → ponte; P/L, P/VP: múltiplo × métrica / ações; DY: dividendos / DY / ações |
+| g implícito | K = múltiplo × EBITDA_T / NOPAT_T; (1 + g)(1 − g/RONIC)/(WACC − g) = K; RONIC = WACC ⇒ g = K × WACC − 1 |

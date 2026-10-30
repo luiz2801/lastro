@@ -54,11 +54,10 @@ def estrutura(
         raise ErroCustoCapital(f"Dívida bruta negativa ({divida:,.0f}).")
     if metodo == "mercado_atual":
         return Estrutura(metodo, divida, equity, divida / (divida + equity))
-    if metodo == "manual":
-        if divida_sobre_capital_alvo is None:
-            raise ErroCustoCapital("Estrutura manual exige divida_sobre_capital.")
-        return Estrutura(metodo, divida, equity, divida_sobre_capital_alvo)
-    raise ErroCustoCapital("Estrutura-alvo do setor depende dos pares (Fase 8).")
+    if divida_sobre_capital_alvo is None:
+        origem = "a mediana dos pares" if metodo == "setor" else "divida_sobre_capital"
+        raise ErroCustoCapital(f"Estrutura {metodo} exige {origem}.")
+    return Estrutura(metodo, divida, equity, divida_sobre_capital_alvo)
 
 
 def wacc(ke: float, kd: float, aliquota: float, peso_divida: float) -> float:

@@ -121,6 +121,18 @@ class ConfigSensibilidade(_Modelo):
     crescimento_faixa: float = Field(gt=0)
 
 
+class Winsorizacao(_Modelo):
+    """Percentis (em fração) aos quais os múltiplos dos pares são limitados."""
+
+    inferior: float = Field(ge=0, le=0.5)
+    superior: float = Field(ge=0.5, le=1)
+
+
+class ConfigMultiplos(_Modelo):
+    min_pares: int = Field(ge=1)
+    winsorizar: Winsorizacao
+
+
 class ValidacaoCruzada(_Modelo):
     """Tolerâncias da comparação entre duas fontes. Taxas em decimal (0,003 = 0,3 p.p.)."""
 
@@ -171,6 +183,7 @@ class Settings(_Modelo):
     terminal: ConfigTerminal
     dcf: ConfigDcf
     sensibilidade: ConfigSensibilidade
+    multiplos: ConfigMultiplos
     validacao_cruzada: ValidacaoCruzada
     perfil: ConfigPerfil
 
@@ -180,7 +193,7 @@ class Settings(_Modelo):
 
 
 class Setor(_Modelo):
-    """Entrada de `config/setores.yaml`. `pares` (tickers comparáveis) é preenchido na Fase 8."""
+    """Entrada de `config/setores.yaml`; `pares` = tickers comparáveis (pode incluir o alvo)."""
 
     descricao: str
     tipo_modelo: Literal["nao_financeira", "financeira"]

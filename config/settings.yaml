@@ -26,7 +26,7 @@ custo_capital:
   beta: {metodo: regressao, janela_semanas: 260, ajuste_blume: true, min_r2_aviso: 0.10}
   # Faixa do Kd histórico (despesas financeiras / dívida bruta média): Rf da moeda + spread.
   kd: {spread_min: 0.0, spread_max: 0.05}  # PLACEHOLDER
-  # mercado_atual | setor (Fase 8) | manual (exige divida_sobre_capital = D/(D+E))
+  # mercado_atual | setor (mediana de D/(D+E) dos pares) | manual (exige divida_sobre_capital)
   estrutura_alvo: {metodo: mercado_atual, divida_sobre_capital: null}
 
 terminal:
@@ -49,6 +49,13 @@ sensibilidade:
   margem_faixa: 0.03
   crescimento_passo: 0.01
   crescimento_faixa: 0.03
+
+# Múltiplos e comparáveis (seção 11.4 e ADR 0009). Múltiplos negativos ou indefinidos são
+# descartados; os demais são limitados aos percentis `winsorizar` dos pares antes da mediana,
+# média e quartis. Menos de `min_pares` válidos num múltiplo => "baixa confiança".
+multiplos:
+  min_pares: 3
+  winsorizar: {inferior: 0.10, superior: 0.90}
 
 # Tolerância para aceitar que duas fontes "concordam" (ver docs/decisoes/0004).
 # Preço, câmbio e market cap: diferença relativa. Taxas: diferença absoluta em decimal.

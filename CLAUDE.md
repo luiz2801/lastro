@@ -781,7 +781,7 @@ Beta, CAPM (`brl_direto` e `usd_crp`), Kd, WACC.
 `dcf.py`, `ponte.py`, `sensibilidade.py`, `cenarios.py`, ponderação por perfil.
 *Pronto:* valor por ação por cenário e ponderado para os 3 pilotos; checagens de VT/EV e g impressas; sensibilidade CSV.
 
-**Fase 8 — Múltiplos e comparáveis**
+**Fase 8 — Múltiplos e comparáveis** ✅ concluída
 `multiplos.py`, `setores.yaml`, estatísticas dos pares.
 *Pronto:* múltiplos e valores implícitos para os pilotos, com tratamento de outliers e aviso de poucos pares.
 
@@ -817,7 +817,8 @@ Modo em lote/screening, SOTP/NAV para holdings, Monte Carlo, deck de commodities
 1. ERP e fonte preferida do prêmio de risco (Fase 6).
 2. Taxa livre de risco: Tesouro Prefixado 10 anos automático ou valor manual (Fase 3/6).
 3. ~~Teto do crescimento perpétuo em termos nominais (Fase 7).~~ Respondida: 5,0% (ADR 0008).
-4. Lista final de empresas do universo (Ibovespa atual) e pares por setor (Fase 8).
+4. Lista final de empresas do universo (Ibovespa atual). ~~Pares por setor (Fase 8).~~ Respondida
+   a parte dos pares (ADR 0009).
 5. Aceitar os valores iniciais do mapeamento perfil → parâmetros (seção 8.4) ou ajustá-los (Fase 4).
 6. Conferência dos números dos pilotos contra os releases das empresas (fim da Fase 2).
 7. Tratamento de JCP e de diluição: ignorar na v1 (padrão) ou incluir.

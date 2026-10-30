@@ -8,6 +8,21 @@
   (GGBR4, GOAU4, USIM5, CSNA3) e `maquinas_equipamentos` (WEGE3 e nove pares).
 - `config/cadastro_manual.csv`: CSNA3 e CMIN3 (o FCA traz o código CVM no lugar do ticker) e
   `escala_acoes` 1000 para CBAV3, EMBJ3, RAPT3/4, TUPY3, KEPL3, MYPK3 e FRAS3.
+- `modelos/multiplos.py`: P/L, EV/EBITDA, EV/EBIT, EV/Receita, P/VP, EV/FCF e dividend yield
+  LTM com o mesmo pipeline contábil para alvo e pares (EV inverso da ponte, EBITDA ajustado);
+  descarte de indefinidos, winsorização 10/90, mediana/média/quartis, baixa confiança com menos de
+  3 pares, exclusão de par com P/VP implausível (escala das ações) e valor por ação implícito do
+  alvo em P25, mediana e P75.
+- `modelos/dcf.py`: g implícito num múltiplo de saída (`g_implicito`).
+- `modelos/ponte.py`: minoritários pelo P/VP mediano dos pares (`multiplo_pvp`).
+- `custo_capital`: estrutura-alvo do setor (mediana de D/(D+E) dos pares); beta por comparáveis
+  ligado aos pares medidos.
+- `settings.yaml`: seção `multiplos` (`min_pares`, `winsorizar`).
+- CLI: `valuation comparar TICKER` (grava `multiplos_pares.csv` e `multiplos_implicitos.csv`);
+  `atualizar --com-pares`; `rodar` mede os pares, grava os mesmos CSVs, mostra o valor implícito e
+  o g implícito no EV/EBITDA dos pares e acrescenta ao `resumo.csv` o valor pela mediana de cada
+  múltiplo, o número de pares, o EV/EBITDA mediano e o g implícito.
+- ADR 0009; `guia.md` 1.7 e 1.8.
 
 ### Fase 7 — DCF, ponte, sensibilidade e cenários
 - `modelos/dcf.py`: DCF do FCFF com ano corrente parcial e convenção de meio período, valor

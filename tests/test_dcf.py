@@ -171,14 +171,25 @@ def test_itens_do_balanco() -> None:
     assert itens == dataclasses.replace(ITENS, divida_extra=0.0)
     no_ebit = pt.itens_do_balanco(balanco, coligadas="manter_no_ebit", **kw)  # type: ignore[arg-type]
     assert no_ebit.investimentos == 0
-    with pytest.raises(ErroModelo, match="Fase 8"):
-        pt.itens_do_balanco(
-            balanco,
-            acoes=100,
-            data_balanco=FIM_2025,
-            coligadas="manter_no_ebit",
-            minoritarios="multiplo_pvp",
-        )
+    pvp = pt.itens_do_balanco(
+        balanco,
+        acoes=100,
+        data_balanco=FIM_2025,
+        coligadas="manter_no_ebit",
+        minoritarios="multiplo_pvp",
+        pvp_pares=1.5,
+    )
+    assert pvp.minoritarios == pytest.approx(75.0)
+    for pvp_pares in (None, float("nan"), 0.0):
+        with pytest.raises(ErroModelo, match="P/VP mediano"):
+            pt.itens_do_balanco(
+                balanco,
+                acoes=100,
+                data_balanco=FIM_2025,
+                coligadas="manter_no_ebit",
+                minoritarios="multiplo_pvp",
+                pvp_pares=pvp_pares,
+            )
     with pytest.raises(ErroModelo, match="ações"):
         pt.itens_do_balanco(
             balanco,

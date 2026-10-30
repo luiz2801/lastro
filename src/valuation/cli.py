@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import platform
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import cast
 
@@ -49,6 +49,7 @@ from valuation.data import precos as prc
 from valuation.data.http import ErroDownload, criar_sessao
 from valuation.data.validacao import ErroDadosExternos, Leitura, Validado
 from valuation.modelos import ErroModelo, dcf
+from valuation.modelos import multiplos as mt
 from valuation.modelos import ponte as pt
 from valuation.perfil import ErroPerfil, NomePerfil
 from valuation.perfil import registro as reg
@@ -159,6 +160,9 @@ def atualizar(
         None, "--tickers", help="Lista separada por vírgula, ex.: PETR4,VALE3."
     ),
     tudo: bool = typer.Option(False, "--tudo", help="Todos os tickers do universo configurado."),
+    com_pares: bool = typer.Option(
+        False, "--com-pares", help="Inclui os pares de cada ticker (YAML da empresa e setores)."
+    ),
     forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e baixa de novo."),
 ) -> None:
     """Baixa cadastro, DFP e ITR da CVM e grava os dados por companhia."""
@@ -174,6 +178,14 @@ def atualizar(
         )
         cadastro = _carregar_cadastro(settings, data_base, forcar)
         empresas = {e.cnpj: e for e in (cad.empresa_por_ticker(cadastro, t) for t in lista)}
+        if com_pares:
+            for par in dict.fromkeys(x for t in lista for x in _pares_do_yaml(t)):
+                try:
+                    e = cad.empresa_por_ticker(cadastro, par)
+                except cad.ErroCadastro as erro:
+                    console.print(f"[yellow]Aviso:[/] par {par} ignorado: {erro}")
+                    continue
+                empresas.setdefault(e.cnpj, e)
         for empresa in empresas.values():
             if empresa.tipo_modelo in ("holding", "nao_suportada"):
                 console.print(
@@ -264,17 +276,7 @@ def _mercado(
         forcar=forcar,
     )
     brapi = prc.BrapiProvider(sessao)
-
-    precos: dict[str, Validado] = {}
-    for classe in empresa.classes:
-        try:
-            precos[classe.ticker] = prc.preco_validado(
-                classe.ticker, base, yf, brapi, tolerancia_rel=tol.preco_rel
-            )
-        except ErroDadosExternos as e:
-            console.print(f"[yellow]Aviso:[/] {classe.ticker} sem preço: {e}")
-    if not precos:
-        raise _erro(f"Nenhum preço disponível para {', '.join(empresa.tickers)}.")
+    precos, cap = _cotacoes(empresa, settings, base, yf, brapi)
     ibov = prc.preco_validado("^BVSP", base, yf, brapi, tolerancia_rel=tol.preco_rel)
 
     cambio_yf: Leitura | None = None
@@ -295,16 +297,37 @@ def _mercado(
         agora=agora,
         forcar=forcar,
     )
+    return _Mercado(empresa, precos, ibov, macro, cap, yf)
+
+
+def _cotacoes(
+    empresa: cad.Empresa,
+    settings: Settings,
+    base: dt.date,
+    yf: prc.PrecosProvider,
+    brapi: prc.PrecosProvider,
+) -> tuple[dict[str, Validado], prc.MarketCap]:
+    """Preço de cada classe (2 fontes) e market cap na data-base."""
+    precos: dict[str, Validado] = {}
+    for classe in empresa.classes:
+        try:
+            precos[classe.ticker] = prc.preco_validado(
+                classe.ticker, base, yf, brapi, tolerancia_rel=settings.validacao_cruzada.preco_rel
+            )
+        except ErroDadosExternos as e:
+            console.print(f"[yellow]Aviso:[/] {classe.ticker} sem preço: {e}")
+    if not precos:
+        raise ErroDadosExternos(f"Nenhum preço disponível para {', '.join(empresa.tickers)}.")
     try:
         composicao = pd.read_parquet(
             DIR_PROCESSED / "cvm" / str(empresa.cd_cvm) / "composicao_capital.parquet"
         )
     except FileNotFoundError as e:
-        raise _erro(
-            f"{e.filename} não existe. Rode `valuation atualizar --tickers {ticker}`."
+        raise ErroDadosExternos(
+            f"{e.filename} não existe. Rode `valuation atualizar --tickers {empresa.tickers[0]}`."
         ) from e
     cap = prc.market_cap(empresa, composicao, {t: p.valor for t, p in precos.items()}, base)
-    return _Mercado(empresa, precos, ibov, macro, cap, yf)
+    return precos, cap
 
 
 @app.command()
@@ -368,14 +391,18 @@ class _Padronizada:
         return pm.ajustes_contabeis(self.premissas.ajustes)
 
 
-def _padronizar(ticker: str, settings: Settings) -> _Padronizada:
+def _padronizar(
+    ticker: str, settings: Settings, cadastro: pd.DataFrame | None = None
+) -> _Padronizada:
     """Padroniza as demonstrações de `ticker` e grava `contas_padronizadas.parquet`.
 
     Usa `config/empresas/{TICKER}.yaml` se existir (mapeamento extra, consolidado, moeda); senão,
-    as premissas padrão.
+    as premissas padrão. `cadastro` evita remontar o cadastro (pares).
     """
-    data_base = settings.resolver_data_base(dt.date.today())
-    empresa = cad.empresa_por_ticker(_carregar_cadastro(settings, data_base, False), ticker)
+    if cadastro is None:
+        data_base = settings.resolver_data_base(dt.date.today())
+        cadastro = _carregar_cadastro(settings, data_base, False)
+    empresa = cad.empresa_por_ticker(cadastro, ticker)
     if empresa.tipo_modelo != "nao_financeira":
         raise ErroContabil(
             f"{', '.join(empresa.tickers)} é {empresa.tipo_modelo}: só o plano de contas "
@@ -891,26 +918,153 @@ def _data_balanco(contas: pd.DataFrame, base: dt.date) -> pd.Timestamp:
     return pd.Timestamp(comuns.max())
 
 
-def _beta(
-    p: _Padronizada, m: _Mercado, settings: Settings, base: dt.date, aliquota: float
-) -> bt.ResultadoBeta:
-    """Beta pelo método do YAML da empresa (se declarado) ou do `settings`."""
-    cfg = settings.custo_capital.beta
+def _tickers_pares(premissas: pm.PremissasEmpresa, proprios: tuple[str, ...]) -> list[str]:
+    """Pares do setor + `pares.incluir` - `pares.excluir`, sem as classes da própria empresa."""
+    setor = _setor(premissas.pares.setor)
+    candidatos = [*(setor.pares if setor else ()), *premissas.pares.incluir]
+    fora = {cad.normalizar_ticker(t) for t in (*premissas.pares.excluir, *proprios)}
+    unicos = dict.fromkeys(cad.normalizar_ticker(t) for t in candidatos)
+    return [t for t in unicos if t not in fora]
+
+
+def _pares_do_yaml(ticker: str) -> list[str]:
+    """Pares de `ticker` pelo YAML da empresa (sem YAML, nenhum)."""
+    normalizado = cad.normalizar_ticker(ticker)
+    caminho = pm.caminho_premissas(normalizado, DIR_EMPRESAS)
+    if not caminho.is_file():
+        return []
+    return _tickers_pares(pm.carregar_premissas(caminho), (normalizado,))
+
+
+@dataclass(frozen=True)
+class _Par:
+    padronizada: _Padronizada
+    cap: prc.MarketCap
+    fundamentos: mt.Fundamentos
+
+
+@dataclass(frozen=True)
+class _Comparaveis:
+    pares: tuple[_Par, ...]
+    avisos: tuple[str, ...]
+
+
+def _fundamentos(
+    p: _Padronizada, cap: prc.MarketCap, settings: Settings, base: dt.date, dolar: float
+) -> mt.Fundamentos:
+    """Métricas LTM no último balanço até a data-base e market cap, em BRL."""
+    data_bal = _data_balanco(p.contas, base)
+    ltm = nf.metricas_ltm(
+        p.contas,
+        aliquota_nominal=settings.impostos.aliquota_nominal,
+        dt_fim=data_bal,
+        ajustes=p.ajustes,
+    )
+    itens = pt.itens_do_balanco(
+        ltm,
+        acoes=sum(c.acoes for c in cap.classes),
+        data_balanco=data_bal.date(),
+        coligadas=p.premissas.ajustes.coligadas,
+        minoritarios="contabil",
+    )
+    cambio = 1.0 if p.moeda == "BRL" else dolar
+    return mt.fundamentos(p.premissas.ticker, ltm, itens=itens, market_cap=cap.valor, cambio=cambio)
+
+
+def _mercado_par(
+    ticker: str,
+    settings: Settings,
+    base: dt.date,
+    cadastro: pd.DataFrame,
+    yf: prc.PrecosProvider,
+    brapi: prc.PrecosProvider,
+) -> prc.MarketCap:
+    """Market cap de um par na data-base (sem macro nem Ibovespa)."""
+    return _cotacoes(cad.empresa_por_ticker(cadastro, ticker), settings, base, yf, brapi)[1]
+
+
+def _coletar_pares(p: _Padronizada, m: _Mercado, settings: Settings, base: dt.date) -> _Comparaveis:
+    """Padroniza cada par e mede-o como o alvo; par sem dados vira aviso, não erro."""
+    tickers = _tickers_pares(p.premissas, p.empresa.tickers)
+    if not tickers:
+        return _Comparaveis(
+            (),
+            (
+                f"{p.premissas.ticker} sem pares: defina pares.setor (com pares em "
+                f"{CAMINHO_SETORES.name}) ou pares.incluir no YAML da empresa.",
+            ),
+        )
+    cadastro = _carregar_cadastro(settings, base, False)
+    brapi = prc.BrapiProvider(criar_sessao())
+    vistos = {p.empresa.cnpj}
+    pares: list[_Par] = []
+    avisos: list[str] = []
+    for t in tickers:
+        try:
+            par = _padronizar(t, settings, cadastro)
+            if par.empresa.cnpj in vistos:
+                continue
+            vistos.add(par.empresa.cnpj)
+            cap = _mercado_par(t, settings, base, cadastro, m.yf, brapi)
+            f = _fundamentos(par, cap, settings, base, m.macro.cambio.valor)
+        except (
+            ErroConfiguracao,
+            ErroDownload,
+            cad.ErroCadastro,
+            ErroDadosExternos,
+            ErroContabil,
+            ErroModelo,
+        ) as e:
+            avisos.append(f"Par {t} ignorado: {e}")
+            continue
+        pares.append(_Par(par, cap, f))
+    return _Comparaveis(tuple(pares), tuple(avisos))
+
+
+def _multiplos(
+    p: _Padronizada, m: _Mercado, comps: _Comparaveis, settings: Settings, base: dt.date
+) -> mt.ResultadoMultiplos | None:
+    """Múltiplos dos pares e valores implícitos do alvo; None se nenhum par foi medido."""
+    if not comps.pares:
+        return None
+    alvo = _fundamentos(p, m.cap, settings, base, m.macro.cambio.valor)
+    cfg = settings.multiplos
+    return mt.avaliar(
+        alvo,
+        [x.fundamentos for x in comps.pares],
+        inferior=cfg.winsorizar.inferior,
+        superior=cfg.winsorizar.superior,
+        min_pares=cfg.min_pares,
+    )
+
+
+def _metodo_beta(p: _Padronizada, settings: Settings) -> str:
     empresa = p.premissas.custo_capital
-    metodo = empresa.beta.metodo if "beta" in empresa.model_fields_set else cfg.metodo
-    if metodo == "manual":
-        if empresa.beta.valor is None:
-            raise ErroConfiguracao("beta manual exige custo_capital.beta.valor no YAML da empresa.")
-        return bt.manual(empresa.beta.valor)
-    if metodo == "comparaveis":
-        setor = _setor(p.premissas.pares.setor)
-        if setor is None or not setor.pares:
-            return bt.comparaveis({}, divida_sobre_equity_alvo=0.0, aliquota=aliquota)
-        raise ErroCustoCapital("Beta por comparáveis ainda não implementado (Fase 8).")
+    return (
+        empresa.beta.metodo
+        if "beta" in empresa.model_fields_set
+        else settings.custo_capital.beta.metodo
+    )
+
+
+def _precisa_pares(p: _Padronizada, settings: Settings) -> bool:
+    """Custo de capital ou ponte dependem dos pares (beta, estrutura ou minoritários)?"""
+    return (
+        _metodo_beta(p, settings) == "comparaveis"
+        or settings.custo_capital.estrutura_alvo.metodo == "setor"
+        or p.premissas.ajustes.minoritarios == "multiplo_pvp"
+    )
+
+
+def _regressao(
+    tickers: list[str], yf: prc.PrecosProvider, settings: Settings, base: dt.date
+) -> bt.ResultadoBeta:
+    """Beta da classe mais líquida contra o Ibovespa."""
+    cfg = settings.custo_capital.beta
     inicio = base - dt.timedelta(weeks=cfg.janela_semanas + 2)
-    historicos = {t: m.yf.historico(prc.simbolo_yahoo(t), inicio, base) for t in m.precos}
+    historicos = {t: yf.historico(prc.simbolo_yahoo(t), inicio, base) for t in tickers}
     ticker = bt.classe_mais_liquida(historicos, base, cfg.janela_semanas)
-    ibov = m.yf.historico("^BVSP", inicio, base)
+    ibov = yf.historico("^BVSP", inicio, base)
     return bt.regressao(
         historicos[ticker]["adj_close"],
         ibov["adj_close"],
@@ -922,10 +1076,70 @@ def _beta(
     )
 
 
+def _beta(
+    p: _Padronizada,
+    m: _Mercado,
+    settings: Settings,
+    base: dt.date,
+    aliquota: float,
+    est: wc.Estrutura,
+    pares: tuple[_Par, ...],
+) -> bt.ResultadoBeta:
+    """Beta pelo método do YAML da empresa (se declarado) ou do `settings`.
+
+    Comparáveis: beta de cada par (regressão, com Blume se configurado) e D/E dele, mediana
+    desalavancada e realavancada na estrutura `est` do alvo.
+    """
+    empresa = p.premissas.custo_capital
+    metodo = _metodo_beta(p, settings)
+    if metodo == "manual":
+        if empresa.beta.valor is None:
+            raise ErroConfiguracao("beta manual exige custo_capital.beta.valor no YAML da empresa.")
+        return bt.manual(empresa.beta.valor)
+    if metodo == "comparaveis":
+        betas: dict[str, tuple[float, float]] = {}
+        avisos: list[str] = []
+        for par in pares:
+            f = par.fundamentos
+            try:
+                r = _regressao([c.ticker for c in par.cap.classes], m.yf, settings, base)
+            except (ErroCustoCapital, ErroDadosExternos) as e:
+                avisos.append(f"Beta de {f.ticker} ignorado: {e}")
+                continue
+            betas[f.ticker] = (r.beta, f.itens.divida_bruta / f.market_cap)
+        resultado = bt.comparaveis(
+            betas, divida_sobre_equity_alvo=est.divida_sobre_equity, aliquota=aliquota
+        )
+        return replace(resultado, avisos=(*resultado.avisos, *avisos))
+    return _regressao(list(m.precos), m.yf, settings, base)
+
+
+def _divida_sobre_capital_setor(pares: tuple[_Par, ...]) -> float:
+    """Mediana de D/(D+E) dos pares (dívida bruta contábil, market cap)."""
+    if not pares:
+        raise ErroCustoCapital(
+            "estrutura_alvo.metodo = setor sem pares medidos: confira os pares e rode "
+            "`valuation atualizar --tickers ... --com-pares`."
+        )
+    pesos = [
+        x.fundamentos.itens.divida_bruta
+        / (x.fundamentos.itens.divida_bruta + x.fundamentos.market_cap)
+        for x in pares
+    ]
+    return float(pd.Series(pesos).median())
+
+
 def _custo_capital(
-    p: _Padronizada, m: _Mercado, settings: Settings, base: dt.date
+    p: _Padronizada,
+    m: _Mercado,
+    settings: Settings,
+    base: dt.date,
+    comps: _Comparaveis | None = None,
 ) -> wc.CustoCapital:
-    """Beta, Ke, Kd, estrutura e WACC na moeda de reporte da empresa."""
+    """Beta, Ke, Kd, estrutura e WACC na moeda de reporte da empresa.
+
+    `comps` (pares medidos) é exigido pelo beta por comparáveis e pela estrutura do setor.
+    """
     cfg = settings.custo_capital
     aliquota = settings.impostos.aliquota_nominal
     moeda = cast(capm.Moeda, p.moeda)
@@ -944,14 +1158,21 @@ def _custo_capital(
     if defasagem > DEFASAGEM_AVISO_DIAS:
         avisos.append(f"Balanço de {data_bal.date()} ({defasagem} dias antes da data-base).")
     equity = m.cap.valor if moeda == "BRL" else m.cap.valor / m.macro.cambio.valor
+    pares = comps.pares if comps else ()
+    alvo_dc = (
+        _divida_sobre_capital_setor(pares)
+        if cfg.estrutura_alvo.metodo == "setor"
+        else cfg.estrutura_alvo.divida_sobre_capital
+    )
     est = wc.estrutura(
         metodo=cfg.estrutura_alvo.metodo,
         divida=float(ltm["divida_bruta"]),
         equity=equity,
-        divida_sobre_capital_alvo=cfg.estrutura_alvo.divida_sobre_capital,
+        divida_sobre_capital_alvo=alvo_dc,
     )
 
-    beta = wc.beta_na_estrutura(_beta(p, m, settings, base, aliquota), est, aliquota)
+    beta_bruto = _beta(p, m, settings, base, aliquota, est, pares)
+    beta = wc.beta_na_estrutura(beta_bruto, est, aliquota)
     ke = capm.custo_capital_proprio(
         metodo=metodo,
         moeda=moeda,
@@ -1036,7 +1257,8 @@ def wacc(
         )
         p = _padronizar(ticker, settings)
         m = _mercado(ticker, settings, base, agora, forcar)
-        cc = _custo_capital(p, m, settings, base)
+        comps = _coletar_pares(p, m, settings, base) if _precisa_pares(p, settings) else None
+        cc = _custo_capital(p, m, settings, base, comps)
     except ValueError as e:
         raise _erro(f"--data-base inválida: {e}") from e
     except (
@@ -1063,7 +1285,7 @@ def wacc(
     raiz = Path(saida) if saida else DIR_SAIDA
     caminho = raiz / p.premissas.ticker / base.isoformat() / "wacc.csv"
     gravar_csv(tab, caminho, settings.csv, cast(FormatoCsv, formato_csv))
-    for aviso in [*cc.avisos, *m.avisos]:
+    for aviso in [*cc.avisos, *(comps.avisos if comps else ()), *m.avisos]:
         console.print(f"[yellow]Aviso:[/] {aviso}")
     console.print(f"Gravado em {caminho}")
 
@@ -1075,6 +1297,7 @@ def _dados_avaliacao(
     settings: Settings,
     base: dt.date,
     historico: pd.DataFrame,
+    pvp_pares: float | None = None,
 ) -> dcf.DadosAvaliacao:
     """Ponte com o balanço dos pesos do WACC, ações em circulação do market cap e câmbio."""
     balanco = nf.metricas_ltm(
@@ -1089,6 +1312,7 @@ def _dados_avaliacao(
         data_balanco=cc.data_balanco,
         coligadas=p.premissas.ajustes.coligadas,
         minoritarios=p.premissas.ajustes.minoritarios,
+        pvp_pares=pvp_pares,
     )
     return dcf.DadosAvaliacao(
         historico=historico,
@@ -1124,9 +1348,11 @@ def _resumo(
     cc: wc.CustoCapital,
     r: cen.ResultadoCenarios,
     referencia: pj.NomeCenario,
+    multiplos: mt.ResultadoMultiplos | None,
+    g_saida: float | None,
     avisos: list[str],
 ) -> pd.DataFrame:
-    """Linha única de `resumo.csv` (seção 13 do CLAUDE.md; múltiplos entram na Fase 8)."""
+    """Linha única de `resumo.csv` (seção 13 do CLAUDE.md)."""
     av = r.avaliacoes[referencia]
     valores = {
         c: r.avaliacoes[c].valor_por_acao if c in r.avaliacoes else None for c in pj.CENARIOS
@@ -1154,6 +1380,13 @@ def _resumo(
         "ronic": av.dcf.ronic,
         "vt_sobre_ev": av.dcf.tv_sobre_ev,
         "ev_ebitda_terminal": av.dcf.ev_ebitda_terminal,
+        "ev_ebitda_pares": multiplos.mediana("ev_ebitda") if multiplos else None,
+        "g_implicito_saida": g_saida,
+        "n_pares": float(len(multiplos.pares)) if multiplos else None,
+        **{
+            f"valor_{n}": multiplos.implicitos.loc[n, "valor_mediana"] if multiplos else None
+            for n in mt.MULTIPLOS
+        },
         "data_balanco": cc.data_balanco.isoformat(),
         "avisos": " | ".join(avisos),
     }
@@ -1208,6 +1441,133 @@ def _mostrar_valuation(
     )
 
 
+def _multiplo_fmt(nome: mt.NomeMultiplo, valor: float) -> str:
+    if pd.isna(valor):
+        return "—"
+    if nome == "dividend_yield":
+        return f"{valor:.1%}".replace(".", ",")
+    return f"{valor:.1f}x".replace(".", ",")
+
+
+def _mostrar_pares(r: mt.ResultadoMultiplos) -> None:
+    tabela = Table(title=f"Múltiplos LTM — {r.alvo.ticker} e pares")
+    tabela.add_column("Ticker")
+    tabela.add_column("Balanço")
+    tabela.add_column("Market cap (R$ mi)", justify="right")
+    for nome in mt.MULTIPLOS:
+        tabela.add_column(mt.ROTULOS[nome], justify="right")
+    todos = pd.concat([mt.tabela_pares([r.alvo]), r.pares])
+    for ticker, linha in todos.iterrows():
+        rotulo = f"[bold]{ticker}[/]" if ticker == r.alvo.ticker else str(ticker)
+        tabela.add_row(
+            rotulo,
+            str(linha["data_balanco"]),
+            _formatar(float(linha["market_cap"]), "mi"),
+            *(_multiplo_fmt(n, float(linha[n])) for n in mt.MULTIPLOS),
+        )
+    console.print(tabela)
+
+
+def _mostrar_implicitos(r: mt.ResultadoMultiplos, preco: float) -> None:
+    tabela = Table(title=f"Valor implícito por múltiplo — {r.alvo.ticker} (R$/ação; pares P25-P75)")
+    for coluna in (
+        "Múltiplo",
+        "Pares",
+        "P25",
+        "Mediana",
+        "P75",
+        "Alvo",
+        "Valor P25-P75",
+        "Mediana",
+    ):
+        tabela.add_column(coluna, justify="left" if coluna == "Múltiplo" else "right")
+    impl = r.implicitos
+    for nome in mt.MULTIPLOS:
+
+        def x(coluna: str, nome: mt.NomeMultiplo = nome) -> float:
+            return mt.celula(impl, nome, coluna)
+
+        n = f"{x('n_pares'):.0f}" + (" (baixa)" if impl.at[nome, "confianca"] == "baixa" else "")
+        faixa = sorted((x("valor_p25"), x("valor_p75")))
+        tabela.add_row(
+            mt.ROTULOS[nome],
+            n,
+            *(_multiplo_fmt(nome, x(f"multiplo_{s}")) for s in mt.ESTATISTICAS),
+            _multiplo_fmt(nome, x("multiplo_alvo")),
+            "—" if any(pd.isna(v) for v in faixa) else f"{_reais(faixa[0])} a {_reais(faixa[1])}",
+            _reais(x("valor_mediana")),
+        )
+    console.print(tabela)
+    console.print(f"Preço de mercado: {_reais(preco)}.")
+
+
+def _gravar_multiplos(
+    r: mt.ResultadoMultiplos, raiz: Path, settings: Settings, fmt: FormatoCsv
+) -> None:
+    """`multiplos_pares.csv` (alvo e pares) e `multiplos_implicitos.csv` (estatísticas)."""
+    pares = pd.concat(
+        [mt.tabela_pares([r.alvo]).assign(papel="alvo"), r.pares.assign(papel="par")]
+    ).reset_index()
+    gravar_csv(pares, raiz / "multiplos_pares.csv", settings.csv, fmt)
+    estat = r.estatisticas.drop(columns=["n", "confianca"])
+    implicitos = r.implicitos.join(estat).reset_index()
+    gravar_csv(implicitos, raiz / "multiplos_implicitos.csv", settings.csv, fmt)
+
+
+@app.command()
+def comparar(
+    ticker: str = typer.Argument(..., help="Ex.: PETR4."),
+    data_base: str | None = typer.Option(
+        None, "--data-base", help="AAAA-MM-DD (padrão: settings)."
+    ),
+    saida: str | None = typer.Option(
+        None, "--saida", help="Diretório raiz da saída (padrão: saida/)."
+    ),
+    formato_csv: str = typer.Option("br", "--formato-csv", help="br | intl."),
+    forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+) -> None:
+    """Múltiplos LTM do alvo e dos pares e valores implícitos por múltiplo (sem DCF)."""
+    agora = dt.datetime.now(dt.UTC)
+    if formato_csv not in ("br", "intl"):
+        raise _erro("--formato-csv deve ser br ou intl.")
+    try:
+        settings = carregar_settings()
+        base = (
+            dt.date.fromisoformat(data_base)
+            if data_base
+            else settings.resolver_data_base(agora.date())
+        )
+        p = _padronizar(ticker, settings)
+        m = _mercado(ticker, settings, base, agora, forcar)
+        comps = _coletar_pares(p, m, settings, base)
+        r = _multiplos(p, m, comps, settings, base)
+    except ValueError as e:
+        raise _erro(f"--data-base inválida: {e}") from e
+    except (
+        ErroConfiguracao,
+        ErroDownload,
+        cad.ErroCadastro,
+        ErroDadosExternos,
+        ErroContabil,
+        ErroModelo,
+    ) as e:
+        raise _erro(str(e)) from e
+    for aviso in comps.avisos:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
+    if r is None:
+        raise _erro(f"Nenhum par de {p.premissas.ticker} pôde ser medido.")
+
+    _mostrar_pares(r)
+    preco = (m.precos.get(cad.normalizar_ticker(ticker)) or next(iter(m.precos.values()))).valor
+    _mostrar_implicitos(r, preco)
+    raiz = (Path(saida) if saida else DIR_SAIDA) / p.premissas.ticker / base.isoformat()
+    _gravar_multiplos(r, raiz, settings, cast(FormatoCsv, formato_csv))
+    for aviso in [*r.avisos, *m.avisos]:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
+    console.print("Estudo pessoal; não é recomendação de investimento.")
+    console.print(f"Gravado em {raiz}")
+
+
 @app.command()
 def rodar(
     ticker: str = typer.Argument(..., help="Ex.: PETR4."),
@@ -1249,8 +1609,11 @@ def rodar(
         resolvidas = _resolver(p, settings, sugestoes, base, horizonte)
         deltas = pj.resolver_cenarios(p.premissas.cenarios, sugestoes)
         m = _mercado(ticker, settings, base, agora, forcar)
-        cc = _custo_capital(p, m, settings, base)
-        dados = _dados_avaliacao(p, m, cc, settings, base, historico)
+        comps = _coletar_pares(p, m, settings, base)
+        cc = _custo_capital(p, m, settings, base, comps)
+        multiplos = _multiplos(p, m, comps, settings, base)
+        pvp = multiplos.mediana("p_vp") if multiplos else None
+        dados = _dados_avaliacao(p, m, cc, settings, base, historico, pvp)
         ronic = _ronic(p, settings, historico)
         normalizado = cad.normalizar_ticker(ticker)
         preco = (m.precos.get(normalizado) or next(iter(m.precos.values()))).valor
@@ -1265,7 +1628,20 @@ def rodar(
             selic=m.macro.selic.valor,
             cenarios=cenarios,
         )
-        ref = r.avaliacoes[referencia].premissas
+        av_ref = r.avaliacoes[referencia]
+        ref = av_ref.premissas
+        ultimo = av_ref.projecao.iloc[-1]
+        g_saida = (
+            dcf.g_implicito(
+                multiplos.mediana("ev_ebitda"),
+                ebitda_t=float(ultimo["ebitda"]),
+                nopat_t=float(ultimo["nopat"]),
+                wacc=av_ref.dcf.wacc,
+                ronic=ronic,
+            )
+            if multiplos
+            else None
+        )
         s = settings.sensibilidade
         wacc_g = sens.wacc_x_g(
             ref,
@@ -1310,10 +1686,23 @@ def rodar(
         f"DCF — {p.premissas.ticker} em {base} ({moeda}; R$ milhões; {horizonte} anos pelo "
         f"{origem})",
     )
+    if settings.terminal.checagem_multiplo_saida and multiplos:
+        implicito = (
+            f"g de {_taxa(g_saida)}"
+            if g_saida is not None
+            else "nenhum g abaixo do WACC (múltiplo fora do alcance do terminal com esse RONIC)"
+        )
+        console.print(
+            f"Múltiplo de saída: EV/EBITDA mediano dos pares "
+            f"{_multiplo_fmt('ev_ebitda', multiplos.mediana('ev_ebitda'))} implica {implicito} "
+            f"na perpetuidade ({referencia}; g usado {_taxa(av_ref.dcf.g)})."
+        )
     _mostrar_projecao(
-        r.avaliacoes[referencia].projecao,
+        av_ref.projecao,
         f"Projeção {referencia} — {p.premissas.ticker} (R$ milhões, {p.moeda})",
     )
+    if multiplos:
+        _mostrar_implicitos(multiplos, preco)
     tabela = Table(title=f"Sensibilidade WACC x g — valor por ação ({referencia})")
     tabela.add_column("WACC \\ g")
     for g in wacc_g.columns:
@@ -1334,8 +1723,19 @@ def rodar(
     gravar_csv(ponte_df, raiz / "ponte_ev_equity.csv", settings.csv, fmt)
     gravar_matriz(wacc_g, raiz / "sensibilidade_wacc_g.csv", settings.csv, fmt)
     gravar_matriz(margem_g, raiz / "sensibilidade_margem_crescimento.csv", settings.csv, fmt)
-    avisos = [*r.avisos, *cc.avisos, *m.avisos, *sugestoes.avisos]
-    resumo = _resumo(p.premissas.ticker, base, efetivo, p.moeda, cc, r, referencia, avisos)
+    if multiplos:
+        _gravar_multiplos(multiplos, raiz, settings, fmt)
+    avisos = [
+        *r.avisos,
+        *cc.avisos,
+        *comps.avisos,
+        *(multiplos.avisos if multiplos else ()),
+        *m.avisos,
+        *sugestoes.avisos,
+    ]
+    resumo = _resumo(
+        p.premissas.ticker, base, efetivo, p.moeda, cc, r, referencia, multiplos, g_saida, avisos
+    )
     gravar_csv(resumo, raiz / "resumo.csv", settings.csv, fmt)
 
     for aviso in avisos:

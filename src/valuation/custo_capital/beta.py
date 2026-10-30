@@ -143,7 +143,8 @@ def comparaveis(
     """
     if not pares:
         raise ErroCustoCapital(
-            "Beta por comparáveis sem pares: defina `pares` em config/setores.yaml (Fase 8)."
+            "Beta por comparáveis sem pares medidos: confira `pares` em config/setores.yaml e "
+            "rode `valuation atualizar --com-pares`."
         )
     desalavancados = [desalavancar(b, de, aliquota) for b, de in pares.values()]
     mediana = statistics.median(desalavancados)

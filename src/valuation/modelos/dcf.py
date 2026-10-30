@@ -21,6 +21,7 @@ from typing import Literal
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import brentq
 
 from valuation.modelos import ErroModelo
 from valuation.modelos import ponte as pt
@@ -139,6 +140,32 @@ def descontar(
             f"{alerta_tv_sobre_ev:.0%}): o resultado depende sobretudo da perpetuidade."
         )
     return replace(resultado, avisos=tuple(avisos))
+
+
+def g_implicito(
+    multiplo_saida: float, *, ebitda_t: float, nopat_t: float, wacc: float, ronic: Ronic
+) -> float | None:
+    """g da perpetuidade que faz VT = `multiplo_saida` x EBITDA_T (checagem do terminal).
+
+    Com K = múltiplo x EBITDA_T / NOPAT_T, resolve (1 + g)(1 - g/RONIC) / (WACC - g) = K. Com
+    RONIC = WACC a solução é fechada: g = K x WACC - 1. None se não houver g < min(WACC, RONIC)
+    (múltiplo, EBITDA ou NOPAT não positivos, ou RONIC < WACC sem raiz única).
+    """
+    if not (multiplo_saida > 0 and ebitda_t > 0 and nopat_t > 0):
+        return None
+    k = multiplo_saida * ebitda_t / nopat_t
+    r = wacc if ronic == "wacc" else float(ronic)
+    if np.isclose(r, wacc):
+        g = k * wacc - 1
+        return g if g < wacc else None
+    if r < wacc:
+        return None
+
+    def h(g: float) -> float:
+        return (1 + g) * (r - g) - k * r * (wacc - g)
+
+    # h(-1) < 0 e h(WACC) > 0 com RONIC > WACC: uma única raiz no intervalo.
+    return float(brentq(h, -1.0, wacc))
 
 
 @dataclass(frozen=True)

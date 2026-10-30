@@ -464,3 +464,107 @@ def test_rodar_erros(mercado_falso: Path, caminho_perfil: Path) -> None:
     resultado = CliRunner().invoke(app, ["rodar", "WEGE3", "--saida", str(mercado_falso)])
     assert resultado.exit_code == 1
     assert "valuation perfil" in " ".join(resultado.output.split())
+
+
+def escrever_yaml_weg(pasta: Path, **extra: object) -> None:
+    caminho = pasta / "empresas" / "WEGE3.yaml"
+    caminho.parent.mkdir(exist_ok=True)
+    base = {"ticker": "WEGE3", "tipo_modelo": "nao_financeira", "classes_acao": ["WEGE3"]}
+    caminho.write_text(yaml.safe_dump({**base, **extra}), "utf-8")
+
+
+@pytest.fixture
+def com_par(mercado_falso: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """PETR4 como único par, com as mesmas demonstrações da WEGE3 sintética e market cap de
+    1.800: todo múltiplo implica equity de 1.800 para a WEGE3, ou R$ 20 por ação (90 ações)."""
+    assert CliRunner().invoke(app, ["atualizar", "--tickers", "PETR4"]).exit_code == 0
+    origem = mercado_falso / "processed" / "cvm" / "5410" / "demonstracoes.parquet"
+    destino = mercado_falso / "processed" / "cvm" / "9512" / "demonstracoes.parquet"
+    destino.write_bytes(origem.read_bytes())
+    escrever_yaml_weg(mercado_falso, pares={"incluir": ["PETR4", "ZZZZ3"]})
+
+    def mercado_par(ticker: str, *args: object) -> prc.MarketCap:
+        if ticker != "PETR4":
+            raise cad.ErroCadastro(f"{ticker} não está no cadastro")
+        classe = prc.ClasseMarketCap("PETR4", "PN", 90, 20.0)
+        return prc.MarketCap(1800.0, (classe,), dt.date(2026, 10, 30), ())
+
+    monkeypatch.setattr(cli, "_mercado_par", mercado_par)
+    return mercado_falso
+
+
+def test_comparar(com_par: Path) -> None:
+    saida = com_par / "saida"
+    resultado = CliRunner().invoke(app, ["comparar", "WEGE3", "--saida", str(saida)])
+    assert resultado.exit_code == 0, resultado.output
+    pasta = saida / "WEGE3" / "2026-10-30"
+    pares = ler_csv_br(pasta / "multiplos_pares.csv").set_index("ticker")
+    assert list(pares["papel"]) == ["alvo", "par"]
+    assert pares.loc["PETR4", "market_cap"] == 1800
+    assert pares.loc["PETR4", "p_l"] == pytest.approx(2 * pares.loc["WEGE3", "p_l"])
+    impl = ler_csv_br(pasta / "multiplos_implicitos.csv").set_index("multiplo")
+    validos = impl["valor_mediana"].dropna()
+    assert len(validos) >= 5
+    assert validos.tolist() == pytest.approx([20.0] * len(validos))
+    assert (impl["confianca"] == "baixa").all()
+    texto = " ".join(resultado.output.split())
+    assert "Par ZZZZ3 ignorado" in texto
+    assert "baixa confiança" in texto
+
+
+def test_comparar_sem_pares(mercado_falso: Path) -> None:
+    resultado = CliRunner().invoke(app, ["comparar", "WEGE3", "--saida", str(mercado_falso)])
+    assert resultado.exit_code == 1
+    assert "sem pares" in " ".join(resultado.output.split())
+
+
+def test_rodar_com_pares(com_par: Path, caminho_perfil: Path) -> None:
+    saida = com_par / "saida"
+    resultado = CliRunner().invoke(
+        app, ["rodar", "WEGE3", "--perfil", "moderado", "--saida", str(saida)]
+    )
+    assert resultado.exit_code == 0, resultado.output
+    pasta = saida / "WEGE3" / "2026-10-30"
+    assert (pasta / "multiplos_pares.csv").exists()
+    assert (pasta / "multiplos_implicitos.csv").exists()
+    r = ler_csv_br(pasta / "resumo.csv").iloc[0]
+    assert r["n_pares"] == 1
+    assert r["valor_p_l"] == pytest.approx(20.0)
+    assert r["valor_ev_ebitda"] == pytest.approx(20.0)
+    assert r["ev_ebitda_pares"] > 0
+    assert "Múltiplo de saída" in " ".join(resultado.output.split())
+
+
+def test_wacc_beta_e_estrutura_dos_pares(com_par: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    escrever_yaml_weg(
+        com_par, pares={"incluir": ["PETR4"]}, custo_capital={"beta": {"metodo": "comparaveis"}}
+    )
+    settings = cli.carregar_settings()
+    cfg = settings.custo_capital.model_copy(
+        update={
+            "estrutura_alvo": settings.custo_capital.estrutura_alvo.model_copy(
+                update={"metodo": "setor"}
+            )
+        }
+    )
+    monkeypatch.setattr(
+        cli, "carregar_settings", lambda: settings.model_copy(update={"custo_capital": cfg})
+    )
+    resultado = CliRunner().invoke(app, ["wacc", "WEGE3", "--saida", str(com_par)])
+    assert resultado.exit_code == 0, resultado.output
+    tab = ler_csv_br(com_par / "WEGE3" / "2026-10-30" / "wacc.csv").set_index("componente")
+    assert tab.loc["beta_metodo", "detalhe"] == "comparaveis"
+    assert tab.loc["estrutura_metodo", "detalhe"] == "setor"
+    # D/(D+E) do par = 100 / (100 + 1.800); o alvo é realavancado na mesma estrutura do par,
+    # então o beta é o do par: 0,67 x 1,2 + 0,33.
+    assert tab.loc["peso_divida", "valor"] == pytest.approx(100 / 1900)
+    assert tab.loc["beta", "valor"] == pytest.approx(0.67 * 1.2 + 0.33)
+    assert "com só 1 par" in " ".join(resultado.output.split())
+
+
+def test_atualizar_com_pares(ambiente_offline: Path) -> None:
+    escrever_yaml_weg(ambiente_offline, pares={"incluir": ["PETR4", "ZZZZ3"]})
+    resultado = CliRunner().invoke(app, ["atualizar", "--tickers", "WEGE3", "--com-pares"])
+    assert resultado.exit_code == 0, resultado.output
+    assert (ambiente_offline / "processed" / "cvm" / "9512" / "demonstracoes.parquet").exists()
+    assert "par ZZZZ3 ignorado" in " ".join(resultado.output.split())

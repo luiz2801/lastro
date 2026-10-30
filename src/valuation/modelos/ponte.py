@@ -1,7 +1,8 @@
 """Ponte EV -> equity -> valor por ação (seção 11.2 do CLAUDE.md e ADR 0008).
 
 Equity = EV - dívida bruta (com arrendamento, se IFRS 16 = dívida) + caixa e aplicações
-- não controladores + investimentos em coligadas (se excluídas do EBIT) - `divida_extra`.
+- não controladores (contábeis ou ao P/VP mediano dos pares) + investimentos em coligadas (se
+excluídas do EBIT) - `divida_extra`.
 Saldos do último balanço até a data-base (o mesmo dos pesos do WACC), na moeda de reporte.
 Valor por ação = equity / ações em circulação (ON + PN, sem tesouraria): igual para todas as
 classes (aproximação; PN pode ter direitos diferentes). Diluição ignorada na v1.
@@ -38,14 +39,23 @@ def itens_do_balanco(
     data_balanco: dt.date,
     coligadas: Literal["somar_investimento_contabil", "manter_no_ebit"],
     minoritarios: Literal["contabil", "multiplo_pvp"],
+    pvp_pares: float | None = None,
 ) -> ItensPonte:
-    """Itens da ponte a partir das métricas de balanço (`nao_financeiras.metricas_ltm`)."""
+    """Itens da ponte a partir das métricas de balanço (`nao_financeiras.metricas_ltm`).
+
+    Com `minoritarios = multiplo_pvp`, os não controladores valem o PL contábil deles vezes
+    `pvp_pares` (mediana do P/VP dos pares).
+    """
     if acoes <= 0:
         raise ErroModelo(f"Quantidade de ações em circulação inválida: {acoes}.")
+    fator = 1.0
     if minoritarios == "multiplo_pvp":
-        raise ErroModelo(
-            "ajustes.minoritarios = multiplo_pvp depende do P/VP dos pares (Fase 8): use contabil."
-        )
+        if pvp_pares is None or not pvp_pares > 0:
+            raise ErroModelo(
+                "ajustes.minoritarios = multiplo_pvp exige o P/VP mediano dos pares, que não "
+                "está disponível: defina os pares do setor ou use contabil."
+            )
+        fator = pvp_pares
 
     def valor(nome: str) -> float:
         x = float(balanco.get(nome, 0.0))
@@ -54,7 +64,7 @@ def itens_do_balanco(
     return ItensPonte(
         divida_bruta=valor("divida_bruta"),
         caixa_e_aplicacoes=valor("caixa_e_aplicacoes"),
-        minoritarios=valor("minoritarios"),
+        minoritarios=valor("minoritarios") * fator,
         investimentos=valor("investimentos") if coligadas == "somar_investimento_contabil" else 0.0,
         divida_extra=valor("divida_extra"),
         acoes=acoes,

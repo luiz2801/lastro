@@ -29,12 +29,14 @@ def test_estrutura_mercado_atual_e_manual() -> None:
     assert alvo.peso_divida == 0.2
     assert alvo.divida_sobre_equity == pytest.approx(0.25)
     assert alvo.divida_sobre_equity_atual == pytest.approx(40 / 60)
+    setor = wc.estrutura(metodo="setor", divida=40, equity=60, divida_sobre_capital_alvo=0.3)
+    assert (setor.metodo, setor.peso_divida) == ("setor", 0.3)
 
 
 def test_estrutura_invalida() -> None:
     with pytest.raises(ErroCustoCapital, match="Market cap"):
         wc.estrutura(metodo="mercado_atual", divida=1, equity=0)
-    with pytest.raises(ErroCustoCapital, match="Fase 8"):
+    with pytest.raises(ErroCustoCapital, match="mediana dos pares"):
         wc.estrutura(metodo="setor", divida=1, equity=1)
     with pytest.raises(ErroCustoCapital, match="divida_sobre_capital"):
         wc.estrutura(metodo="manual", divida=1, equity=1)
