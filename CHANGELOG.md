@@ -15,6 +15,12 @@
 - `CLAUDE.md`: referenciamento das regras modulares na seção 0 (regras 14 e 15) e nas seções 6, 7, 11 e 15 apontando para `docs/regras/`.
 - `CONTRIBUTING.md`, `README.md` e `guia.md`: referências atualizadas para `docs/regras/`; versão do `guia.md` atualizada para 1.19.
 
+### Fase 10 concluída
+- Critério de pronto atendido: pipeline completo para ITUB4 e BBAS3 com checagem DDM × lucro
+  residual; cobertura de 96% (todas as camadas acima de 80%). Pendentes com o usuário: golden das
+  financeiras e a divisão do setor `seguradoras` (seção 19 do `CLAUDE.md`, itens 9 e 10).
+- `guia.md` 1.23.
+
 ### Fase 10 — YAMLs das financeiras
 - `config/empresas/`: ITUB4, BBAS3, BBDC4, SANB11, BPAC11 (setor `bancos`) e BBSE3, CXSE3, PSSA3,
   IRBR3 (setor `seguradoras`), gerados por `premissas sugerir --escrever`; `rodar` conferido nos

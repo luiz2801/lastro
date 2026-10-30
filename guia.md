@@ -1,12 +1,11 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.22 — 2026-10-30**
+**Versão 1.23 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
 > [`REGRAS_MODELOS.md`](docs/regras/REGRAS_MODELOS.md) e [`REGRAS_TESTES.md`](docs/regras/REGRAS_TESTES.md)).
-> Este arquivo descreve **o que existe hoje** (Fases 0 a 8 implementadas; Fase 10, financeiras,
-> em andamento) para que você não precise reler os módulos. Para o que ainda **não** existe,
+> Este arquivo descreve **o que existe hoje** (Fases 0 a 8 e 10 implementadas) para que você não precise reler os módulos. Para o que ainda **não** existe,
 > veja a seção 12.
 > Política de commits, que documento atualizar em cada mudança e ADRs: `CONTRIBUTING.md` e
 > `docs/decisoes/README.md`.
@@ -52,7 +51,7 @@
 | Saída | `saida/csv.py` | CSV e matrizes (seção 19); gráficos, `meta.json` e demais arquivos na Fase 9 |
 | CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar` |
 
-~8.700 linhas de código, 438 testes (11 golden pulados por motivo declarado), mypy `strict`,
+~8.900 linhas de código, 446 testes (11 golden pulados por motivo declarado), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -527,7 +526,6 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | Fase | Falta | Dica de onde conectar |
 |---|---|---|
 | 9 | gráficos (football field, cascata da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos` | `rodar` já tem tudo em memória: `ResultadoCenarios`, matrizes, `ResultadoMultiplos` (barras P/L, EV/EBITDA, P/VP pelos quartis: `implicitos.valor_p25/p75`; `mt.ROTULOS`) e `PerfilEfetivo.origem` (vai ao `meta.json`). `premissas_usadas.yaml` = serializar `Avaliacao.premissas` de cada cenário |
-| 10 | Golden das financeiras (conferência do usuário), fechamento da fase | Múltiplos financeiros já existem: `mt.fundamentos_financeira`, `MULTIPLOS_FINANCEIRA`, `regressao_pvp_roe`, `ResultadoMultiplos.nomes/regressao/valor_regressao` (ADR 0014); `cli._fundamentos` escolhe pelo tipo; setores `bancos` e `seguradoras` |
 
 ## 13. Convenções que o código já segue (siga também)
 

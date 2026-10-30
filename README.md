@@ -71,7 +71,7 @@ um token gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
 
 ## Estado atual
 
-**Fases 0 a 8 concluídas** (seção 17 do `CLAUDE.md`). Próxima: Fase 9, saídas (gráficos,
+**Fases 0 a 8 e 10 concluídas** (seção 17 do `CLAUDE.md`). Próxima: Fase 9, saídas (gráficos,
 `meta.json`, relatório real).
 Pilotos: PETR4, VALE3 e WEGE3.
 
@@ -112,16 +112,17 @@ Pilotos: PETR4, VALE3 e WEGE3.
   winsorização, quartis, aviso de poucos pares e de escala implausível; valor implícito do alvo;
   beta por comparáveis, estrutura-alvo do setor, minoritários pelo P/VP e g implícito no múltiplo
   de saída; `valuation comparar TICKER` e múltiplos no `rodar`.
-- **Testes**: 438 (427 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
+- **Testes**: 446 (435 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
 - **Universo**: `config/universo_ibovespa.csv` com os 76 ativos da carteira de 30/10/26 da B3;
   `valuation atualizar --tudo` baixa os dados de todos (holdings só avisam).
-- **Financeiras** (Fase 10, em andamento): plano de contas de bancos e seguradoras (25 companhias
+- **Financeiras** (Fase 10): plano de contas de bancos e seguradoras (25 companhias
   conferidas), métricas (ROE, payout, PL da controladora), QA próprio; premissas do DDM (ROE
   até o de longo prazo, payout até 1 − g/ROE) e projeção de lucro, dividendos e PL; DDM com
   checagem por lucro residual, Ke sem WACC, cenários ponderados pelo perfil, Ke implícito no preço
-  e matrizes Ke × g e ROE × Ke; `qa`, `historico`, `cobertura`, `premissas sugerir`, `wacc` e
-  `rodar` aceitam financeiras.
-- **Ainda não**: múltiplos das financeiras, gráficos e demais saídas da Fase 9. Lista
+  e matrizes Ke × g e ROE × Ke; múltiplos P/L, P/VP e DY com regressão P/VP × ROE (setores
+  `bancos`, 18 pares, e `seguradoras`); units no market cap; YAMLs de 5 bancos e 4 seguradoras;
+  todos os comandos aceitam financeiras. Golden das financeiras aguardam a conferência do usuário.
+- **Ainda não**: gráficos e demais saídas da Fase 9. Lista
   completa na seção 12 do `guia.md`.
 
 ## Decisões que completam ou divergem do `CLAUDE.md`
@@ -167,6 +168,10 @@ Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
   ROE de longo prazo pela mediana de 10 anos, payout até 1 − g/ROE, cenários pelo ROE.
 - **DDM das financeiras** ([ADR 0013](docs/decisoes/0013-ddm-ke-e-cenarios-das-financeiras.md)):
   desconto no fim do ano, lucro residual igual ao DDM por construção, Ke sem WACC.
+- **Múltiplos das financeiras** ([ADR 0014](docs/decisoes/0014-multiplos-e-pares-das-financeiras.md)):
+  P/L, P/VP e DY sem EV, regressão P/VP × ROE, pares de todos os bancos cotados.
+- **Units** ([ADR 0015](docs/decisoes/0015-units-no-market-cap.md)): ON e PN pelo preço da unit
+  quando a composição está no cadastro manual (BPAC11, BRBI11, SANB11).
 
 O ERP (5,0%) é premissa do usuário, sem fonte externa (`docs/fontes.md`). Os demais parâmetros de
 mercado de `config/settings.yaml` (faixa do Kd, Rf e inflação em USD) e o mapeamento perfil →

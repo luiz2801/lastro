@@ -802,7 +802,7 @@ Beta, CAPM (`brl_direto` e `usd_crp`), Kd, WACC.
 CSVs completos, `meta.json`, gráficos, football field, relatório real (deflacionado).
 *Pronto:* `valuation rodar PETR4` gera a pasta de saída completa e reprodutível.
 
-**Fase 10 — Financeiras**
+**Fase 10 — Financeiras** ✅ concluída
 Mapeamento de contas de bancos/seguradoras, métricas (ROE, payout, PL), `ddm.py`, lucro residual, P/VP justificado, múltiplos financeiros.
 *Pronto:* pipeline completo para ITUB4 e/ou BBAS3 com checagem DDM × lucro residual.
 
@@ -838,6 +838,10 @@ Modo em lote/screening, SOTP/NAV para holdings, Monte Carlo, deck de commodities
 7. Tratamento de JCP e de diluição: ignorar na v1 (padrão) ou incluir.
 8. Faixa do Kd histórico (`custo_capital.kd`, hoje Rf + 0 a 5 p.p.) e se o piso deve ser a Rf em BRL
    para empresas com dívida em dólar (ADR 0007) (Fase 6).
+9. Conferência de lucro, PL e ROE de ITUB4 e BBAS3 contra os releases, para os golden das
+   financeiras (Fase 10; a CVM traz IFRS consolidado, não o lucro recorrente gerencial).
+10. Setor `seguradoras`: separar holdings de seguros (BBSE3, CXSE3) das operadoras (PSSA3,
+    IRBR3)? Juntas, o P/VP dos pares distorce o valor das operadoras (`guia.md`, armadilha 38).
 
 ---
 
