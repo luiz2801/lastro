@@ -9,11 +9,14 @@ investimento.**
 | Documento | Para quê |
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | Especificação completa: escopo, decisões, fórmulas, fontes, roadmap por fase e regras para o agente |
+| [`REGRAS_*.md`](REGRAS_DADOS.md) | Regras modulares por camada na raiz ([`DADOS`](REGRAS_DADOS.md), [`CONTABIL`](REGRAS_CONTABIL.md), [`MODELOS`](REGRAS_MODELOS.md), [`TESTES`](REGRAS_TESTES.md)) para agentes de IA |
 | [`guia.md`](guia.md) | Mapa do código como ele está hoje: módulos, contratos, parâmetros, testes e armadilhas. Leia antes de modificar |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Política de commits, que documento atualizar, testes e convenções |
 | [`docs/decisoes/`](docs/decisoes/README.md) | ADRs: decisões que completam ou divergem do `CLAUDE.md`, com índice |
 | [`docs/justificativas_e_alternativas.md`](docs/justificativas_e_alternativas.md) | Por que cada decisão do valuation foi tomada e que alternativas dá para usar (config, código, ADR ou fase) em outras análises |
 | [`docs/fontes.md`](docs/fontes.md) | O que foi confirmado em cada fonte real (URLs, arquivos, contas, séries SGS) |
+| [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md) | Diagrama de atividades UML do pipeline (complementa o `guia.md` com o fluxo dinâmico de processos e decisões) |
+| [`docs/recipes_agentes.md`](docs/recipes_agentes.md) | Playbooks de tarefas frequentes e procedimentos operacionais passo a passo para agentes de IA |
 | [`CHANGELOG.md`](CHANGELOG.md) | O que foi entregue em cada fase |
 | [`referencias/README.md`](referencias/README.md) | Índice dos documentos das companhias usados na conciliação (os arquivos ficam fora do git) |
 

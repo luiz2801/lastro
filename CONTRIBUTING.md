@@ -5,8 +5,14 @@ escrever um ADR, testes e convenções de código. As regras valem para pessoas 
 as do agente estão na seção 0 do [`CLAUDE.md`](CLAUDE.md), e este guia as reúne num lugar só.
 
 Antes de mexer em código, leia a seção do módulo no [`guia.md`](guia.md) (e as seções 13 e 16,
-convenções e armadilhas). Antes de seguir uma seção do `CLAUDE.md`, confira no
-[índice de ADRs](docs/decisoes/README.md) se alguma decisão a alterou.
+convenções e armadilhas), consulte o [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md) e
+as regras modulares da camada correspondente na raiz ([`REGRAS_DADOS.md`](REGRAS_DADOS.md),
+[`REGRAS_CONTABIL.md`](REGRAS_CONTABIL.md), [`REGRAS_MODELOS.md`](REGRAS_MODELOS.md) e
+[`REGRAS_TESTES.md`](REGRAS_TESTES.md)). Eles **não se substituem, se complementam**: o diagrama
+orienta a visão dinâmica do fluxo e decisões de processo, o guia mapeia a estrutura, contratos e
+parâmetros do código, e as regras modulares orientam os limites e convenções específicas da camada.
+Antes de seguir uma seção do `CLAUDE.md`, confira no [índice de ADRs](docs/decisoes/README.md) se alguma
+decisão a alterou.
 
 ## Ambiente
 
@@ -65,6 +71,8 @@ se um arquivo de teste surgir ou sumir).
 | O que mudou | Documento |
 |---|---|
 | Módulo, função, contrato, fórmula, parâmetro lido, comando da CLI, armadilha | [`guia.md`](guia.md) (versão no topo, conforme a regra de manutenção dele) |
+| Fluxo do pipeline, etapas, bifurcações, modelos ou saídas | [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md) (complementa o `guia.md` com o fluxo dinâmico; atualizar com a evolução do fluxo) |
+| Procedimento operacional frequente (nova empresa, métrica, parâmetro, etc.) | [`docs/recipes_agentes.md`](docs/recipes_agentes.md) |
 | Entrega concluída (o quê, por fase) | [`CHANGELOG.md`](CHANGELOG.md), seção `[Não lançado]` |
 | Decisão que completa ou diverge do `CLAUDE.md` | novo ADR em [`docs/decisoes/`](docs/decisoes/README.md) + linha no índice + item em "Decisões" do README |
 | URL, arquivo, código de conta ou série confirmado na fonte real | [`docs/fontes.md`](docs/fontes.md) |
@@ -80,12 +88,13 @@ decisão for mantida, registre-a num ADR.
 ### Antes de concluir
 
 1. Li a seção do `guia.md` (e do `CLAUDE.md`, se for regra de negócio) antes de começar?
-2. O `guia.md` reflete a mudança, e a versão no topo subiu conforme a regra dele?
-3. O `CHANGELOG.md` tem a entrada?
-4. Decisão nova ou divergência do `CLAUDE.md` virou ADR e entrou no índice?
-5. Fonte ou código de conta validado foi registrado em `docs/fontes.md`?
-6. Contagens e listas do README e do `guia.md` (testes, comandos, fases) estão corretas?
-7. `make lint tipos testes` passa?
+2. Consultei o [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md) para me guiar pelo fluxo de atividades e, se o fluxo/etapas mudaram, o atualizei?
+3. O `guia.md` reflete a mudança, e a versão no topo subiu conforme a regra dele?
+4. O `CHANGELOG.md` tem a entrada?
+5. Decisão nova ou divergência do `CLAUDE.md` virou ADR e entrou no índice?
+6. Fonte ou código de conta validado foi registrado em `docs/fontes.md`?
+7. Contagens e listas do README e do `guia.md` (testes, comandos, fases) estão corretas?
+8. `make lint tipos testes` passa?
 
 No resumo final, diga quais documentos foram atualizados (ou por que nenhum precisou).
 

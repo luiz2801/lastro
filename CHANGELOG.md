@@ -2,6 +2,19 @@
 
 ## [Não lançado]
 
+### Documentação para Agentes de IA
+- Criação do `tests/README.md` (Guia de Mocks, Fixtures e Testes Rápidos) com orientações sobre comandos cirúrgicos de teste, política estrita de zero acesso à rede e exemplos de dados sintéticos.
+- Adição da função helper `criar_empresa_sintetica` em `tests/sintetico.py` para geração de demonstrações sintéticas completas multi-anuais no padrão CVM.
+- Criação do diagrama de atividades UML em `docs/diagrama_atividades.md` mapeando o fluxo completo do pipeline (CLI, ingestão, DCF/DDM, sensibilidade e saídas).
+- Criação de playbooks operacionais em `docs/recipes_agentes.md` com 7 procedimentos passo a passo determinísticos (nova empresa, métricas contábeis, parâmetros de configuração, múltiplos, testes golden e diagnóstico de erros).
+- Criação de regras modulares na raiz do repositório para orientar agentes com contexto delimitado:
+  - `REGRAS_DADOS.md`: adaptadores, scrapers, APIs, cache e escalas.
+  - `REGRAS_CONTABIL.md`: padronização contábil, planos de contas, IFRS 16 e QA.
+  - `REGRAS_MODELOS.md`: funções puras, DCF/DDM, custo de capital e sanidade econômica.
+  - `REGRAS_TESTES.md`: mocks, dados sintéticos, golden tests e proibição de rede.
+- `CLAUDE.md`: referenciamento das regras modulares na seção 0 (regras 14 e 15) e nas seções 6, 7, 11 e 15.
+- `CONTRIBUTING.md` e `guia.md`: referências às regras modulares, diagrama de atividades e recipes; versão do `guia.md` atualizada para 1.18.
+
 ### Fase 10 — Financeiras: múltiplos e pares
 - `modelos/multiplos.py`: `fundamentos_financeira`, `MULTIPLOS_FINANCEIRA` (P/L, P/VP, DY),
   regressão P/VP × ROE (`regressao_pvp_roe`, `valor_regressao`).

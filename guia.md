@@ -1,23 +1,31 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.15 — 2026-10-30**
+**Versão 1.18 — 2026-10-30**
 
-> Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
-> (Fases 0 a 8 implementadas; Fase 10, financeiras, em andamento) para que você não precise reler os módulos. Para o que ainda
-> **não** existe, veja a seção 12.
+> Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares na raiz
+> ([`REGRAS_DADOS.md`](REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](REGRAS_CONTABIL.md),
+> [`REGRAS_MODELOS.md`](REGRAS_MODELOS.md) e [`REGRAS_TESTES.md`](REGRAS_TESTES.md)).
+> Este arquivo descreve **o que existe hoje** (Fases 0 a 8 implementadas; Fase 10, financeiras,
+> em andamento) para que você não precise reler os módulos. Para o que ainda **não** existe,
+> veja a seção 12.
 > Política de commits, que documento atualizar em cada mudança e ADRs: `CONTRIBUTING.md` e
 > `docs/decisoes/README.md`.
 
 > ## Regra de manutenção (obrigatória)
 >
 > **Antes de modificar:** leia deste guia a seção do módulo que vai mexer (e as seções 13 e 16,
-> convenções e armadilhas). Só abra o código-fonte para o que o guia não responder. Planeje a
-> alteração a partir daqui.
+> convenções e armadilhas), consulte o diagrama de atividades em [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md)
+> e a regra modular específica da camada na raiz.
+> **O diagrama e as regras modulares não substituem este guia, eles se complementam**: o diagrama provê a visão de fluxo dinâmico
+> e decisões do processo, as regras modulares delimitam restrições inegociáveis de cada camada, enquanto este guia mapeia a estrutura do código, módulos, contratos, parâmetros e armadilhas.
+> Só abra o código-fonte para o que eles não responderem. Planeje a alteração a partir daqui.
 >
 > **Ao modificar:** toda alteração de lógica, contrato, parâmetro, arquivo ou comando precisa ser
 > refletida neste guia **na mesma entrega (mesmo commit)**: função nova/removida/renomeada,
 > fórmula ou critério trocado, parâmetro de `settings.yaml` que passou a ser lido (tire o ⏳),
-> fase concluída (atualize as seções 1 e 12), armadilha descoberta (seção 16).
+> fase concluída (atualize as seções 1 e 12), armadilha descoberta (seção 16). Se a mudança
+> alterar o fluxo de execução, etapas do pipeline, decisões ou modelos, atualize também o
+> [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md).
 >
 > **Versão (no topo):** typo sem mudança de comportamento → não muda; mudança de comportamento,
 > contrato ou arquivo → *minor* (1.1, 1.2…); mudança que invalida dados já gravados em `data/` ou
@@ -51,6 +59,10 @@ Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valua
 Teste focado: `uv run pytest tests/test_cvm.py -k escala -q`.
 
 ## 2. Fluxo de dados
+
+> O diagrama de atividades UML completo (da CLI aos artefatos de saída, com bifurcações DCF/DDM e travas de segurança)
+> está documentado em [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md). O agente deve consultá-lo
+> para se guiar no fluxo geral e mantê-lo atualizado conforme novas etapas e modelos forem introduzidos.
 
 ```
 settings.yaml ──► config.carregar_settings() ──► Settings (pydantic, frozen, extra=forbid)
@@ -573,6 +585,8 @@ Fixtures CVM são amostras minúsculas (uma empresa, 2025/2026): ao mudar parsin
 vez de baixar dados reais. Sem rede nos testes.
 
 ## 15. Receitas rápidas
+
+> **Playbooks detalhados passo a passo**: Para procedimentos completos e determinísticos para agentes de IA (adicionar empresa, nova métrica, parâmetros de configuração, múltiplos e resolução de falhas comuns), consulte [`docs/recipes_agentes.md`](docs/recipes_agentes.md).
 
 | Quero… | Mexa em… |
 |---|---|

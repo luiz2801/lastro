@@ -26,8 +26,15 @@
 8. Código tipado (`mypy`/`pyright` limpo), formatado com `ruff`, com testes `pytest`. Identificadores de domínio em português (`receita_liquida`, `divida_liquida`), termos genéricos de programação em inglês quando for o idioma natural da biblioteca.
 9. Commits pequenos e atômicos, uma mensagem por mudança lógica, no formato `area: o quê` (ver `CONTRIBUTING.md`). **Antes de todo commit, `make lint tipos testes` passa**; se não puder rodar, não faça o commit e avise o usuário. Mantenha `CHANGELOG.md`.
 10. **Consulte o `guia.md` antes de modificar** qualquer código (leia a seção do módulo, convenções e armadilhas) e **atualize-o na mesma entrega** de toda alteração de lógica, contrato, parâmetro, arquivo ou comando, subindo a versão no topo conforme a regra de manutenção do próprio guia. O guia é uma foto do estado atual (história vai no `CHANGELOG.md`); se código e guia discordarem, o código vence e o guia deve ser corrigido no mesmo commit.
-11. **Este documento tem decisões posteriores registradas em ADR.** Antes de seguir uma seção, confira no índice `docs/decisoes/README.md` se algum ADR a alterou: o ADR aceito vence o texto daqui. Se código e este documento divergirem sem ADR, aponte a divergência ao usuário em vez de escolher um lado em silêncio.
-12. **Antes de dar uma tarefa por concluída**, siga a lista "Antes de concluir" do `CONTRIBUTING.md` (que documento atualizar para cada tipo de mudança está na tabela de lá) e diga no resumo ao usuário quais documentos foram atualizados, ou por que nenhum precisou.
+11. **Consulte o diagrama de atividades em [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md)** para se guiar no fluxo geral do pipeline (da CLI e ingestão ao DCF/DDM, sensibilidade e saídas). **Ele não substitui o `guia.md`, eles se complementam**: o diagrama dá a visão do fluxo dinâmico e das decisões de processo, enquanto o `guia.md` detalha contratos, módulos, parâmetros e convenções. **Mantenha-o atualizado**: sempre que etapas, decisões de fluxo, modelos ou saídas forem adicionados ou alterados com o prosseguimento do projeto, atualize o diagrama e a documentação associada na mesma entrega.
+12. **Este documento tem decisões posteriores registradas em ADR.** Antes de seguir uma seção, confira no índice `docs/decisoes/README.md` se algum ADR a alterou: o ADR aceito vence o texto daqui. Se código e este documento divergirem sem ADR, aponte a divergência ao usuário em vez de escolher um lado em silêncio.
+13. **Antes de dar uma tarefa por concluída**, siga a lista "Antes de concluir" do `CONTRIBUTING.md` (que documento atualizar para cada tipo de mudança está na tabela de lá) e diga no resumo ao usuário quais documentos foram atualizados, ou por que nenhum precisou.
+14. **Consulte as regras modulares na raiz conforme a área de atuação**: Para manter o foco, economizar janela de contexto e seguir diretrizes estritas da camada, consulte e aplique:
+    - [`REGRAS_DADOS.md`](REGRAS_DADOS.md): ingestão, scrapers, APIs externas, cache, tickers e escala.
+    - [`REGRAS_CONTABIL.md`](REGRAS_CONTABIL.md): padronização contábil, DFP/ITR, não-financeiras vs financeiras, IFRS 16 e QA.
+    - [`REGRAS_MODELOS.md`](REGRAS_MODELOS.md): projeções, custo de capital (WACC/Ke), modelos (DCF/DDM/Múltiplos) e funções puras.
+    - [`REGRAS_TESTES.md`](REGRAS_TESTES.md): suíte de testes, fixtures, dados sintéticos, golden tests e proibição de rede.
+15. **Consulte os playbooks de tarefas frequentes em [`docs/recipes_agentes.md`](docs/recipes_agentes.md)**: Passos determinísticos para adicionar nova empresa, nova métrica contábil, parâmetros de configuração, múltiplos, testes golden e diagnóstico de falhas comuns.
 
 ---
 
@@ -176,6 +183,8 @@ valuation/
 
 ## 6. Fontes de dados
 
+> **Regras modulares**: Antes de alterar adaptadores ou arquivos de configuração de dados, consulte [`REGRAS_DADOS.md`](REGRAS_DADOS.md).
+
 Todas gratuitas. Cada fonte tem um **adaptador** com interface estável, cache e tratamento de erro. `[VALIDAR]` tudo que for URL/nome de arquivo.
 
 ### 6.1 CVM — dados abertos (portal `dados.cvm.gov.br`)
@@ -272,6 +281,8 @@ sensibilidade:
 ---
 
 ## 7. Camada contábil
+
+> **Regras modulares**: Antes de alterar a padronização contábil ou mapeamento de contas, consulte [`REGRAS_CONTABIL.md`](REGRAS_CONTABIL.md).
 
 ### 7.1 Modelo de dados
 
@@ -582,6 +593,8 @@ Só **Ke** (não há WACC). Mesma lógica de beta/CAPM.
 
 ## 11. Modelos de avaliação
 
+> **Regras modulares**: Antes de alterar modelos de avaliação, projeções ou custo de capital, consulte [`REGRAS_MODELOS.md`](REGRAS_MODELOS.md).
+
 ### 11.1 DCF — FCFF (não financeiras) (`dcf.py`)
 
 ```
@@ -709,6 +722,8 @@ Mensagens em PT-BR, `rich` para tabelas no terminal, códigos de saída não nul
 ---
 
 ## 15. Testes e validação
+
+> **Regras modulares**: Antes de criar ou alterar testes e fixtures, consulte [`REGRAS_TESTES.md`](REGRAS_TESTES.md).
 
 **Unitários (`pytest`)**
 
