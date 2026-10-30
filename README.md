@@ -12,6 +12,7 @@ investimento.**
 | [`guia.md`](guia.md) | Mapa do código como ele está hoje: módulos, contratos, parâmetros, testes e armadilhas. Leia antes de modificar |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Política de commits, que documento atualizar, testes e convenções |
 | [`docs/decisoes/`](docs/decisoes/README.md) | ADRs: decisões que completam ou divergem do `CLAUDE.md`, com índice |
+| [`docs/justificativas_e_alternativas.md`](docs/justificativas_e_alternativas.md) | Por que cada decisão do valuation foi tomada e que alternativas dá para usar (config, código, ADR ou fase) em outras análises |
 | [`docs/fontes.md`](docs/fontes.md) | O que foi confirmado em cada fonte real (URLs, arquivos, contas, séries SGS) |
 | [`CHANGELOG.md`](CHANGELOG.md) | O que foi entregue em cada fase |
 | [`referencias/README.md`](referencias/README.md) | Índice dos documentos das companhias usados na conciliação (os arquivos ficam fora do git) |

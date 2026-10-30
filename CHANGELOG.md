@@ -2,6 +2,11 @@
 
 ## [Não lançado]
 
+### Justificativas e alternativas
+- `docs/justificativas_e_alternativas.md`: justificativa de cada decisão (dados, contabilidade,
+  premissas, custo de capital, DCF, múltiplos, perfil), alternativas com o custo de implementar e
+  roteiro de análises diferentes.
+
 ### ERP e backlog
 - `custo_capital.erp` mantido em 5,0% como premissa do usuário (sem fonte externa), registrado em
   `docs/fontes.md` com a sensibilidade e a checagem pelo yield spread do Ibovespa (−5,5 p.p.,
