@@ -109,10 +109,13 @@ Pilotos: PETR4, VALE3 e WEGE3.
   winsorização, quartis, aviso de poucos pares e de escala implausível; valor implícito do alvo;
   beta por comparáveis, estrutura-alvo do setor, minoritários pelo P/VP e g implícito no múltiplo
   de saída; `valuation comparar TICKER` e múltiplos no `rodar`.
-- **Testes**: 402 (391 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
+- **Testes**: 415 (404 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
 - **Universo**: `config/universo_ibovespa.csv` com os 76 ativos da carteira de 30/10/26 da B3;
   `valuation atualizar --tudo` baixa os dados de todos (holdings só avisam).
-- **Ainda não**: plano de contas de financeiras, gráficos e demais saídas da Fase 9, DDM. Lista
+- **Financeiras** (Fase 10, em andamento): plano de contas de bancos e seguradoras (25 companhias
+  conferidas), métricas (ROE, payout, PL da controladora), QA próprio; `qa`, `historico` e
+  `cobertura` aceitam financeiras.
+- **Ainda não**: DDM e premissas das financeiras, gráficos e demais saídas da Fase 9. Lista
   completa na seção 12 do `guia.md`.
 
 ## Decisões que completam ou divergem do `CLAUDE.md`
@@ -151,6 +154,9 @@ Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
   mediana e faixa P25–P75; par com P/VP implausível é excluído (escala das ações).
 - **Universo e Vale** ([ADR 0010](docs/decisoes/0010-universo-ibovespa-e-pares-da-mineracao.md)):
   universo da carteira teórica da B3 e CSNA3 como terceiro par da mineração.
+- **Financeiras** ([ADR 0011](docs/decisoes/0011-plano-de-contas-das-financeiras.md)): plano de
+  contas por descrição para bancos, seguradoras e o plano comercial; individuais quando não há
+  consolidado; ROE sobre o PL inicial; corretoras (WIZC3, QUAL3) avaliadas como não financeiras.
 
 O ERP (5,0%) é premissa do usuário, sem fonte externa (`docs/fontes.md`). Os demais parâmetros de
 mercado de `config/settings.yaml` (faixa do Kd, Rf e inflação em USD) e o mapeamento perfil →

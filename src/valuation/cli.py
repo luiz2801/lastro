@@ -33,6 +33,7 @@ from valuation.config import (
     carregar_settings,
 )
 from valuation.contabil import ErroContabil
+from valuation.contabil import financeiras as fin
 from valuation.contabil import nao_financeiras as nf
 from valuation.contabil import padronizacao as pad
 from valuation.contabil import periodos as per
@@ -403,28 +404,34 @@ def _padronizar(
         data_base = settings.resolver_data_base(dt.date.today())
         cadastro = _carregar_cadastro(settings, data_base, False)
     empresa = cad.empresa_por_ticker(cadastro, ticker)
-    if empresa.tipo_modelo != "nao_financeira":
+    tipo = empresa.tipo_modelo
+    if tipo not in ("nao_financeira", "financeira"):
         raise ErroContabil(
-            f"{', '.join(empresa.tickers)} é {empresa.tipo_modelo}: só o plano de contas "
-            "não financeiro existe por enquanto (financeiras na Fase 10)."
+            f"{', '.join(empresa.tickers)} é {tipo}: a v1 não avalia esse tipo "
+            "(holdings exigem NAV/SOTP; ver seção 1 do CLAUDE.md)."
         )
     normalizado = cad.normalizar_ticker(ticker)
     caminho = pm.caminho_premissas(normalizado, DIR_EMPRESAS)
     if caminho.is_file():
         premissas = pm.carregar_premissas(caminho)
-        pm.conferir_cadastro(premissas, empresa.tickers, empresa.tipo_modelo)
+        pm.conferir_cadastro(premissas, empresa.tickers, tipo)
     else:
-        premissas = pm.premissas_padrao(normalizado, "nao_financeira", empresa.tickers)
-    plano = pad.carregar_mapeamento(extra=premissas.ajustes.mapeamento_extra)
+        premissas = pm.premissas_padrao(normalizado, tipo, empresa.tickers)
+    plano = pad.carregar_mapeamento(tipo=tipo, extra=premissas.ajustes.mapeamento_extra)
     try:
         demonstracoes = pad.ler_demonstracoes(DIR_PROCESSED, empresa.cd_cvm)
     except FileNotFoundError as e:
         raise ErroContabil(
             f"{e.filename} não existe. Rode `valuation atualizar --tickers {ticker}`."
         ) from e
-    selecionadas = pad.selecionar_reapresentacoes(
-        demonstracoes, consolidado=premissas.ajustes.consolidado
-    )
+    consolidado = premissas.ajustes.consolidado
+    if consolidado and not demonstracoes["consolidado"].any():
+        console.print(
+            f"[yellow]Aviso:[/] {normalizado} só publica demonstrações individuais: usadas no "
+            "lugar das consolidadas."
+        )
+        consolidado = False
+    selecionadas = pad.selecionar_reapresentacoes(demonstracoes, consolidado=consolidado)
     moeda = detectar_moeda(selecionadas, premissas.moeda_relatorio)
     contas = pad.padronizar(selecionadas, plano, ticker=normalizado)
     contas.to_parquet(pad.caminho_padronizadas(DIR_PROCESSED, empresa.cd_cvm), index=False)
@@ -501,6 +508,20 @@ _LINHAS_HISTORICO = (
     ("roic", "ROIC", "%"),
     ("dividendos_pagos", "Dividendos pagos", "mi"),
 )
+_LINHAS_HISTORICO_FINANCEIRA = (
+    ("receitas", "Receitas (3.01)", "mi"),
+    ("resultado_bruto", "Resultado bruto (3.03)", "mi"),
+    ("lucro_liquido", "Lucro líquido", "mi"),
+    ("lucro_liquido_controladora", "Lucro controladora", "mi"),
+    ("aliquota_efetiva", "Alíquota efetiva", "%"),
+    ("patrimonio_liquido", "PL controladora", "mi"),
+    ("roe", "ROE (PL inicial)", "%"),
+    ("dividendos_pagos", "Dividendos pagos", "mi"),
+    ("payout", "Payout", "%"),
+    ("ativo_total", "Ativo total", "mi"),
+    ("alavancagem", "Ativo / PL", "x"),
+    ("roa", "ROA", "%"),
+)
 
 
 def _formatar(valor: float, unidade: str) -> str:
@@ -508,6 +529,8 @@ def _formatar(valor: float, unidade: str) -> str:
         return "—"
     if unidade == "%":
         return f"{valor:.1%}".replace(".", ",")
+    if unidade == "x":
+        return f"{valor:.1f}x".replace(".", ",")
     return f"{valor / 1e6:,.0f}".replace(",", ".")
 
 
@@ -524,7 +547,22 @@ def historico(
         settings = carregar_settings()
         p = _padronizar(ticker, settings)
         aliquota = settings.impostos.aliquota_nominal
-        if trimestral:
+        financeira = p.plano.tipo == "financeira"
+        linhas = _LINHAS_HISTORICO_FINANCEIRA if financeira else _LINHAS_HISTORICO
+        if trimestral and financeira:
+            tabela_m = (
+                per.trimestral(p.contas)
+                .tail(8)
+                .reindex(columns=["lucro_liquido_controladora", "dividendos_pagos"])
+            )
+            tabela_m["dividendos_pagos"] = -tabela_m["dividendos_pagos"]
+            colunas = [f"{d.month // 3}T{d:%y}" for d in tabela_m.index]
+        elif financeira:
+            m = fin.metricas(per.anual(p.contas)).tail(anos)
+            ltm = fin.metricas_ltm(p.contas)
+            tabela_m = pd.concat([m, ltm.to_frame().T])
+            colunas = [*map(str, m.index), f"LTM {pd.Timestamp(str(ltm.name)):%m/%Y}"]
+        elif trimestral:
             tabela_m = (
                 per.trimestral(p.contas)
                 .tail(8)
@@ -558,7 +596,7 @@ def historico(
     tabela.add_column("Métrica")
     for coluna in colunas:
         tabela.add_column(coluna, justify="right")
-    for chave, rotulo, unidade in _LINHAS_HISTORICO:
+    for chave, rotulo, unidade in linhas:
         if chave in tabela_m.columns:
             tabela.add_row(rotulo, *(_formatar(v, unidade) for v in tabela_m[chave]))
     console.print(tabela)
@@ -594,10 +632,14 @@ def cobertura(
     for t in matriz.columns:
         tabela.add_column(t, justify="right")
     for conta, linha in matriz.iterrows():
-        celulas = [f"[{'green' if f >= 0.95 else 'red'}]{f:.0%}[/]" for f in linha]
+        celulas = [
+            "—" if pd.isna(f) else f"[{'green' if f >= 0.95 else 'red'}]{f:.0%}[/]" for f in linha
+        ]
         tabela.add_row(str(conta), *celulas)
     console.print(tabela)
-    console.print(f"Média geral: {matriz.to_numpy().mean():.1%}")
+    console.print(f"Média geral: {pd.Series(matriz.to_numpy().ravel()).mean():.1%}")
+    if matriz.isna().to_numpy().any():
+        console.print("— = conta crítica de outro plano (financeira x não financeira).")
 
 
 def _perguntar_questionario() -> dict[str, int]:

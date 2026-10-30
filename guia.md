@@ -1,9 +1,9 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.11 — 2026-10-30**
+**Versão 1.12 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
-> (Fases 0 a 8 implementadas) para que você não precise reler os módulos. Para o que ainda
+> (Fases 0 a 8 implementadas; Fase 10, financeiras, em andamento) para que você não precise reler os módulos. Para o que ainda
 > **não** existe, veja a seção 12.
 > Política de commits, que documento atualizar em cada mudança e ADRs: `CONTRIBUTING.md` e
 > `docs/decisoes/README.md`.
@@ -35,7 +35,7 @@
 |---|---|---|
 | Config | `config.py` | ✅ pronto |
 | Dados | `data/{http,cvm,cadastro,validacao,precos,macro}.py` | ✅ prontos |
-| Contábil | `contabil/{padronizacao,periodos,moeda,qa,nao_financeiras}.py` + `config/mapeamento_contas.yaml` | ✅ prontos (só plano `nao_financeira`) |
+| Contábil | `contabil/{padronizacao,periodos,moeda,qa,nao_financeiras,financeiras}.py` + `config/mapeamento_contas.yaml` | ✅ prontos (planos `nao_financeira` e `financeira`) |
 | Perfil | `perfil/{questionario,pontuacao,registro,parametros}.py` | ✅ prontos (seção 17) |
 | Projeção | `projecao/{premissas,sugestor,projetor,escrita}.py` + `config/empresas/*.yaml` + `config/setores.yaml` | ✅ prontos (seção 18) |
 | Custo de capital | `custo_capital/{beta,capm,kd,wacc}.py` | ✅ prontos (seção 19), inclusive beta por comparáveis e estrutura do setor |
@@ -44,7 +44,7 @@
 | Saída | `saida/csv.py` | CSV e matrizes (seção 19); gráficos, `meta.json` e demais arquivos na Fase 9 |
 | CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar` |
 
-~7.500 linhas de código, 402 testes (11 golden pulados por motivo declarado), mypy `strict`,
+~7.700 linhas de código, 415 testes (11 golden pulados por motivo declarado), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -117,9 +117,11 @@ Callback global: `-v/--verbose` → logging DEBUG. Erros: `_erro()` imprime em v
 `cad.atualizar_cadastro` com TTL de `cache_ttl_horas.cvm`), `_tickers_do_universo(caminho)`,
 `_linha_validada(v, formato)` (cor por status), `_padronizar(ticker, settings) -> _Padronizada`
 (cadastro → YAML da empresa em `DIR_EMPRESAS`, se existir, conferido contra o cadastro; senão
-`premissas_padrao` → `carregar_mapeamento(extra=mapeamento_extra)` → `ler_demonstracoes` →
-`selecionar_reapresentacoes(consolidado=…)` → `detectar_moeda(…, moeda_relatorio)` → `padronizar`
-→ grava `contas_padronizadas.parquet`; só `nao_financeira`, outro tipo ⇒ `ErroContabil`).
+`premissas_padrao` → `carregar_mapeamento(tipo=tipo_modelo, extra=mapeamento_extra)` →
+`ler_demonstracoes` → `selecionar_reapresentacoes(consolidado=…)` → `detectar_moeda(…,
+moeda_relatorio)` → `padronizar` → grava `contas_padronizadas.parquet`; `nao_financeira` ou
+`financeira` (plano conforme o tipo), `holding`/`nao_suportada` ⇒ `ErroContabil`. Companhia sem
+nenhuma demonstração consolidada usa as individuais, com aviso).
 `_Padronizada.ajustes` = `AjustesContabeis` do YAML (usado por `historico` e `premissas`).
 `_setor(chave)` (chave ausente de `setores.yaml` ⇒ `ErroConfiguracao`), `_horizonte(premissas,
 settings, hoje, override)` (inteiro do YAML ou horizonte do perfil via `resolver_perfil`).
@@ -150,9 +152,9 @@ mediana de 5a), `_resumo` (linha do `resumo.csv`), `_mostrar_valuation`.
 | `cadastro buscar TEXTO` | `--forcar` | Busca por ticker/razão/nome/CNPJ no cadastro | `--forcar` ignora TTL e rebaixa cadastro+FCA |
 | `atualizar` | `--tickers A,B` ou `--tudo`; `--com-pares`; `--forcar` | Baixa DFP/ITR/composição e grava parquets por companhia | exatamente um de `--tickers`/`--tudo`. `--tudo` lê `config/universo_ibovespa.csv` (76 ativos da carteira de 30/10/26; só a coluna `ticker` é usada; linhas `#` são comentário; ausente ⇒ `ErroConfiguracao`; ~1 min com os zips em cache). `--com-pares` acrescenta os pares de cada ticker que tem YAML em `config/empresas/` (par fora do cadastro só avisa). Holding/não suportada: só avisa e baixa |
 | `mercado TICKER` | `--data-base AAAA-MM-DD`; `--forcar` | Preço por classe, Ibovespa, dólar, Selic, IPCA, Rf e market cap, cada um em 2 fontes | `--data-base` sobrescreve `settings.data_base`. Exige `atualizar` antes (lê `composicao_capital.parquet`; senão mensagem pedindo o comando) |
-| `qa TICKER` | — | Padroniza, roda o QA, imprime verificações, cobertura e contas não mapeadas relevantes; grava `data/processed/qa/qa_{TICKER}.json` | **Sai com 1 se houver erro de QA.** Exige `atualizar` antes |
-| `historico TICKER` | `--anos N` (5); `--trimestral` | Métricas anuais (R$ mi) + coluna LTM | `--anos` = quantos exercícios; `--trimestral` mostra os 8 últimos trimestres (receita, EBITDA, lucro, D&A, capex, dividendos) |
-| `cobertura` | `--tickers A,B` ou `--tudo` | Matriz conta crítica × ticker com a fração dos exercícios mapeados (verde ≥ 95%) | igual a `atualizar` |
+| `qa TICKER` | — | Padroniza, roda o QA (verificações do plano da companhia), imprime verificações, cobertura e contas não mapeadas relevantes (só não financeiras); grava `data/processed/qa/qa_{TICKER}.json` | **Sai com 1 se houver erro de QA.** Exige `atualizar` antes |
+| `historico TICKER` | `--anos N` (5); `--trimestral` | Métricas anuais (R$ mi) + coluna LTM. Financeiras: receitas e resultado bruto (`3.01`/`3.03`), lucro, lucro da controladora, alíquota, PL da controladora, ROE, dividendos, payout, ativo, ativo/PL, ROA | `--anos` = quantos exercícios; `--trimestral` mostra os 8 últimos trimestres (receita, EBITDA, lucro, D&A, capex, dividendos; financeiras: lucro da controladora e dividendos) |
+| `cobertura` | `--tickers A,B` ou `--tudo` | Matriz conta crítica × ticker com a fração dos exercícios mapeados (verde ≥ 95%); conta do outro plano aparece como `—` | igual a `atualizar` |
 | `premissas sugerir TICKER` | `--escrever`; `--perfil P`; `--data-base AAAA-MM-DD` | Sugere as premissas a partir dos exercícios encerrados antes da data-base e imprime "premissas sugeridas × histórico" (último ano, medianas 5a/10a, sugerido, valor no YAML), CAGR 3/5/10a, deltas dos cenários e a **projeção base** (R$ mi). Avisos: setor de commodity, setor não definido, ano-ponte sem DFP, histórico curto | `--escrever` regenera `config/empresas/{TICKER}.yaml` comentado (anterior em `.yaml.bak`; sem ele, só avisa que o YAML não existe). `--perfil` só define o horizonte quando o YAML usa `horizonte_anos: perfil`; sem perfil válido nem `--perfil`, mostra as sugestões e pula a projeção (sai com 0). `--data-base` corta o histórico e define a fração do ano corrente. Exige `atualizar` antes |
 | `wacc TICKER` | `--data-base AAAA-MM-DD`; `--forcar`; `--saida DIR`; `--formato-csv br\|intl` | Beta, Ke, Kd, estrutura e WACC na moeda de reporte; tabela no terminal e `{saida}/{TICKER}/{data-base}/wacc.csv` (`componente;valor;detalhe`, avisos em linhas `aviso`) | `--saida` muda a raiz (padrão `saida/`); `intl` grava `,`/`.`/utf-8. **WACC ≤ g terminal ⇒ sai com 1.** Exige `atualizar` antes; consulta preços e macro como `mercado`. Mede os pares só se o beta for por comparáveis ou a estrutura for `setor` |
 | `comparar TICKER` | `--data-base`; `--saida DIR`; `--formato-csv br\|intl`; `--forcar` | Múltiplos LTM do alvo e dos pares (P/L, EV/EBITDA, EV/EBIT, EV/Receita, P/VP, EV/FCF, dividend yield), P25/mediana/P75 dos pares e valor por ação implícito do alvo; grava `multiplos_pares.csv` e `multiplos_implicitos.csv` em `{saida}/{TICKER}/{data-base}/` | **Nenhum par medido ⇒ sai com 1** (par sem dados vira aviso). Exige `atualizar` do alvo e dos pares (`--com-pares`) |
@@ -367,7 +369,7 @@ acento**: escreva `aplicacoes`, não `aplicações`), `sinal` (1/-1). Exige `cd`
 |---|---|---|
 | `carregar_mapeamento(caminho, tipo="nao_financeira", extra=None) -> PlanoContas` | Lê e valida; `extra` (= `mapeamento_extra` da empresa) entra **antes** das regras padrão e pode criar conta | Conta que mistura saldo e fluxo, crítica sem regra, regex inválida ⇒ `ErroConfiguracao` |
 | `PlanoContas(tipo, contas, criticas)`, `.eh_saldo(conta)` | — | — |
-| `selecionar_reapresentacoes(demonstracoes, *, consolidado=True)` | Filtra consolidado e BPA/BPP/DRE/DFC/DVA; por (`familia`, `dt_ini`, `dt_fim`) fica **um** documento: maior (`dt_refer`, `versao`). DFC_MD sai se o mesmo período tem DFC_MI. Acrescenta a coluna `familia` | É o que corrige o sinal da Vale 2022 (vale o `PENÚLTIMO` da DFP 2023). DMPL/DRA são descartadas |
+| `selecionar_reapresentacoes(demonstracoes, *, consolidado=True)` | Filtra consolidado e BPA/BPP/DRE/DFC/DVA; por (`familia`, `dt_ini`, `dt_fim`) fica **um** documento: maior (`dt_refer`, `versao`) entre os que têm algum valor ≠ 0 no período (só zeros fica só se for o único). DFC_MD sai se o mesmo período tem DFC_MI. Acrescenta a coluna `familia` | É o que corrige o sinal da Vale 2022 (vale o `PENÚLTIMO` da DFP 2023) e o balanço de 2024 zerado nos ITR 2025 de BAZA3, BNBR3 etc. DMPL/DRA são descartadas |
 | `avaliar_regra(selecionadas, regra)` | Valor da regra por período: soma das contas casadas **de nível mais alto** (subconta de outra casada é ignorada), × `sinal` | Usado também pelo QA para comparar regras |
 | `padronizar(selecionadas, plano, *, ticker)` | Por conta e período, vence a **primeira regra que casa**. Saída `COLUNAS_PADRONIZADAS` | Conta sem casamento num período simplesmente não aparece (sem NaN) |
 | `periodicidade(dt_ini, dt_fim)` | `S` saldo, `A` 12 meses, `T` 3 meses, `YTD` 6/9 meses | 1T (jan–mar) é `T` mas também é o YTD de março |
@@ -389,6 +391,14 @@ investimentos, imobilizado, intangivel`; BPP `passivo_total, passivo_circulante,
 emprestimos_cp, arrendamento_cp_em_emprestimos, arrendamento_cp_outros, passivo_nao_circulante,
 emprestimos_lp, arrendamento_lp_em_emprestimos, arrendamento_lp_outros, provisoes_lp,
 patrimonio_liquido_total, minoritarios`.
+
+Contas padrão do plano `financeira` (ADR 0011; três planos da CVM — bancos, seguradoras e
+comercial — por regex de descrição): DRE `receitas` (`3.01`) e `resultado_bruto` (`3.03`), só
+informativas; `lair, ir_csll, lucro_liquido, lucro_liquido_controladora,
+lucro_liquido_minoritarios` (atribuição: regra de `3.11`, depois `3.13`, `3.09` e, por último, a
+DRE individual sem "consolidado"); DFC `dividendos_pagos`; BPA `ativo_total`; BPP
+`passivo_total, patrimonio_liquido_total, minoritarios`. Críticas: LAIR, IR, lucro, lucro da
+controladora, ativo, passivo e PL.
 
 ### `periodos.py` (visões largas, índice = data ou ano)
 
@@ -440,6 +450,23 @@ visão anual). `caixa_extra`/`divida_extra` são nomes de **contas padrão** (cr
 | `fcf_caixa` | CFO − capex |
 | `capital_investido`, `roic` | PL total + dívida líquida; NOPAT / média do capital (NaN se ≤ 0) |
 
+### `financeiras.py`
+
+`metricas(largo) -> DataFrame` e `metricas_ltm(contas, *, dt_fim=None) -> Series` (ROE/ROA contra o
+balanço de 12 meses antes; sem ele ⇒ `ErroContabil`). `OPCIONAIS` (receitas, resultado bruto,
+não controladores) ausentes = NaN/0; `dividendos_pagos` ausente = **NaN** (não zero); demais
+ausentes ⇒ `ErroContabil`. Comparação com o período anterior só se ele estiver exatamente 12 meses
+antes (`_anterior`; índice inteiro ou data).
+
+| Métrica | Fórmula |
+|---|---|
+| `lucro_liquido_controladora` | da DRE; se controladora e não controladores = 0 com lucro ≠ 0, o lucro (`atribuicao_ausente` = True) |
+| `patrimonio_liquido` | PL consolidado − não controladores (PL da controladora) |
+| `roe` | lucro da controladora / PL da controladora **do início** (NaN se ≤ 0 ou sem o período anterior) |
+| `roa`, `alavancagem` | lucro / ativo do início; ativo / PL consolidado |
+| `dividendos_pagos`, `payout` | sinal trocado (positivo = saída); dividendos / lucro da controladora (NaN se lucro ≤ 0) |
+| `aliquota_efetiva` | −IR/LAIR (NaN se LAIR ≤ 0) |
+
 ### `qa.py`
 
 `verificar(selecionadas, contas, plano, *, ticker, moeda, historico_anos) -> ResultadoQA`
@@ -461,6 +488,12 @@ visão anual). `caixa_extra`/`divida_extra` são nomes de **contas padrão** (cr
 | `conta_critica_ausente` | aviso | crítica sem valor num exercício |
 | `escala_varia` | info | `MIL` e `UNIDADE` misturadas (já normalizado) |
 
+Plano `financeira` (`_verificacoes_financeira`): `balanco_fecha` (ativo × passivo total, erro),
+`pl_positivo` (erro), `subcontas` só de `1` e `2` (`PAIS_SUBCONTAS_FINANCEIRA`), `lucro_atribuido`,
+`salto_anual` de ativo, PL e lucro (`CONTAS_SALTO_FINANCEIRA`), mais as comuns
+(`fontes_divergentes`, `anos_faltantes`, `conta_critica_ausente`, `escala_varia`). Sem
+`nao_mapeadas` (depósitos e captações de banco apareceriam sempre).
+
 `contas_nao_mapeadas`: contas x.yy.zz do último exercício fora do mapeamento (nem ancestral nem
 descendente de conta usada com ≥ 2 pontos) com |valor| ≥ 5% do ativo (BPA/BPP, sem PL) ou da
 receita (só `3.04.03–05`, candidatas a não recorrente).
@@ -469,9 +502,8 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 
 | Fase | Falta | Dica de onde conectar |
 |---|---|---|
-| 2 | `contabil/financeiras.py` e seção `financeira:` do mapeamento | Fase 10, após inspecionar ITUB4/BBAS3. `_padronizar` da CLI recusa tipo ≠ `nao_financeira` |
 | 9 | gráficos (football field, cascata da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos` | `rodar` já tem tudo em memória: `ResultadoCenarios`, matrizes, `ResultadoMultiplos` (barras P/L, EV/EBITDA, P/VP pelos quartis: `implicitos.valor_p25/p75`; `mt.ROTULOS`) e `PerfilEfetivo.origem` (vai ao `meta.json`). `premissas_usadas.yaml` = serializar `Avaliacao.premissas` de cada cenário |
-| 10 | DDM, lucro residual, P/VP justificado | `rodar` só aceita `nao_financeira` (via `_padronizar`) |
+| 10 | Premissas, DDM, lucro residual, P/VP justificado, Ke das financeiras, múltiplos financeiros | `qa`, `historico` e `cobertura` já aceitam financeiras; `premissas`, `wacc`, `comparar` e `rodar` ainda supõem as métricas não financeiras |
 
 ## 13. Convenções que o código já segue (siga também)
 
@@ -500,12 +532,13 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | `test_cvm.py` | parsing, escala, versões, `coletar` | `zip_cvm("dfp_cia_aberta_2025")` etc. |
 | `test_cadastro.py` | FCA, manual, classificação, busca | `tests/fixtures/cvm/*` |
 | `test_validacao.py`, `test_precos.py`, `test_macro.py` | `cruzar`, providers falsos, market cap, SGS/Focus/Tesouro | respostas sintéticas |
-| `test_config.py`, `test_cli.py` | YAML real, `CliRunner` (`qa`/`historico`/`cobertura`/`premissas sugerir` sobre DFP sintética; `perfil` com `input=`; `wacc` e `rodar` com `_mercado` trocado por `mercado_falso`: 90 ações a R$ 10; `comparar`, `rodar` com pares, beta/estrutura dos pares e `atualizar --com-pares` com `com_par`: PETR4 com as mesmas demonstrações e market cap 1.800, logo todo valor implícito = R$ 20). `ambiente_offline` aponta `DIR_EMPRESAS` para `tmp_path` | `ambiente_offline`, `weg_sintetica`, `mercado_falso`, `com_par`, `caminho_perfil` |
+| `test_config.py`, `test_cli.py` | YAML real, `CliRunner` (`qa`/`historico`/`cobertura`/`premissas sugerir` sobre DFP sintética; `perfil` com `input=`; `wacc` e `rodar` com `_mercado` trocado por `mercado_falso`: 90 ações a R$ 10; `comparar`, `rodar` com pares, beta/estrutura dos pares e `atualizar --com-pares` com `com_par`: PETR4 com as mesmas demonstrações e market cap 1.800, logo todo valor implícito = R$ 20). `banco_sintetico`: WEGE3 reclassificada como `financeira` no cadastro manual, com `dfp_banco` 2024–2025. `ambiente_offline` aponta `DIR_EMPRESAS` para `tmp_path` | `ambiente_offline`, `weg_sintetica`, `mercado_falso`, `com_par`, `banco_sintetico`, `caminho_perfil` |
 | `test_perfil.py` | questionário (10 perguntas, 1–5 pontos, vetos), faixas, vetos, validade, JSON ida e volta e adulterado, `resolver_perfil`, parâmetros do settings | `respostas(padrao, **trocas)` |
 | `test_premissas.py` | esquema do YAML (padrões, manual, listas, inválidos), carga e ticker, conferência com o cadastro, conversão dos ajustes, YAMLs do repositório, escrita ida e volta | `MINIMO`, `historico_anual` |
 | `test_sugestor.py` | sugestões calculadas à mão (medianas, reversão da margem, desvios e limites), resumo, histórico curto e com buraco, commodity | `historico_anual` |
 | `test_projetor.py` | projeção de 3 anos calculada à mão, anos projetados, fração do ano, `resolver` (sugerido, manual, listas, erros), cenários, g terminal | `PREMISSAS`, `historico_anual` |
 | `test_beta.py`, `test_capm.py`, `test_kd.py`, `test_wacc.py` | regressão em série sintética com beta exato, Blume, Hamada, comparáveis, classe mais líquida; Ke dos dois métodos e coerência por Fisher; Kd com dívida média, buracos e limites; WACC à mão, estrutura, realavancagem, `validar_g`, tabela e CSV br/intl | `precos(retornos)` (sextas) |
+| `test_financeiras.py` | plano `financeira` (bancos antigo e novo, atribuição dupla do BB, individual, período zerado), métricas à mão, sem atribuição, dividendos ausentes, LTM, QA das financeiras | `dfp_banco` |
 | `test_padronizacao.py`, `test_periodos.py`, `test_moeda.py`, `test_nao_financeiras.py`, `test_qa.py` | regras, reapresentação, LTM/trimestre, métricas calculadas à mão, cada verificação do QA | `tests/sintetico.py` |
 | `test_dcf.py` | DCF à mão (fim e meio de período, RONIC numérico, ano parcial, ano-ponte), erros de convergência, avisos, `resolver_ronic`, `avaliar` à mão (com câmbio), ponte à mão e `itens_do_balanco` | `projecao()`, `HISTORICO`, `PREMISSAS`, `ITENS` (reusados pelos dois seguintes) |
 | `test_multiplos.py` | EV e múltiplos à mão, indefinidos, conversão para BRL e PL da controladora, winsorização, estatísticas (P25/mediana/P75 à mão), valor implícito por EV/P/L/P/VP/DY, `avaliar` (alvo fora dos pares, baixa confiança, escala implausível), `dcf.g_implicito` (RONIC = WACC e numérico) | `ALVO`, `PARES`, `par()` |
@@ -519,6 +552,8 @@ fixture `zip_cvm`. Pytest roda com `pythonpath=tests` (importa `conftest` direto
 (linhas no formato de `demonstracoes.parquet`), `dfp_completa(ano, **trocas)` (DFP consistente com
 todas as críticas; `trocas={"DRE": {"3.02": 60}}`, `None` remove), `contas_padronizadas(registros)`
 com `ano()`, `ytd()`, `saldo()`.
+`dfp_banco(ano, cd_cvm=1234, **trocas)`: DFP de banco no plano antigo (lucro 24, controladora 22,
+PL 120 com 20 de não controladores, dividendos à controladora 11), mesma regra de `trocas`.
 `historico_anual(crescimento, margem, *, inicio, da, capex, nwc, arrendamento, aliquota)`:
 métricas anuais mínimas para o sugestor/projetor (razões sobre a receita viram valores).
 `test_golden.py`: chaves da referência → métrica em `FLUXOS`/`SALDOS`; definições próprias das
@@ -641,6 +676,14 @@ vez de baixar dados reais. Sem rede nos testes.
     (múltiplo dos pares acima do alcance do terminal): é a matemática, não bug.
 32. No dividend yield, P25 dá o maior valor implícito (relação inversa); o terminal mostra a
     faixa já ordenada.
+33. Financeiras mudam de código no tempo (lucro `3.09` → `3.11`, PL `2.08` → `2.07` nos bancos em
+    2019–2020) e entre planos (seguradoras: `3.13`/`2.03`): o plano `financeira` é por descrição.
+    O BB tem atribuição sob `3.09` e `3.11` em 2024–2025 (`fontes_divergentes` esperado).
+34. Bancos que só publicam individual (BAZA3, BNBR3, BGIP4, BPAR3, BMIN4) trazem, nos ITR de 2025,
+    o balanço comparativo de 31/12/2024 zerado; a seleção ignora documento só com zeros.
+35. Atribuição do lucro zerada (ABCB4 2020–2023, IRBR3 2022–2025) vira lucro todo da controladora
+    e aviso `lucro_atribuido`. Dividendos sem linha (Santander 2021+, DFC direto) ficam NaN no
+    payout. O payout histórico é de caixa e inclui extraordinários (Itaú 2025: 108%).
 
 ## 17. `perfil/` — perfil do investidor
 

@@ -109,6 +109,29 @@ Outras observações:
 - Vale 2019: "Aplicações financeiras de curto prazo" dentro de `1.01.08` (outros ativos), fora do caixa
   padronizado.
 
+### Plano de contas das financeiras (Fase 10, 2026-10-30)
+
+Seção `financeira:` de `config/mapeamento_contas.yaml` conferida contra 25 financeiras (DFP
+2015–2025, ITR 2025–2026): bancos BBDC4, BAZA3, BBAS3, BGIP4, BEES3, BPAR3, BRSR6, BNBR3, BMIN4,
+BMEB4, MERC4, DMFN3, BSLI4, ITUB4, SANB11, PINE4, ABCB4, BPAN4, BPAC11, BMGB4, BRBI11 e seguradoras
+BBSE3, CXSE3, PSSA3, IRBR3. Decisões em [ADR 0011](decisoes/0011-plano-de-contas-das-financeiras.md).
+
+| Conta | Onde está | Observado |
+|---|---|---|
+| Lucro consolidado | `3.09` (bancos até 2019; Itaú, BTG, BMG sempre), `3.11` (bancos de 2020 em diante; comercial), `3.13` (seguradoras) | Descrição estável: "Lucro/Prejuízo Consolidado do Período" ou "Lucro ou Prejuízo Líquido Consolidado do Período" |
+| Atribuição à controladora | filho do lucro consolidado | BB 2024–2025 também sob `3.09` ("antes das participações"); a regra de `3.11` vem primeiro |
+| PL consolidado | `2.08` (bancos até 2019), `2.07` (bancos depois), `2.03` (seguradoras e comercial) | Não controladores em `x.09` ou `2.07.02` |
+| Dividendos/JCP pagos | `6.03.xx`, regex | BB a partir de 2020 separa "aos acionistas controladores" e "não controladores". Santander 2021+ (DFC método direto) não abre a linha. ABC 2023 traz "Dividendos distribuídos" positivo |
+| Só individual | BAZA3, BNBR3, BGIP4, BPAR3, BMIN4, MERC4, DMFN3 | PL "Patrimônio Líquido"; lucro "Lucro ou Prejuízo Líquido do Período". BAZA3 até 2019: plano antigo (`3.07` "Resultado Antes Tributação/Participações", IR em `3.08`+`3.09`, lucro em `3.13`) |
+| ITR com comparativo zerado | mesmos bancos, ITR de 2025 | Balanço de 31/12/2024 todo zero como `PENÚLTIMO`; ignorado (vale a DFP 2024) |
+| Atribuição zerada | ABCB4 2020–2023, IRBR3 2022–2025 | Controladora e não controladores = 0 com lucro ≠ 0 |
+| DRE semestral | BSLI4 (BRB) em parte dos anos | Sem exercício anual em 2015 e 2020–2025 |
+
+Cobertura das 7 contas críticas: 100% em 23 companhias, 40% em BSLI4 e 91% em CXSE3 (sem a DRE de
+2015). Sem cotação no Yahoo: BPAN4 (fechada pelo BTG), MERC4, DMFN3, BRBI3/BRBI4 (só a unit
+BRBI11). BPAC3/BPAC5 cotam com volume baixo e preço defasado (BPAC3 + 2 × BPAC5 = R$ 58,05 contra
+BPAC11 a R$ 51,55 em 30/10/2026).
+
 ### Cadastro (`cad_cia_aberta.csv`)
 
 - Várias linhas por CNPJ: uma por mercado (`TP_MERC`) e registros cancelados com outro `CD_CVM`

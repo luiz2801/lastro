@@ -231,3 +231,54 @@ def historico_anual(
             "aliquota_efetiva": lista(aliquota),
         }
     )
+
+
+# Banco no plano de contas de bancos antigo (lucro em 3.09, PL em 2.08), em milhares.
+BANCO = {
+    "BPA": {
+        "1": ("Ativo Total", 1000),
+        "1.01": ("Caixa e Equivalentes de Caixa", 50),
+        "1.02": ("Ativos Financeiros", 950),
+    },
+    "BPP": {
+        "2": ("Passivo Total", 1000),
+        "2.03": ("Passivos Financeiros ao Custo Amortizado", 880),
+        "2.08": ("Patrimônio Líquido Consolidado", 120),
+        "2.08.09": ("Participação dos Acionistas Não Controladores", 20),
+    },
+    "DRE": {
+        "3.01": ("Receitas da Intermediação Financeira", 200),
+        "3.02": ("Despesas da Intermediação Financeira", -150),
+        "3.03": ("Resultado Bruto Intermediação Financeira", 50),
+        "3.05": ("Resultado Antes dos Tributos sobre o Lucro", 30),
+        "3.06": ("Imposto de Renda e Contribuição Social sobre o Lucro", -6),
+        "3.09": ("Lucro/Prejuízo Consolidado do Período", 24),
+        "3.09.01": ("Atribuído a Sócios da Empresa Controladora", 22),
+        "3.09.02": ("Atribuído a Sócios Não Controladores", 2),
+    },
+    "DFC": {
+        "6.03.05": ("Dividendos e Juros sobre o Capital Próprio Pagos", -11),
+        "6.03.06": ("Dividendos e JCP Pagos a Acionistas não Controladores", -1),
+    },
+}
+
+
+def dfp_banco(
+    ano: int, cd_cvm: int = 1234, **trocas: dict[str, float | tuple[str, float] | None]
+) -> pd.DataFrame:
+    """DFP de banco consistente (só ÚLTIMO); `trocas` como em `dfp_completa`."""
+    partes = []
+    for dem, base in BANCO.items():
+        contas = {**base, **trocas.get(dem, {})}
+        contas = {k: v for k, v in contas.items() if v is not None}
+        fluxo = dem not in ("BPA", "BPP")
+        partes.append(
+            documento(
+                contas,
+                dem="DFC_MI" if dem == "DFC" else dem,
+                dt_ini=f"{ano}-01-01" if fluxo else None,
+                dt_fim=f"{ano}-12-31",
+                cd_cvm=cd_cvm,
+            )
+        )
+    return juntar(*partes)

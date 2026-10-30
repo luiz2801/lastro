@@ -2,6 +2,20 @@
 
 ## [Não lançado]
 
+### Fase 10 — Financeiras: plano de contas e métricas
+- `config/mapeamento_contas.yaml`: seção `financeira:` por regex de descrição, conferida em 25
+  bancos e seguradoras (planos de bancos, de seguradoras e comercial; demonstrações individuais).
+- `contabil/financeiras.py`: lucro e PL da controladora, ROE sobre o PL inicial, ROA, payout,
+  dividendos pagos, alavancagem e alíquota efetiva, anuais e LTM.
+- `contabil/qa.py`: verificações próprias das financeiras (balanço, PL positivo, atribuição do
+  lucro, saltos).
+- `contabil/padronizacao.py`: documento que informa um período só com zeros não substitui outro
+  (balanço de 2024 zerado nos ITR 2025 de BAZA3, BNBR3, BGIP4, BPAR3 e BMIN4).
+- CLI: `qa`, `historico` e `cobertura` aceitam financeiras; companhia sem consolidado usa as
+  individuais com aviso; holdings recebem mensagem própria.
+- `config/cadastro_manual.csv`: WIZC3 e QUAL3 (corretoras) como `nao_financeira`.
+- ADR 0011; `guia.md` 1.12.
+
 ### Justificativas e alternativas
 - `docs/justificativas_e_alternativas.md`: justificativa de cada decisão (dados, contabilidade,
   premissas, custo de capital, DCF, múltiplos, perfil), alternativas com o custo de implementar e

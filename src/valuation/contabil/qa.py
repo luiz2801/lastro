@@ -3,6 +3,10 @@
 `verificar` devolve um `ResultadoQA` com uma `Verificacao` por regra que falhou (severidade
 `erro`, `aviso` ou `info`), a cobertura das contas críticas e as contas relevantes que o plano
 não mapeia. Erro significa que o valuation não deve rodar sem corrigir o mapeamento ou os dados.
+
+Financeiras (plano `financeira`, ADR 0011) têm verificações próprias: não há EBIT, D&A nem
+passivo circulante, e as contas não mapeadas do balanço de um banco (depósitos, captações) seriam
+sempre "relevantes" sem servir ao DDM, por isso não são listadas.
 """
 
 from __future__ import annotations
@@ -32,6 +36,8 @@ LIMIAR_RELEVANTE = 0.05  # conta não mapeada relevante: |valor| / base
 CONTAS_DRE_NAO_RECORRENTES = ("3.04.03", "3.04.04", "3.04.05")
 CONTAS_SALTO = ("receita_liquida", "ativo_total", "patrimonio_liquido_total", "imobilizado")
 PAIS_SUBCONTAS = ("1", "1.01", "1.02", "2", "2.01", "2.02")
+PAIS_SUBCONTAS_FINANCEIRA = ("1", "2")
+CONTAS_SALTO_FINANCEIRA = ("ativo_total", "patrimonio_liquido_total", "lucro_liquido")
 
 # Contas que as verificações leem (ausentes viram NaN e não geram falha; a ausência de conta
 # crítica é apontada por `conta_critica_ausente`).
@@ -143,10 +149,12 @@ def _balanco_fecha(bal: pd.DataFrame) -> Iterable[Verificacao]:
             )
 
 
-def _subcontas(selecionadas: pd.DataFrame) -> Iterable[Verificacao]:
+def _subcontas(
+    selecionadas: pd.DataFrame, pais: tuple[str, ...] = PAIS_SUBCONTAS
+) -> Iterable[Verificacao]:
     bp = selecionadas[selecionadas["familia"].isin(["BPA", "BPP"])]
     falhas: list[str] = []
-    for pai in PAIS_SUBCONTAS:
+    for pai in pais:
         nivel = pai.count(".") + 1
         filhas = bp[
             bp["cd_conta"].str.startswith(pai + ".") & (bp["cd_conta"].str.count(r"\.") == nivel)
@@ -186,6 +194,10 @@ def _dre(fluxos: pd.DataFrame, anual: pd.DataFrame) -> Iterable[Verificacao]:
             "lair_consistente", "aviso", "LAIR difere de EBIT + resultado financeiro.", falhas
         )
 
+    yield from _lucro_atribuido(fluxos)
+
+
+def _lucro_atribuido(fluxos: pd.DataFrame) -> Iterable[Verificacao]:
     soma = fluxos["lucro_liquido_controladora"] + fluxos["lucro_liquido_minoritarios"].fillna(0)
     falhas = _falhas(
         _diferenca_relativa(fluxos["lucro_liquido"], soma, fluxos["lucro_liquido"]) > TOL_ATRIBUICAO
@@ -237,8 +249,8 @@ def _fontes_divergentes(selecionadas: pd.DataFrame, plano: PlanoContas) -> Itera
             )
 
 
-def _saltos(anual: pd.DataFrame) -> Iterable[Verificacao]:
-    for conta in CONTAS_SALTO:
+def _saltos(anual: pd.DataFrame, contas: tuple[str, ...] = CONTAS_SALTO) -> Iterable[Verificacao]:
+    for conta in contas:
         if conta not in anual:
             continue
         serie = anual[conta]
@@ -360,17 +372,24 @@ def verificar(
     historico_anos: int,
 ) -> ResultadoQA:
     """Roda todas as verificações sobre as demonstrações selecionadas e as contas padronizadas."""
-    bal = periodos.saldos(contas).reindex(columns=_SALDOS_USADOS)
     anual = periodos.anual(contas)
-    anual = anual.reindex(columns=anual.columns.union(_ANUAIS_USADOS))
-    fluxos = _todos_os_fluxos(contas).reindex(columns=_FLUXOS_USADOS)
-    verificacoes = [
-        *_balanco_fecha(bal),
-        *_subcontas(selecionadas),
-        *_dre(fluxos, anual),
-        *_da(anual),
+    if plano.tipo == "financeira":
+        verificacoes = list(_verificacoes_financeira(selecionadas, contas, anual))
+        nao_mapeadas: list[dict[str, Any]] = []
+    else:
+        bal = periodos.saldos(contas).reindex(columns=_SALDOS_USADOS)
+        anual = anual.reindex(columns=anual.columns.union(_ANUAIS_USADOS))
+        fluxos = _todos_os_fluxos(contas).reindex(columns=_FLUXOS_USADOS)
+        verificacoes = [
+            *_balanco_fecha(bal),
+            *_subcontas(selecionadas),
+            *_dre(fluxos, anual),
+            *_da(anual),
+            *_saltos(anual),
+        ]
+        nao_mapeadas = contas_nao_mapeadas(selecionadas, contas)
+    verificacoes += [
         *_fontes_divergentes(selecionadas, plano),
-        *_saltos(anual),
         *_anos_faltantes(anual, historico_anos),
         *_criticas(anual, plano),
         *_escala(selecionadas),
@@ -385,8 +404,37 @@ def verificar(
         cobertura={
             str(k): round(float(v), 4) for k, v in cobertura(contas, plano.criticas).items()
         },
-        nao_mapeadas=tuple(contas_nao_mapeadas(selecionadas, contas)),
+        nao_mapeadas=tuple(nao_mapeadas),
     )
+
+
+def _verificacoes_financeira(
+    selecionadas: pd.DataFrame, contas: pd.DataFrame, anual: pd.DataFrame
+) -> Iterable[Verificacao]:
+    """Balanço (ativo = passivo total), PL positivo, atribuição do lucro e saltos."""
+    bal = periodos.saldos(contas).reindex(
+        columns=["ativo_total", "passivo_total", "patrimonio_liquido_total"]
+    )
+    falhas = _falhas(
+        _diferenca_relativa(bal["ativo_total"], bal["passivo_total"], bal["ativo_total"])
+        > TOL_BALANCO
+    )
+    if falhas:
+        yield Verificacao(
+            "balanco_fecha",
+            "erro",
+            f"Ativo total difere do passivo total (> {TOL_BALANCO:.1%}).",
+            falhas,
+        )
+    falhas = _falhas(bal["patrimonio_liquido_total"] <= 0)
+    if falhas:
+        yield Verificacao("pl_positivo", "erro", "Patrimônio líquido não positivo.", falhas)
+    yield from _subcontas(selecionadas, PAIS_SUBCONTAS_FINANCEIRA)
+    fluxos = _todos_os_fluxos(contas).reindex(
+        columns=["lucro_liquido", "lucro_liquido_controladora", "lucro_liquido_minoritarios"]
+    )
+    yield from _lucro_atribuido(fluxos)
+    yield from _saltos(anual, CONTAS_SALTO_FINANCEIRA)
 
 
 def gravar(resultado: ResultadoQA, caminho: Path) -> Path:

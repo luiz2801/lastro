@@ -190,8 +190,10 @@ def selecionar_reapresentacoes(
 ) -> pd.DataFrame:
     """Para cada família de demonstração e período, mantém só o documento mais recente.
 
-    "Mais recente" = maior (`dt_refer`, `versao`). Se o documento escolhido trouxer DFC pelos
-    métodos indireto e direto, fica o indireto (os códigos `6.xx` coincidem).
+    "Mais recente" = maior (`dt_refer`, `versao`). Documento que informa o período só com zeros
+    não conta (os ITR de 2025 de BAZA3, BNBR3 e outros trazem o balanço comparativo zerado), a
+    menos que nenhum outro o informe. Se o documento escolhido trouxer DFC pelos métodos indireto e
+    direto, fica o indireto (os códigos `6.xx` coincidem).
     """
     df = demonstracoes[
         (demonstracoes["consolidado"] == consolidado)
@@ -203,12 +205,15 @@ def selecionar_reapresentacoes(
     df["familia"] = df["demonstracao"].map(FAMILIAS)
 
     chave = ["familia", "dt_ini", "dt_fim"]
-    documentos = (
-        df[[*chave, "dt_refer", "versao"]]
-        .drop_duplicates()
-        .sort_values(["dt_refer", "versao"])
-        .drop_duplicates(chave, keep="last")
+    candidatos = (
+        df.assign(com_valor=df["valor"].fillna(0) != 0)
+        .groupby([*chave, "dt_refer", "versao"], dropna=False)["com_valor"]
+        .any()
+        .reset_index()
     )
+    documentos = candidatos.sort_values(["com_valor", "dt_refer", "versao"]).drop_duplicates(
+        chave, keep="last"
+    )[[*chave, "dt_refer", "versao"]]
     df = df.merge(documentos, on=[*chave, "dt_refer", "versao"], how="inner")
 
     tem_mi = df[df["demonstracao"] == "DFC_MI"][chave].drop_duplicates()

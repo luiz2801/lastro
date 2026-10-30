@@ -9,7 +9,7 @@ import yaml
 from typer.testing import CliRunner
 
 from conftest import DIR_FIXTURES_CVM, SessaoFalsa
-from sintetico import dfp_completa, juntar
+from sintetico import dfp_banco, dfp_completa, juntar
 from valuation import __version__, cli
 from valuation.cli import app
 from valuation.config import Settings, carregar_settings
@@ -160,6 +160,65 @@ def test_cobertura(weg_sintetica: Path) -> None:
     assert resultado.exit_code == 0, resultado.output
     assert "Média geral: 100.0%" in resultado.output
     assert CliRunner().invoke(app, ["cobertura"]).exit_code == 1
+
+
+@pytest.fixture
+def banco_sintetico(ambiente_offline: Path) -> Path:
+    """WEGE3 reclassificada como financeira (cadastro manual) e com DFPs de banco sintéticas:
+    PL da controladora 90 em 2024 e 100 em 2025, lucro da controladora 22 em 2025."""
+    (ambiente_offline / "manual.csv").write_text(
+        "ticker;cnpj;especie;tipo_modelo;escala_acoes;observacao\nWEGE3;;;financeira;;teste\n",
+        encoding="utf-8",
+    )
+    assert CliRunner().invoke(app, ["atualizar", "--tickers", "WEGE3"]).exit_code == 0
+    pasta = ambiente_offline / "processed" / "cvm" / "5410"
+    dados = juntar(
+        dfp_banco(
+            2024,
+            cd_cvm=5410,
+            BPP={
+                "2.03": ("Passivos Financeiros ao Custo Amortizado", 890),
+                "2.08": ("Patrimônio Líquido Consolidado", 110),
+            },
+        ),
+        dfp_banco(2025, cd_cvm=5410),
+    )
+    dados.to_parquet(pasta / "demonstracoes.parquet", index=False)
+    return ambiente_offline
+
+
+def test_qa_e_historico_de_financeira(banco_sintetico: Path) -> None:
+    resultado = CliRunner().invoke(app, ["qa", "WEGE3"])
+    assert resultado.exit_code == 0, resultado.output
+    assert "Nenhum problema encontrado" in resultado.output
+    assert "Cobertura das 7 contas críticas: 100%" in resultado.output
+    historico = CliRunner().invoke(app, ["historico", "WEGE3"])
+    assert historico.exit_code == 0, historico.output
+    texto = " ".join(historico.output.split())
+    assert "ROE" in texto and "24,4%" in texto  # 22 / 90
+    assert "Payout" in texto and "50,0%" in texto
+    cobertura = CliRunner().invoke(app, ["cobertura", "--tickers", "WEGE3"])
+    assert cobertura.exit_code == 0, cobertura.output
+
+
+def test_padronizar_usa_individual_quando_nao_ha_consolidado(banco_sintetico: Path) -> None:
+    pasta = banco_sintetico / "processed" / "cvm" / "5410"
+    dados = pd.read_parquet(pasta / "demonstracoes.parquet").assign(consolidado=False)
+    dados.to_parquet(pasta / "demonstracoes.parquet", index=False)
+    resultado = CliRunner().invoke(app, ["qa", "WEGE3"])
+    assert resultado.exit_code == 0, resultado.output
+    assert "só publica demonstrações individuais" in " ".join(resultado.output.split())
+
+
+def test_holding_e_recusada(ambiente_offline: Path) -> None:
+    (ambiente_offline / "manual.csv").write_text(
+        "ticker;cnpj;especie;tipo_modelo;escala_acoes;observacao\nWEGE3;;;holding;;teste\n",
+        encoding="utf-8",
+    )
+    assert CliRunner().invoke(app, ["atualizar", "--tickers", "WEGE3"]).exit_code == 0
+    resultado = CliRunner().invoke(app, ["qa", "WEGE3"])
+    assert resultado.exit_code == 1
+    assert "NAV/SOTP" in " ".join(resultado.output.split())
 
 
 @pytest.fixture

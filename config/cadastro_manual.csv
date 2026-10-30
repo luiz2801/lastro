@@ -44,3 +44,5 @@ CXSE3;;;;1000;Composição do capital em milhares na CVM (razão ações CVM / q
 VBBR3;;;;1000;Composição do capital em milhares na CVM (razão ações CVM / quantidade teórica B3 = 0.0010 em 2026-10-30)
 ASAI3;;;;1000;Composição do capital em milhares na CVM (razão ações CVM / quantidade teórica B3 = 0.0010 em 2026-10-30)
 AURE3;;;;1000;Composição do capital em milhares na CVM (razão ações CVM / quantidade teórica B3 = 0.0033 em 2026-10-30)
+WIZC3;;;nao_financeira;;Corretora de seguros: receita de comissões, sem float nem capital regulatório, DRE no plano comercial (ADR 0011)
+QUAL3;;;nao_financeira;;Administradora de benefícios e corretora: prestadora de serviço, DRE no plano comercial (ADR 0011)

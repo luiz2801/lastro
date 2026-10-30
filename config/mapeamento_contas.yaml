@@ -135,6 +135,55 @@ nao_financeira:
   minoritarios:
     - {dem: BPP, cd: "2.03.09"}
 
+# Financeiras (bancos, seguradoras e holdings de seguros; ADR 0011). Três planos de contas convivem:
+# o de bancos (BBAS3, ITUB4…; lucro em 3.09 até 2019 e em 3.11 depois, PL em 2.08 ou 2.07), o de
+# seguradoras (BBSE3, IRBR3; lucro em 3.13, PL em 2.03) e o comercial (PSSA3, CXSE3; lucro em 3.11).
+# Os códigos mudam entre planos e ao longo do tempo, as descrições não: as regras usam regex.
+# Conferido em 25 bancos e seguradoras (DFP 2015-2025, ITR 2025-2026); ver docs/fontes.md.
+financeira:
+  # --- DRE -------------------------------------------------------------------------------------
+  # 3.01 e 3.03 só informam (receita da intermediação, dos seguros ou de serviços, e o resultado
+  # bruto): o DDM parte do lucro e do PL.
+  receitas:
+    - {dem: DRE, cd: "3.01"}
+  resultado_bruto:
+    - {dem: DRE, cd: "3.03"}
+  # Plano antigo das demonstrações individuais (BAZA3 até 2019): "Resultado Antes
+  # Tributação/Participações" e o IR em duas linhas (provisão e diferido), somadas.
+  lair:
+    - {dem: DRE, ds_regex: "^resultado antes (dos tributos sobre o lucro|tributacao)"}
+  ir_csll:
+    - {dem: DRE, ds_regex: "^(imposto de renda e contribuicao social sobre o lucro|provisao para ir|ir diferido)"}
+  lucro_liquido:
+    - {dem: DRE, ds_regex: "^lucro(/| ou )prejuizo (liquido )?(consolidado )?do periodo"}
+  # A atribuição fica sob o lucro consolidado (3.11, 3.13 ou 3.09). No BB de 2024-2025 há linhas
+  # de atribuição também sob 3.09 ("antes das participações"): a regra de 3.11 vem primeiro. A
+  # última regra só casa a DRE individual (sem "consolidado"), onde o lucro é todo da controladora.
+  lucro_liquido_controladora:
+    - {dem: DRE, cd_prefixo: "3.11", ds_regex: "empresa controladora"}
+    - {dem: DRE, cd_prefixo: "3.13", ds_regex: "empresa controladora"}
+    - {dem: DRE, cd_prefixo: "3.09", ds_regex: "empresa controladora"}
+    - {dem: DRE, ds_regex: "^lucro(/| ou )prejuizo (liquido )?do periodo"}
+  lucro_liquido_minoritarios:
+    - {dem: DRE, cd_prefixo: "3.11", ds_regex: "nao controladores"}
+    - {dem: DRE, cd_prefixo: "3.13", ds_regex: "nao controladores"}
+    - {dem: DRE, cd_prefixo: "3.09", ds_regex: "nao controladores"}
+
+  # --- DFC -------------------------------------------------------------------------------------
+  dividendos_pagos:
+    - {dem: DFC, cd_prefixo: "6.03", ds_regex: "dividendo|juros s(obre|/) ?(o )?capital|jcp",
+       ds_excluir: "nao controlador|minorit|recebid"}
+
+  # --- BPA / BPP -------------------------------------------------------------------------------
+  ativo_total:
+    - {dem: BPA, cd: "1"}
+  passivo_total:
+    - {dem: BPP, cd: "2"}
+  patrimonio_liquido_total:
+    - {dem: BPP, ds_regex: "^patrimonio liquido( consolidado)?$"}
+  minoritarios:
+    - {dem: BPP, ds_regex: "^participacao dos acionistas nao controladores|^patrimonio liquido atribuido aos nao controladores"}
+
 # Contas sem as quais as métricas principais não saem. O relatório de cobertura mede estas; o QA
 # avisa quando faltam em algum exercício.
 contas_criticas:
@@ -157,3 +206,11 @@ contas_criticas:
     - emprestimos_lp
     - patrimonio_liquido_total
     - minoritarios
+  financeira:
+    - lair
+    - ir_csll
+    - lucro_liquido
+    - lucro_liquido_controladora
+    - ativo_total
+    - passivo_total
+    - patrimonio_liquido_total
