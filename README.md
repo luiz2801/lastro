@@ -115,7 +115,7 @@ Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
   `REAL`, não em USD como o guia supunha. Ela é avaliada com `brl_direto`; o caminho `usd_crp`
   fica implementado e testado só com dados sintéticos.
 - **Escala das ações** ([ADR 0003](docs/decisoes/0003-escala-das-acoes.md)): a composição do
-  capital não informa escala. `escala_acoes` no cadastro manual (hoje só VALE3) e correção
+  capital não informa escala. `escala_acoes` no cadastro manual (VALE3 e sete pares) e correção
   automática de datas em milhares.
 - **Mercado por API com validação cruzada** ([ADR 0004](docs/decisoes/0004-validacao-cruzada-de-apis.md)):
   cada dado tem fonte principal e segunda fonte; a principal vence, divergência vira aviso. O aviso

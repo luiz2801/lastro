@@ -1,18 +1,26 @@
 # Setores: tipo de modelo, se é de commodity e pares padrão (seção 11.4 do CLAUDE.md).
 # `commodity: true` faz o sugestor avisar que o histórico reflete o ciclo de preços e que as
-# premissas devem ser revistas à mão (seção 9.2). Os pares entram na Fase 8 (dúvida 19.4).
+# premissas devem ser revistas à mão (seção 9.2).
+# `pares`: tickers comparáveis (decididos pelo usuário em 2026-10-30, ADR 0009). A própria
+# empresa avaliada pode constar da lista: ela é retirada dos pares na hora do cálculo. Cada par
+# precisa de `valuation atualizar --tickers ...` (ou `--com-pares`) antes.
 petroleo_gas:
-  descricao: Petróleo, gás e biocombustíveis
+  descricao: Petróleo e gás (exploração e produção)
   tipo_modelo: nao_financeira
   commodity: true
-  pares: []
+  pares: [PETR4, PRIO3, RECV3, BRAV3]
 mineracao:
-  descricao: Mineração e siderurgia
+  descricao: Mineração
   tipo_modelo: nao_financeira
   commodity: true
-  pares: []
+  pares: [VALE3, CMIN3, CBAV3]
+siderurgia:
+  descricao: Siderurgia
+  tipo_modelo: nao_financeira
+  commodity: true
+  pares: [GGBR4, GOAU4, USIM5, CSNA3]
 maquinas_equipamentos:
   descricao: Máquinas e equipamentos industriais
   tipo_modelo: nao_financeira
   commodity: false
-  pares: []
+  pares: [WEGE3, EMBJ3, RAPT4, TUPY3, POMO4, KEPL3, ROMI3, LEVE3, MYPK3, FRAS3]

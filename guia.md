@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.6 — 2026-10-30**
+**Versão 1.7 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
 > (Fases 0 a 7 implementadas) para que você não precise reler os módulos. Para o que ainda
@@ -159,8 +159,8 @@ Constantes de caminho (relativas à raiz do repo): `DIR_CONFIG`, `CAMINHO_SETTIN
 `ler_yaml(caminho)` (mapeamento no topo; ausente, YAML inválido ou outro tipo ⇒
 `ErroConfiguracao`) é a leitura comum a settings, setores e YAML da empresa.
 `carregar_setores(caminho=CAMINHO_SETORES) -> dict[str, Setor]`; `Setor(descricao, tipo_modelo,
-commodity, pares=())`. Hoje: `petroleo_gas` e `mineracao` (commodity) e `maquinas_equipamentos`;
-`pares` vazios até a Fase 8.
+commodity, pares=())`. Hoje: `petroleo_gas` (E&P), `mineracao` e `siderurgia` (commodity) e
+`maquinas_equipamentos`, com os pares decididos pelo usuário (a própria empresa pode constar).
 
 `Settings` (todos os submodelos herdam `_Modelo`: `extra="forbid"`, `frozen=True` → **campo novo no
 YAML exige campo novo na classe, e vice-versa**, senão `ErroConfiguracao`).
@@ -547,7 +547,12 @@ vez de baixar dados reais. Sem rede nos testes.
 
 1. `CD_CVM` com zero à esquerda na DFP/ITR, sem no cadastro ⇒ sempre `normalizar_cd_cvm`.
 2. `MOEDA` na CVM é `REAL` até para a Vale (ADR 0002): detecção de moeda não vem do campo hoje.
-3. Composição do capital: sem escala e semântica do "total" varia (seção 9).
+3. Composição do capital: sem escala e semântica do "total" varia (seção 9). Escala em milhares
+   em todas as datas é comum (VALE3, CBAV3, EMBJ3, RAPT3/4, TUPY3, KEPL3, MYPK3, FRAS3): a
+   correção automática não pega, é preciso `escala_acoes: 1000` no cadastro manual. Sintoma:
+   market cap de poucos milhões e P/VP perto de zero.
+3a. Alguns FCA trazem o código CVM no lugar do ticker (CSN `4030`, CSN Mineração `25585`): o
+   ticker some do cadastro e entra pelo `cadastro_manual.csv` com `cnpj` e `especie`.
 4. Códigos de conta mudam entre períodos da mesma empresa (D&A da Vale: `6.01.01.05` × `.06`) ⇒
    mapear por `cd_conta` **e** regex de `ds_conta`. Arrendamento da WEG está fora de empréstimos.
 5. ITR: DRE traz acumulado e trimestre (distinguir por `dt_ini`); DFC só acumulado; não há ITR do 4º

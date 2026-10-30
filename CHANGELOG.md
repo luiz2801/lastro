@@ -2,6 +2,13 @@
 
 ## [Não lançado]
 
+### Fase 8 — Múltiplos e comparáveis
+- `config/setores.yaml`: pares por setor (decisão do usuário): `petroleo_gas` só E&P (PETR4,
+  PRIO3, RECV3, BRAV3), `mineracao` (VALE3, CMIN3, CBAV3) separada do novo setor `siderurgia`
+  (GGBR4, GOAU4, USIM5, CSNA3) e `maquinas_equipamentos` (WEGE3 e nove pares).
+- `config/cadastro_manual.csv`: CSNA3 e CMIN3 (o FCA traz o código CVM no lugar do ticker) e
+  `escala_acoes` 1000 para CBAV3, EMBJ3, RAPT3/4, TUPY3, KEPL3, MYPK3 e FRAS3.
+
 ### Fase 7 — DCF, ponte, sensibilidade e cenários
 - `modelos/dcf.py`: DCF do FCFF com ano corrente parcial e convenção de meio período, valor
   terminal por value driver (RONIC = WACC, ROIC histórico ou número), EV/EBITDA implícito no

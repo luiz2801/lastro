@@ -8,3 +8,13 @@ ITSA3;;;holding;;Holding (NAV/SOTP fora da v1)
 ITSA4;;;holding;;Holding (NAV/SOTP fora da v1)
 BRAP3;;;holding;;Holding (NAV/SOTP fora da v1)
 BRAP4;;;holding;;Holding (NAV/SOTP fora da v1)
+CSNA3;33.042.730/0001-04;ON;;;FCA traz o código da CVM (4030) no lugar do ticker
+CMIN3;08.902.291/0001-15;ON;;;FCA traz o código da CVM (25585) no lugar do ticker
+CBAV3;;;;1000;Composição do capital em milhares na CVM (651.073 em 2026-06-30)
+EMBJ3;;;;1000;Composição do capital em milhares na CVM (740.465 em 2026-06-30)
+RAPT3;;;;1000;Composição do capital em milhares na CVM (349.725 em 2026-06-30)
+RAPT4;;;;1000;Composição do capital em milhares na CVM (349.725 em 2026-06-30)
+TUPY3;;;;1000;Composição do capital em milhares na CVM (132.450 em 2026-06-30)
+KEPL3;;;;1000;Composição do capital em milhares na CVM (179.720 em 2026-06-30)
+MYPK3;;;;1000;Composição do capital em milhares na CVM (153.720 em 2026-06-30)
+FRAS3;;;;1000;Composição do capital em milhares na CVM (280.335 em 2026-06-30)

@@ -44,6 +44,10 @@ Legenda: ✅ confirmado · ⚠️ diferente do guia · ⏳ pendente
 - ⚠️ **Sem coluna de escala.** A Vale informa em milhares em todas as datas (4.262.534 em 2026-03-31);
   a Petrobras informou em milhares só na DFP 2020 (13.044.497). Ver [ADR 0003](decisoes/0003-escala-das-acoes.md).
   Escala da Vale confirmada pela composição acionária publicada pela companhia (31/08/2026).
+- Também em milhares em todas as datas (observado em 2026-10-30, ITR de 30/06/2026; `escala_acoes`
+  1000 no cadastro manual): CBAV3 651.073, EMBJ3 740.465, RAPT3/4 349.725, TUPY3 132.450, KEPL3
+  179.720, MYPK3 153.720, FRAS3 280.335. Em unidades: PRIO3, RECV3, BRAV3, CMIN3, POMO3/4, ROMI3,
+  LEVE3. Sintoma do erro: market cap de poucos milhões de reais e P/VP perto de zero.
 - ⚠️ **Significado de `QT_ACAO_TOTAL_CAP_INTEGR` varia por companhia.** Na Vale é o total **sem**
   tesouraria (4.255.763 mil = "Total (sem ações em tesouraria)" do RI; capital total 4.439.159.764).
   Na WEG é o capital total (4.197.317.998). Calcular "total − tesouraria" para todas subtrai a
@@ -111,6 +115,9 @@ Outras observações:
 - `Valor_Mobiliario` usado: "Ações Ordinárias", "Ações Preferenciais", "Units"; `Mercado` = "Bolsa".
 - Lixo conhecido: códigos "NÃO HÁ", "N/A" e numéricos (`713854`); o mesmo ticker como ON e PN
   (`CRTE3`); tickers encerrados com `Data_Fim_Negociacao` preenchida (`BRFS3`, 2025-09-22).
+- Código CVM no lugar do ticker (FCA 2025 e 2026): CSN (`33.042.730/0001-04`, `4030`) e CSN
+  Mineração (`08.902.291/0001-15`, `25585`). CSNA3 e CMIN3 entram pelo cadastro manual.
+- A Embraer negocia como `EMBJ3` (não mais `EMBR3`).
 - Nem toda companhia entrega o FCA do ano corrente: o código usa os FCA de `ano` e `ano - 1` e fica
   com o documento mais recente de cada CNPJ.
 
