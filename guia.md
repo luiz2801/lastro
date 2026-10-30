@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.21 — 2026-10-30**
+**Versão 1.22 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -527,7 +527,7 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | Fase | Falta | Dica de onde conectar |
 |---|---|---|
 | 9 | gráficos (football field, cascata da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos` | `rodar` já tem tudo em memória: `ResultadoCenarios`, matrizes, `ResultadoMultiplos` (barras P/L, EV/EBITDA, P/VP pelos quartis: `implicitos.valor_p25/p75`; `mt.ROTULOS`) e `PerfilEfetivo.origem` (vai ao `meta.json`). `premissas_usadas.yaml` = serializar `Avaliacao.premissas` de cada cenário |
-| 10 | YAMLs das financeiras em `config/empresas/`, golden das financeiras, fechamento da fase | Múltiplos financeiros já existem: `mt.fundamentos_financeira`, `MULTIPLOS_FINANCEIRA`, `regressao_pvp_roe`, `ResultadoMultiplos.nomes/regressao/valor_regressao` (ADR 0014); `cli._fundamentos` escolhe pelo tipo; setores `bancos` e `seguradoras` |
+| 10 | Golden das financeiras (conferência do usuário), fechamento da fase | Múltiplos financeiros já existem: `mt.fundamentos_financeira`, `MULTIPLOS_FINANCEIRA`, `regressao_pvp_roe`, `ResultadoMultiplos.nomes/regressao/valor_regressao` (ADR 0014); `cli._fundamentos` escolhe pelo tipo; setores `bancos` e `seguradoras` |
 
 ## 13. Convenções que o código já segue (siga também)
 
@@ -718,6 +718,10 @@ vez de baixar dados reais. Sem rede nos testes.
 37. O DDM desconta no **fim** do ano (sem meio período): comparar o valor de um banco com o de uma
     não financeira com `convencao_meio_periodo: true` mistura convenções. Com a Rf de ~15% o Ke
     dos bancos passa do ROE de longo prazo e o aviso "ROE abaixo do Ke" é comum.
+38. O setor `seguradoras` mistura holdings de seguros (BBSE3, CXSE3: lucro de equivalência sobre
+    um PL pequeno, ROE de 34% a 79%) e operadoras (PSSA3, IRBR3). O P/VP mediano dos pares fica
+    alto e o valor implícito por P/VP das operadoras sai absurdo (PSSA3 R$ 116, IRBR3 R$ 303 em
+    30/10/2026); use o DDM e o P/L delas, não o P/VP dos pares.
 
 ## 17. `perfil/` — perfil do investidor
 

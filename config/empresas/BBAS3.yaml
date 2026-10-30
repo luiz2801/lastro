@@ -1,0 +1,41 @@
+# Premissas de BBAS3 (seção 9.1 do CLAUDE.md), geradas por
+# `valuation premissas sugerir BBAS3 --escrever` em 2026-10-30, com o histórico até 2025.
+# `sugerido` = recalculado do histórico a cada execução; o comentário mostra o valor de
+# hoje e a origem. Troque por um número para fixar (ou, em roe, por uma
+# lista com um valor por ano projetado a partir de 2026).
+# Taxas em decimal (0.05 = 5%). Estudo pessoal; não é recomendação de investimento.
+ticker: BBAS3
+tipo_modelo: financeira              # nao_financeira | financeira
+classes_acao: [BBAS3]
+moeda_relatorio: auto                # auto | BRL | USD
+
+# Financeira: DDM (seção 11.3); só estes ajustes se aplicam.
+ajustes:
+  consolidado: true
+  mapeamento_extra: {}               # regras de mapeamento_contas.yaml
+
+projecao:
+  horizonte_anos: perfil             # perfil | inteiro (anos com fluxo por vir)
+  # fim = ROE de longo prazo (P/VP justificado do valor terminal)
+  # inicio sugerido: 15,6% (mediana do ROE 2021-2025)
+  # fim sugerido: 14,4% (mediana do ROE 2016-2025)
+  roe: {inicio: sugerido, fim: sugerido, curva: linear}
+  # sugerido: 43,4% (mediana do payout 2021-2025)
+  # converge para 1 - g / ROE de longo prazo (payout que sustenta g)
+  payout_inicio: sugerido
+  terminal:
+    g_nominal: null                  # null => settings.terminal.g_nominal_max
+
+# Delta somado ao ROE de todos os anos, inclusive o de longo prazo (0.02 = 2 p.p.).
+# Sugerido: ±3,96 p.p. (1 desvio-padrão do ROE 2016-2025 = 3,96 p.p.); pessimista -, otimista +.
+cenarios:
+  pessimista: {roe_pp: sugerido}
+  otimista: {roe_pp: sugerido}
+
+pares:
+  setor: bancos                      # chave em config/setores.yaml
+  incluir: []
+  excluir: []
+
+custo_capital:                      # sobrescritas opcionais (Fase 6)
+  beta: {metodo: regressao}          # regressao | comparaveis | manual (com valor)

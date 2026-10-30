@@ -15,6 +15,12 @@
 - `CLAUDE.md`: referenciamento das regras modulares na seção 0 (regras 14 e 15) e nas seções 6, 7, 11 e 15 apontando para `docs/regras/`.
 - `CONTRIBUTING.md`, `README.md` e `guia.md`: referências atualizadas para `docs/regras/`; versão do `guia.md` atualizada para 1.19.
 
+### Fase 10 — YAMLs das financeiras
+- `config/empresas/`: ITUB4, BBAS3, BBDC4, SANB11, BPAC11 (setor `bancos`) e BBSE3, CXSE3, PSSA3,
+  IRBR3 (setor `seguradoras`), gerados por `premissas sugerir --escrever`; `rodar` conferido nos
+  nove (lucro residual igual ao DDM em todos).
+- `guia.md` 1.22: ressalva do setor `seguradoras` (holdings × operadoras).
+
 ### Fase 10 — Units no market cap
 - `fix`: papel avaliado pela unit (SANB11, BPAC11) tem o valor por ação contado em units, comparável
   ao preço da unit (antes saía por ação, 2 a 3 vezes menor).
