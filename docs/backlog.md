@@ -244,3 +244,133 @@ Quando a Fase 11 for iniciada, avaliar a implementação de simulação Monte Ca
 - Definir os critérios: por exemplo, faixas de upside contra o preço teto/preço máximo, retorno
   esperado contra o hurdle do perfil e confiança (avisos de QA, poucos pares, VT/EV alto).
 - Manter o aviso de que é uso pessoal e não constitui recomendação de investimento.
+
+---
+
+## Ordem de implementação incremental (adicionada em 2026-10-30)
+
+Raciocínio: cada etapa entrega algo utilizável de imediato e não bloqueia nada que vem depois.
+A sequência respeita as dependências do roadmap (seção 17 do `CLAUDE.md`) e agrupa os itens do
+backlog por valor entregue ao usuário.
+
+### Etapa 1 — Fechar a Fase 10 (pendências imediatas)
+
+Pré-requisito para qualquer trabalho posterior em financeiras e para a consistência dos testes.
+
+1. **Units no market cap** (ADR 0015): suporte a BPAC11/BRBI11 no `cadastro_manual.csv` e em
+   `precos.market_cap`; testes unitários novos.
+2. **YAMLs das financeiras**: gerar com `valuation premissas sugerir {T} --escrever` para ITUB4,
+   BBAS3, BBDC4, SANB11, BPAC11, BBSE3, CXSE3, PSSA3 e ajustar `pares.setor`.
+3. **Rodar e conferir seguradoras** (BBSE3, CXSE3, PSSA3, IRBR3); registrar ressalvas em `guia.md`.
+4. **Golden das financeiras**: solicitar ao usuário os números de ITUB4 e BBAS3; codificar em
+   `tests/golden/referencias.yaml`.
+5. **Fechamento formal**: `guia.md` (seções 1, 12 e 14), `README.md`, ✅ na seção 17 do `CLAUDE.md`,
+   `make cobertura`.
+
+*Entrega:* Fase 10 fechada; pipeline de financeiras completo e testado.
+
+### Etapa 2 — Fase 9: Saídas completas
+
+Depende das fases 7 e 8 (já concluídas) e é pré-requisito natural para GUI e cache de resultados.
+
+1. **Gráficos**: football field (com quartis dos múltiplos e linhas de preço atual / preço teto),
+   cascata da ponte EV → Equity, heatmap de sensibilidade, histórico × projeção, composição do
+   valor (VP dos fluxos × VP do valor terminal).
+2. **Arquivos de saída**: `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`,
+   `valores_reais.csv` (deflacionados por IPCA projetado — seção 11.5 do `CLAUDE.md`).
+3. **Flag `--sem-graficos`** na CLI (`valuation rodar`).
+4. Validar que `valuation rodar PETR4 --cenario todos` gera a pasta de saída completa e
+   reprodutível (critério de pronto da Fase 9).
+
+*Entrega:* relatório completo e reprodutível para qualquer empresa já mapeada; base pronta para GUI.
+
+### Etapa 3 — Ajuste pontual do Kd da PETR4
+
+Pequena, mas elimina erro metodológico que distorce o valor em até 18%.
+
+1. Decidir com o usuário o valor do Kd a usar (manual vs. algum proxy defensável).
+2. Fixar `custo_capital.kd: {metodo: manual, valor: X}` no `config/empresas/PETR4.yaml`.
+3. Rerodar `valuation rodar PETR4` e conferir o impacto; atualizar golden se necessário.
+
+*Entrega:* valor da PETR4 metodologicamente correto; sem nova funcionalidade, baixo risco.
+
+### Etapa 4 — Expandir o universo de empresas (não financeiras)
+
+Baixo custo marginal: só adicionar YAMLs; o motor já está pronto.
+
+1. Priorizar empresas do Ibovespa que o usuário queira acompanhar (lista a confirmar).
+2. Para cada nova empresa: criar `config/empresas/{TICKER}.yaml`, rodar `valuation premissas
+   sugerir {T} --escrever`, conferir o resultado, adicionar ao `universo_ibovespa.csv` se ausente.
+3. Atenção a setores com particularidades ainda não validadas (varejo/arrendamentos IFRS 16,
+   commodities com ciclo de preços — avisar o usuário nas premissas).
+
+*Entrega:* cobertura prática do universo prioritário do usuário.
+
+### Etapa 5 — Preço teto e recomendação básica
+
+Agrupa dois itens relacionados; exige decisão de negócio antes de codar.
+
+1. **Definir com o usuário** qual "preço teto" implementar (Bazin vs. `valor_justo_ponderado ×
+   (1 − margem_segurança)` — o segundo já está previsto na seção 8.4 do `CLAUDE.md`).
+2. Implementar e exibir: coluna em `resumo.csv`, linha vertical no football field (Fase 9 já
+   entrega o gráfico).
+3. **Recomendação** (compra / manter / venda): critérios baseados em upside relativo ao preço teto
+   e retorno esperado vs. hurdle do perfil; aviso de confiança (QA, nº de pares, VT/EV); aviso de
+   uso pessoal em destaque.
+
+*Entrega:* sinal de decisão acionável sem requerer nenhuma nova fonte de dados.
+
+### Etapa 6 — ERP implícito do Ibovespa em BRL
+
+Melhora a robustez da premissa de ERP sem depender de fontes pagas; mais elaborado que os itens
+anteriores, por isso fica aqui.
+
+1. ADR descrevendo a escolha de crescimento esperado (Focus PIB + inflação como teto).
+2. Módulo puro `custo_capital/erp_implicito.py` (ver detalhes na seção "ERP implícito" deste
+   backlog).
+3. Campo `custo_capital.erp.fonte: manual | implicito_ibovespa` em `config.py` e `settings.yaml`.
+4. Testes à mão, `guia.md` e `CHANGELOG.md`.
+
+*Entrega:* calibração do ERP baseada em dados locais, saindo com faixa e aviso (não número único).
+
+### Etapa 7 — Glossário / explicação de métricas na CLI
+
+Melhora a usabilidade sem alterar nenhum modelo.
+
+1. Comando `valuation glossario [METRICA]` (ou flag `--explicar`) usando `rich`.
+2. Legendas e notas de rodapé nas tabelas existentes (modo sucinto mantido por padrão).
+3. Dicionário de dados embutido em `meta.json` e gerado junto aos relatórios da Fase 9.
+
+*Entrega:* ferramenta mais educativa; útil antes da GUI.
+
+### Etapa 8 — Tickers favoritos e cache de resultados
+
+Agiliza o uso cotidiano depois que o universo estiver razoavelmente coberto (Etapa 4).
+
+1. `config/favoritos.yaml` (ou campo em `settings.yaml`): lista de tickers favoritos.
+2. Cache de resultados calculados: snapshot de `resumo.json` em `saida/{TICKER}/{data}/`; TTL e
+   flag `--atualizar-favoritos`.
+3. Comando `valuation favoritos` mostrando tabela resumida (preço, valor ponderado, upside, data).
+
+*Entrega:* fluxo de revisão rápida sem nova rede; base para aba de favoritos na futura GUI.
+
+### Etapa 9 — Interface gráfica (GUI)
+
+Só depois das Fases 9 e 10 fechadas, e após as etapas 5–8 estabilizarem a CLI.
+
+1. Decidir tecnologia (Streamlit local ou desktop) e registrar em ADR.
+2. Implementar como camada fina sobre o motor: chama as mesmas funções puras e lê os mesmos YAMLs.
+3. Telas prioritárias: favoritos/dashboard, edição de premissas, resultado (football field,
+   sensibilidade) e histórico × projeção.
+
+*Entrega:* interface visual para o workflow completo já validado na CLI.
+
+### Etapa 10 — Monte Carlo (Fase 11, sob demanda)
+
+Só iniciar se o usuário pedir explicitamente; exige decisão sobre distribuições e saída antes de codar.
+
+1. Alternativa de curto prazo: `numpy`/`scipy` vetorizado (~100 k trajetórias), sem C++.
+2. Se performance exigir: extensão C++ via `pybind11`, apenas no núcleo de simulação.
+3. ADR antes de qualquer implementação (distribuições, saída, integração com CLI).
+
+*Entrega:* distribuição do valor por ação e VaR do upside; Fase 11 do roadmap.
