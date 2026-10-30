@@ -25,6 +25,7 @@
 7. Em dúvida de negócio (não de código), **pergunte ao usuário** em vez de decidir sozinho. Liste as dúvidas pendentes na seção 19.
 8. Código tipado (`mypy`/`pyright` limpo), formatado com `ruff`, com testes `pytest`. Identificadores de domínio em português (`receita_liquida`, `divida_liquida`), termos genéricos de programação em inglês quando for o idioma natural da biblioteca.
 9. Commits pequenos, uma mensagem por mudança lógica. Mantenha `CHANGELOG.md`.
+10. **Consulte o `guia.md` antes de modificar** qualquer código (leia a seção do módulo, convenções e armadilhas) e **atualize-o na mesma entrega** de toda alteração de lógica, contrato, parâmetro, arquivo ou comando, subindo a versão no topo conforme a regra de manutenção do próprio guia. O guia é uma foto do estado atual (história vai no `CHANGELOG.md`); se código e guia discordarem, o código vence e o guia deve ser corrigido no mesmo commit.
 
 ---
 
