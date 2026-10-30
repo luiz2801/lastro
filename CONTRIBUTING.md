@@ -39,6 +39,12 @@ que foi decidido e o que depende dele.
 falhando, nem sem tê-los rodado. Se não for possível rodar, não faça o commit: avise e peça ao
 usuário que rode ou autorize explicitamente.
 
+**Commit ao concluir uma aplicação 100% integrada.** Quando uma mudança está inteira (código,
+CLI quando couber, testes, documentação e ADR), `make lint tipos testes` passa e não sobra parte
+pendente, o commit é feito logo, sem esperar pedido do usuário. Isso vale só para a mudança
+completa: não commite trabalho parcial, WIP nem etapa que depende de decisão ainda aberta (dúvida
+da seção 19 do `CLAUDE.md`). O push continua só quando o usuário pede.
+
 Um commit é **atômico**: uma única mudança lógica, completa e que funciona sozinha.
 
 - **Um propósito por commit**: um módulo novo, uma correção, uma refatoração ou uma mudança de
