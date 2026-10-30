@@ -13,7 +13,12 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 RAIZ_PROJETO = Path(__file__).resolve().parents[2]
-CAMINHO_SETTINGS = RAIZ_PROJETO / "config" / "settings.yaml"
+DIR_CONFIG = RAIZ_PROJETO / "config"
+CAMINHO_SETTINGS = DIR_CONFIG / "settings.yaml"
+CAMINHO_CADASTRO_MANUAL = DIR_CONFIG / "cadastro_manual.csv"
+CAMINHO_UNIVERSO = DIR_CONFIG / "universo_ibovespa.csv"
+DIR_RAW = RAIZ_PROJETO / "data" / "raw"
+DIR_PROCESSED = RAIZ_PROJETO / "data" / "processed"
 
 
 class _Modelo(BaseModel):

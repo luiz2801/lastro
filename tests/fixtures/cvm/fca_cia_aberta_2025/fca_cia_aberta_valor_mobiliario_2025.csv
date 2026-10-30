@@ -1,0 +1,3 @@
+CNPJ_Companhia;Data_Referencia;Versao;ID_Documento;Nome_Empresarial;Valor_Mobiliario;Sigla_Classe_Acao_Preferencial;Classe_Acao_Preferencial;Codigo_Negociacao;Composicao_BDR_Unit;Mercado;Sigla_Entidade_Administradora;Entidade_Administradora;Data_Inicio_Negociacao;Data_Fim_Negociacao;Segmento;Data_Inicio_Listagem;Data_Fim_Listagem
+01.838.723/0001-27;2025-01-01;6;153988;BRF S.A.;Ações Ordinárias;;;BRFS3;;Bolsa;B3;B3 S.A. - Brasil, Bolsa, Balcão.;2006-02-17;2025-09-22;Novo Mercado;2006-02-17;
+84.429.695/0001-11;2025-01-01;2;152581;WEG S.A.;Ações Ordinárias;;;WEGE3;;Bolsa;B3;B3 S.A. - Brasil, Bolsa, Balcão.;2007-06-22;;Novo Mercado;2007-06-22;

@@ -1,0 +1,10 @@
+# Sobrescritas do cadastro por ticker. Campos vazios não sobrescrevem nada.
+# tipo_modelo: nao_financeira | financeira | holding | nao_suportada
+# escala_acoes: 1 | 1000 (a composição do capital da CVM não informa a escala)
+# Tickers fora do FCA precisam de cnpj e especie (ON | PN | UNIT).
+ticker;cnpj;especie;tipo_modelo;escala_acoes;observacao
+VALE3;;;;1000;Composição do capital em milhares na CVM (4.262.534 em 2026-03-31)
+ITSA3;;;holding;;Holding (NAV/SOTP fora da v1)
+ITSA4;;;holding;;Holding (NAV/SOTP fora da v1)
+BRAP3;;;holding;;Holding (NAV/SOTP fora da v1)
+BRAP4;;;holding;;Holding (NAV/SOTP fora da v1)
