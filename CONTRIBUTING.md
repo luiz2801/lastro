@@ -6,9 +6,9 @@ as do agente estão na seção 0 do [`CLAUDE.md`](CLAUDE.md), e este guia as re�
 
 Antes de mexer em código, leia a seção do módulo no [`guia.md`](guia.md) (e as seções 13 e 16,
 convenções e armadilhas), consulte o [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md) e
-as regras modulares da camada correspondente na raiz ([`REGRAS_DADOS.md`](REGRAS_DADOS.md),
-[`REGRAS_CONTABIL.md`](REGRAS_CONTABIL.md), [`REGRAS_MODELOS.md`](REGRAS_MODELOS.md) e
-[`REGRAS_TESTES.md`](REGRAS_TESTES.md)). Eles **não se substituem, se complementam**: o diagrama
+as regras modulares da camada correspondente em [`docs/regras/`](docs/regras/README.md) ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md),
+[`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md), [`REGRAS_MODELOS.md`](docs/regras/REGRAS_MODELOS.md) e
+[`REGRAS_TESTES.md`](docs/regras/REGRAS_TESTES.md)). Eles **não se substituem, se complementam**: o diagrama
 orienta a visão dinâmica do fluxo e decisões de processo, o guia mapeia a estrutura, contratos e
 parâmetros do código, e as regras modulares orientam os limites e convenções específicas da camada.
 Antes de seguir uma seção do `CLAUDE.md`, confira no [índice de ADRs](docs/decisoes/README.md) se alguma
@@ -73,6 +73,7 @@ se um arquivo de teste surgir ou sumir).
 | Módulo, função, contrato, fórmula, parâmetro lido, comando da CLI, armadilha | [`guia.md`](guia.md) (versão no topo, conforme a regra de manutenção dele) |
 | Fluxo do pipeline, etapas, bifurcações, modelos ou saídas | [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md) (complementa o `guia.md` com o fluxo dinâmico; atualizar com a evolução do fluxo) |
 | Procedimento operacional frequente (nova empresa, métrica, parâmetro, etc.) | [`docs/recipes_agentes.md`](docs/recipes_agentes.md) |
+| Princípios inegociáveis ou armadilhas de uma camada técnica | [`docs/regras/`](docs/regras/README.md) ([`REGRAS_*.md`](docs/regras/README.md)) |
 | Entrega concluída (o quê, por fase) | [`CHANGELOG.md`](CHANGELOG.md), seção `[Não lançado]` |
 | Decisão que completa ou diverge do `CLAUDE.md` | novo ADR em [`docs/decisoes/`](docs/decisoes/README.md) + linha no índice + item em "Decisões" do README |
 | URL, arquivo, código de conta ou série confirmado na fonte real | [`docs/fontes.md`](docs/fontes.md) |

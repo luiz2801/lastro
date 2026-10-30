@@ -1,10 +1,10 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.18 — 2026-10-30**
+**Versão 1.19 — 2026-10-30**
 
-> Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares na raiz
-> ([`REGRAS_DADOS.md`](REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](REGRAS_CONTABIL.md),
-> [`REGRAS_MODELOS.md`](REGRAS_MODELOS.md) e [`REGRAS_TESTES.md`](REGRAS_TESTES.md)).
+> Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
+> ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
+> [`REGRAS_MODELOS.md`](docs/regras/REGRAS_MODELOS.md) e [`REGRAS_TESTES.md`](docs/regras/REGRAS_TESTES.md)).
 > Este arquivo descreve **o que existe hoje** (Fases 0 a 8 implementadas; Fase 10, financeiras,
 > em andamento) para que você não precise reler os módulos. Para o que ainda **não** existe,
 > veja a seção 12.
@@ -15,7 +15,7 @@
 >
 > **Antes de modificar:** leia deste guia a seção do módulo que vai mexer (e as seções 13 e 16,
 > convenções e armadilhas), consulte o diagrama de atividades em [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md)
-> e a regra modular específica da camada na raiz.
+> e a regra modular específica da camada em [`docs/regras/`](docs/regras/README.md).
 > **O diagrama e as regras modulares não substituem este guia, eles se complementam**: o diagrama provê a visão de fluxo dinâmico
 > e decisões do processo, as regras modulares delimitam restrições inegociáveis de cada camada, enquanto este guia mapeia a estrutura do código, módulos, contratos, parâmetros e armadilhas.
 > Só abra o código-fonte para o que eles não responderem. Planeje a alteração a partir daqui.

@@ -9,7 +9,7 @@ investimento.**
 | Documento | Para quê |
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | Especificação completa: escopo, decisões, fórmulas, fontes, roadmap por fase e regras para o agente |
-| [`REGRAS_*.md`](REGRAS_DADOS.md) | Regras modulares por camada na raiz ([`DADOS`](REGRAS_DADOS.md), [`CONTABIL`](REGRAS_CONTABIL.md), [`MODELOS`](REGRAS_MODELOS.md), [`TESTES`](REGRAS_TESTES.md)) para agentes de IA |
+| [`docs/regras/`](docs/regras/README.md) | Regras modulares por camada em `docs/regras/` ([`DADOS`](docs/regras/REGRAS_DADOS.md), [`CONTABIL`](docs/regras/REGRAS_CONTABIL.md), [`MODELOS`](docs/regras/REGRAS_MODELOS.md), [`TESTES`](docs/regras/REGRAS_TESTES.md)) para agentes de IA |
 | [`guia.md`](guia.md) | Mapa do código como ele está hoje: módulos, contratos, parâmetros, testes e armadilhas. Leia antes de modificar |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Política de commits, que documento atualizar, testes e convenções |
 | [`docs/decisoes/`](docs/decisoes/README.md) | ADRs: decisões que completam ou divergem do `CLAUDE.md`, com índice |
@@ -63,7 +63,7 @@ um token gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
 - `config/`: `settings.yaml` (parâmetros globais), `mapeamento_contas.yaml` (plano de contas
   padronizado), `cadastro_manual.csv` (holdings e escala de ações), `setores.yaml` e
   `empresas/{TICKER}.yaml` (ajustes e premissas de cada empresa).
-- `docs/`: fontes validadas e ADRs.
+- `docs/`: fontes validadas, ADRs, regras modulares por camada (`docs/regras/`), diagrama de atividades e recipes.
 - `tests/`: testes offline; `tests/golden/referencias.yaml` tem valores conferidos com documentos
   das companhias.
 - `referencias/`: PDFs e planilhas das companhias (fora do git; só o índice é versionado).

@@ -1,7 +1,7 @@
 # REGRAS_TESTES.md — Regras para Testes, Mocks e Validação
 
 > Instruções modulares para agentes de IA atuando na suíte de testes, fixtures, dados sintéticos e qualidade de código.  
-> Consulte o guia detalhado em [`tests/README.md`](tests/README.md) para exemplos de código e uso de fixtures.  
+> Consulte o guia detalhado em [`tests/README.md`](../../tests/README.md) para exemplos de código e uso de fixtures.  
 > Escopo: `tests/*.py`, `tests/fixtures/`, `tests/golden/`, `pyproject.toml` e `Makefile`.
 
 ---
