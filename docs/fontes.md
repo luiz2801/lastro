@@ -121,6 +121,17 @@ Outras observações:
 - Nem toda companhia entrega o FCA do ano corrente: o código usa os FCA de `ano` e `ano - 1` e fica
   com o documento mais recente de cada CNPJ.
 
+### Ibovespa (B3, 2026-10-30)
+
+- Carteira teórica do dia: `GET https://sistemaswebb3-listados.b3.com.br/indexProxy/indexCall/GetPortfolioDay/<base64>`,
+  com `<base64>` do JSON `{"language":"pt-br","pageNumber":1,"pageSize":120,"index":"IBOV","segment":"1"}`.
+  ✅ Sem autenticação; devolve JSON (`header.date`, `results[].cod/asset/type/part/theoricalQty`).
+  Em 30/10/26: 76 ativos, participações somando 100,000, sem duplicados. Há também
+  `GetDownloadPortfolioDay/<base64>` (CSV em base64, latin-1), não usado.
+- Dos 76 tickers, 73 casam com o cadastro. BPAC11 (unit, FCA com `000000`), CEAB3 (fim de
+  negociação = início no FCA) e MBRF3 (Marfrig; FCA só com ADR) entram pelo cadastro manual.
+- Composição por tipo: 65 não financeiras, 9 financeiras e 2 holdings (BRAP4 e ITSA4).
+
 ### Chaves entre arquivos
 
 - `composicao_capital`: só `CNPJ_CIA` (sem `CD_CVM`). Colunas `QT_ACAO_{ORDIN,PREF,TOTAL}_CAP_INTEGR` e `QT_ACAO_{ORDIN,PREF,TOTAL}_TESOURO`.

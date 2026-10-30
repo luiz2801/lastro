@@ -109,8 +109,10 @@ Pilotos: PETR4, VALE3 e WEGE3.
   beta por comparáveis, estrutura-alvo do setor, minoritários pelo P/VP e g implícito no múltiplo
   de saída; `valuation comparar TICKER` e múltiplos no `rodar`.
 - **Testes**: 402 (391 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
-- **Ainda não**: plano de contas de financeiras, universo do Ibovespa (`atualizar --tudo` falha
-  sem ele), gráficos e demais saídas da Fase 9, DDM. Lista completa na seção 12 do `guia.md`.
+- **Universo**: `config/universo_ibovespa.csv` com os 76 ativos da carteira de 30/10/26 da B3;
+  `valuation atualizar --tudo` baixa os dados de todos (holdings só avisam).
+- **Ainda não**: plano de contas de financeiras, gráficos e demais saídas da Fase 9, DDM. Lista
+  completa na seção 12 do `guia.md`.
 
 ## Decisões que completam ou divergem do `CLAUDE.md`
 
@@ -146,6 +148,8 @@ Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
   decididos pelo usuário (petróleo só E&P, mineração separada da siderurgia, lista ampla de
   máquinas); EV como inverso da ponte e EBITDA ajustado; winsorização 10/90 com valor pela
   mediana e faixa P25–P75; par com P/VP implausível é excluído (escala das ações).
+- **Universo e Vale** ([ADR 0010](docs/decisoes/0010-universo-ibovespa-e-pares-da-mineracao.md)):
+  universo da carteira teórica da B3 e CSNA3 como terceiro par da mineração.
 
 Os parâmetros de mercado de `config/settings.yaml` (ERP, faixa do Kd, Rf e inflação em USD)
 e o mapeamento perfil → parâmetros continuam **placeholders** até o usuário revisá-los (dúvidas em aberto na seção 19 do `CLAUDE.md`).

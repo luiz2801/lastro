@@ -2,6 +2,13 @@
 
 ## [Não lançado]
 
+### Universo do Ibovespa e pares da mineração
+- `config/universo_ibovespa.csv`: 76 ativos da carteira de 30/10/26 da B3 (`ticker;cnpj;setor_cvm;
+  tipo_modelo`); `valuation atualizar --tudo` passa a funcionar.
+- `config/cadastro_manual.csv`: BPAC11, CEAB3 e MBRF3, que o FCA não resolvia.
+- `config/setores.yaml`: CSNA3 entra nos pares de `mineracao`.
+- ADR 0010; `guia.md` 1.9.
+
 ### Fase 8 — Múltiplos e comparáveis
 - `config/setores.yaml`: pares por setor (decisão do usuário): `petroleo_gas` só E&P (PETR4,
   PRIO3, RECV3, BRAV3), `mineracao` (VALE3, CMIN3, CBAV3) separada do novo setor `siderurgia`

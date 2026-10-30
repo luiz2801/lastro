@@ -20,6 +20,7 @@ Itens `[DECIDIDO]` não mudam por ADR sem o aval do usuário (regra 7 do `CLAUDE
 | [0007](0007-custo-de-capital.md) | Kd histórico (despesas financeiras / dívida bruta média, 3 anos) limitado a Rf + faixa, benefício fiscal pela alíquota nominal, IPCA de longo prazo do Focus, precedência do beta do YAML, pesos com a dívida bruta do último balanço, comando `wacc` | 10.1, 10.2, 10.3, 14 | aceito |
 | [0008](0008-dcf-ponte-e-cenarios.md) | Ke e WACC implícitos no preço, teto do g de 5%, prazos com meio período e VT no τ do último ano, RONIC, saldos e ações da ponte, cenário único, eixos da sensibilidade, `rodar` antecipado | 8.4, 11.1, 11.2, 12, 14, 19 (#3) | aceito |
 | [0009](0009-multiplos-e-comparaveis.md) | Pares por setor (petróleo E&P, mineração × siderurgia, máquinas), EV inverso da ponte e EBITDA ajustado, winsorização 10/90 com mediana e P25–P75, exclusão por P/VP implausível, beta e estrutura dos pares, minoritários pelo P/VP, g implícito no múltiplo de saída, `comparar` e `atualizar --com-pares` | 10.1, 10.3, 11.1, 11.2, 11.4, 14, 19 (#4) | aceito |
+| [0010](0010-universo-ibovespa-e-pares-da-mineracao.md) | Universo = carteira teórica da B3 (JSON `GetPortfolioDay`), CSNA3 como terceiro par da mineração, cadastro manual de BPAC11, CEAB3 e MBRF3 | 11.4, 19 (#4) | aceito |
 
 ## Quando escrever um ADR
 

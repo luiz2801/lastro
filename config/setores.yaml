@@ -13,7 +13,9 @@ mineracao:
   descricao: Mineração
   tipo_modelo: nao_financeira
   commodity: true
-  pares: [VALE3, CMIN3, CBAV3]
+  # CSNA3 é integrada (minério e aço) e controla a CMIN3: terceiro par para a VALE3 sair do
+  # aviso de baixa confiança (decisão do usuário, ADR 0009), com esse viés na mediana.
+  pares: [VALE3, CMIN3, CBAV3, CSNA3]
 siderurgia:
   descricao: Siderurgia
   tipo_modelo: nao_financeira

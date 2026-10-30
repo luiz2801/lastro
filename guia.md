@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.8 — 2026-10-30**
+**Versão 1.9 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
 > (Fases 0 a 8 implementadas) para que você não precise reler os módulos. Para o que ainda
@@ -148,7 +148,7 @@ mediana de 5a), `_resumo` (linha do `resumo.csv`), `_mostrar_valuation`.
 |---|---|---|---|
 | `versao` | — | Imprime versão e Python | — |
 | `cadastro buscar TEXTO` | `--forcar` | Busca por ticker/razão/nome/CNPJ no cadastro | `--forcar` ignora TTL e rebaixa cadastro+FCA |
-| `atualizar` | `--tickers A,B` ou `--tudo`; `--com-pares`; `--forcar` | Baixa DFP/ITR/composição e grava parquets por companhia | exatamente um de `--tickers`/`--tudo`. `--tudo` lê `config/universo_ibovespa.csv` (**arquivo ainda não existe**, dá `ErroConfiguracao`). `--com-pares` acrescenta os pares de cada ticker que tem YAML em `config/empresas/` (par fora do cadastro só avisa). Holding/não suportada: só avisa e baixa |
+| `atualizar` | `--tickers A,B` ou `--tudo`; `--com-pares`; `--forcar` | Baixa DFP/ITR/composição e grava parquets por companhia | exatamente um de `--tickers`/`--tudo`. `--tudo` lê `config/universo_ibovespa.csv` (76 ativos da carteira de 30/10/26; só a coluna `ticker` é usada; linhas `#` são comentário; ausente ⇒ `ErroConfiguracao`; ~1 min com os zips em cache). `--com-pares` acrescenta os pares de cada ticker que tem YAML em `config/empresas/` (par fora do cadastro só avisa). Holding/não suportada: só avisa e baixa |
 | `mercado TICKER` | `--data-base AAAA-MM-DD`; `--forcar` | Preço por classe, Ibovespa, dólar, Selic, IPCA, Rf e market cap, cada um em 2 fontes | `--data-base` sobrescreve `settings.data_base`. Exige `atualizar` antes (lê `composicao_capital.parquet`; senão mensagem pedindo o comando) |
 | `qa TICKER` | — | Padroniza, roda o QA, imprime verificações, cobertura e contas não mapeadas relevantes; grava `data/processed/qa/qa_{TICKER}.json` | **Sai com 1 se houver erro de QA.** Exige `atualizar` antes |
 | `historico TICKER` | `--anos N` (5); `--trimestral` | Métricas anuais (R$ mi) + coluna LTM | `--anos` = quantos exercícios; `--trimestral` mostra os 8 últimos trimestres (receita, EBITDA, lucro, D&A, capex, dividendos) |
@@ -176,7 +176,7 @@ Constantes de caminho (relativas à raiz do repo): `DIR_CONFIG`, `CAMINHO_SETTIN
 `ler_yaml(caminho)` (mapeamento no topo; ausente, YAML inválido ou outro tipo ⇒
 `ErroConfiguracao`) é a leitura comum a settings, setores e YAML da empresa.
 `carregar_setores(caminho=CAMINHO_SETORES) -> dict[str, Setor]`; `Setor(descricao, tipo_modelo,
-commodity, pares=())`. Hoje: `petroleo_gas` (E&P), `mineracao` e `siderurgia` (commodity) e
+commodity, pares=())`. Hoje: `petroleo_gas` (E&P), `mineracao` (com CSNA3, ADR 0010) e `siderurgia` (commodity) e
 `maquinas_equipamentos`, com os pares decididos pelo usuário (a própria empresa pode constar).
 
 `Settings` (todos os submodelos herdam `_Modelo`: `extra="forbid"`, `frozen=True` → **campo novo no
@@ -472,7 +472,6 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | 2 | `contabil/financeiras.py` e seção `financeira:` do mapeamento | Fase 10, após inspecionar ITUB4/BBAS3. `_padronizar` da CLI recusa tipo ≠ `nao_financeira` |
 | 9 | gráficos (football field, cascata da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos` | `rodar` já tem tudo em memória: `ResultadoCenarios`, matrizes, `ResultadoMultiplos` (barras P/L, EV/EBITDA, P/VP pelos quartis: `implicitos.valor_p25/p75`; `mt.ROTULOS`) e `PerfilEfetivo.origem` (vai ao `meta.json`). `premissas_usadas.yaml` = serializar `Avaliacao.premissas` de cada cenário |
 | 10 | DDM, lucro residual, P/VP justificado | `rodar` só aceita `nao_financeira` (via `_padronizar`) |
-| — | `config/universo_ibovespa.csv` | `--tudo` falha sem o universo |
 
 ## 13. Convenções que o código já segue (siga também)
 
@@ -546,6 +545,7 @@ vez de baixar dados reais. Sem rede nos testes.
 | Fixar beta ou Kd de uma empresa | `config/empresas/{TICKER}.yaml > custo_capital.beta` / `kd: {metodo: manual, valor: ...}` (beta declarado no YAML vence o `settings`) |
 | Mudar ERP, faixa do Kd, Blume, janela do beta | `settings.yaml > custo_capital` (sem código) |
 | Novo componente no `wacc.csv` | linha em `wacc.tabela` (valor numérico; texto em `detalhe`) |
+| Atualizar o universo do Ibovespa | Baixar a carteira da B3 (ver `docs/fontes.md`), regerar `config/universo_ibovespa.csv` (`ticker;cnpj;setor_cvm;tipo_modelo`) com o cadastro e `valuation atualizar --tudo` |
 | Novo setor | `config/setores.yaml` (`descricao`, `tipo_modelo`, `commodity`, `pares`) |
 | Mudar pares de uma empresa ou setor | `config/setores.yaml > pares` ou `config/empresas/{TICKER}.yaml > pares.incluir/excluir`; depois `valuation atualizar --tickers TICKER --com-pares` e `valuation comparar TICKER`. Par com market cap de poucos milhões: `escala_acoes: 1000` no cadastro manual |
 | Mudar winsorização ou mínimo de pares | `settings.yaml > multiplos` (sem código) |
@@ -571,8 +571,14 @@ vez de baixar dados reais. Sem rede nos testes.
    em todas as datas é comum (VALE3, CBAV3, EMBJ3, RAPT3/4, TUPY3, KEPL3, MYPK3, FRAS3): a
    correção automática não pega, é preciso `escala_acoes: 1000` no cadastro manual. Sintoma:
    market cap de poucos milhões e P/VP perto de zero.
-3a. Alguns FCA trazem o código CVM no lugar do ticker (CSN `4030`, CSN Mineração `25585`): o
-   ticker some do cadastro e entra pelo `cadastro_manual.csv` com `cnpj` e `especie`.
+3a. Alguns FCA trazem o código CVM no lugar do ticker (CSN `4030`, CSN Mineração `25585`), `000000`
+   para units (BPAC11) ou uma data de fim de negociação igual à de início (CEAB3), e a Marfrig
+   (MBRF3) só lista o ADR: o ticker some do cadastro e entra pelo `cadastro_manual.csv` com
+   `cnpj` e `especie`. Units (BPAC11) não têm market cap (são ignoradas).
+3b. MBRF3 foi mapeada para o CNPJ da Marfrig após a incorporação da BRF; não foi confirmado que
+   as demonstrações já consolidam a BRF.
+3c. `config/universo_ibovespa.csv` vem do JSON da B3 (`GetPortfolioDay`, índice IBOV): rodar de
+   novo a cada quadrimestre e conferir se há ticker sem cadastro (entra no `cadastro_manual.csv`).
 4. Códigos de conta mudam entre períodos da mesma empresa (D&A da Vale: `6.01.01.05` × `.06`) ⇒
    mapear por `cd_conta` **e** regex de `ds_conta`. Arrendamento da WEG está fora de empréstimos.
 5. ITR: DRE traz acumulado e trimestre (distinguir por `dt_ini`); DFC só acumulado; não há ITR do 4º
