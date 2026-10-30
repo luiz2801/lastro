@@ -190,3 +190,44 @@ def ytd(conta: str, fim: str, valor: float) -> tuple[str, str, str, float]:
 
 def saldo(conta: str, data: str, valor: float) -> tuple[str, None, str, float]:
     return (conta, None, data, valor)
+
+
+def historico_anual(
+    crescimento: Iterable[float],
+    margem: Iterable[float],
+    *,
+    inicio: int = 2016,
+    receita_inicial: float = 100.0,
+    da: float = 0.05,
+    capex: Iterable[float] | float = 0.06,
+    nwc: float = 0.10,
+    arrendamento: float = 0.01,
+    aliquota: Iterable[float] | float = 0.30,
+) -> pd.DataFrame:
+    """Métricas anuais mínimas para o sugestor/projetor: razões sobre a receita viram valores.
+
+    `crescimento` tem um valor a menos que `margem` (o primeiro ano não tem crescimento).
+    """
+    margens = list(margem)
+    receitas = [receita_inicial]
+    for g in crescimento:
+        receitas.append(receitas[-1] * (1 + g))
+    if len(receitas) != len(margens):
+        raise ValueError("crescimento deve ter um valor a menos que margem")
+    n = len(margens)
+
+    def lista(valor: Iterable[float] | float) -> list[float]:
+        return [float(valor)] * n if isinstance(valor, int | float) else list(valor)
+
+    receita = pd.Series(receitas, index=pd.RangeIndex(inicio, inicio + n, name="ano"))
+    return pd.DataFrame(
+        {
+            "receita_liquida": receita,
+            "ebitda_ajustado": receita * margens,
+            "da": receita * da,
+            "capex": receita * lista(capex),
+            "nwc": receita * nwc,
+            "pagamento_arrendamento": receita * arrendamento,
+            "aliquota_efetiva": lista(aliquota),
+        }
+    )

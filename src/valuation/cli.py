@@ -7,6 +7,7 @@ import logging
 import platform
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 import typer
@@ -17,11 +18,15 @@ from valuation import __version__
 from valuation.config import (
     CAMINHO_CADASTRO_MANUAL,
     CAMINHO_PERFIL,
+    CAMINHO_SETORES,
     CAMINHO_UNIVERSO,
+    DIR_EMPRESAS,
     DIR_PROCESSED,
     DIR_RAW,
     ErroConfiguracao,
+    Setor,
     Settings,
+    carregar_setores,
     carregar_settings,
 )
 from valuation.contabil import ErroContabil
@@ -36,10 +41,15 @@ from valuation.data import macro as mac
 from valuation.data import precos as prc
 from valuation.data.http import ErroDownload, criar_sessao
 from valuation.data.validacao import ErroDadosExternos, Leitura, Validado
-from valuation.perfil import ErroPerfil
+from valuation.perfil import ErroPerfil, NomePerfil
 from valuation.perfil import registro as reg
 from valuation.perfil.parametros import parametros_do_perfil
 from valuation.perfil.questionario import QUESTIONARIO
+from valuation.projecao import ErroProjecao
+from valuation.projecao import escrita as esc
+from valuation.projecao import premissas as pm
+from valuation.projecao import projetor as pj
+from valuation.projecao import sugestor as sg
 
 app = typer.Typer(
     help="Valuation de ações da B3. Uso pessoal e educacional; não é recomendação de investimento.",
@@ -48,6 +58,10 @@ app = typer.Typer(
 )
 cadastro_app = typer.Typer(help="Consulta ao cadastro de companhias abertas.", no_args_is_help=True)
 app.add_typer(cadastro_app, name="cadastro")
+premissas_app = typer.Typer(
+    help="Premissas de projeção por empresa (config/empresas/).", no_args_is_help=True
+)
+app.add_typer(premissas_app, name="premissas")
 console = Console()
 
 
@@ -314,10 +328,20 @@ class _Padronizada:
     selecionadas: pd.DataFrame
     contas: pd.DataFrame
     moeda: str
+    premissas: pm.PremissasEmpresa
+    caminho_premissas: Path
+
+    @property
+    def ajustes(self) -> nf.AjustesContabeis:
+        return pm.ajustes_contabeis(self.premissas.ajustes)
 
 
 def _padronizar(ticker: str, settings: Settings) -> _Padronizada:
-    """Padroniza as demonstrações de `ticker` e grava `contas_padronizadas.parquet`."""
+    """Padroniza as demonstrações de `ticker` e grava `contas_padronizadas.parquet`.
+
+    Usa `config/empresas/{TICKER}.yaml` se existir (mapeamento extra, consolidado, moeda); senão,
+    as premissas padrão.
+    """
     data_base = settings.resolver_data_base(dt.date.today())
     empresa = cad.empresa_por_ticker(_carregar_cadastro(settings, data_base, False), ticker)
     if empresa.tipo_modelo != "nao_financeira":
@@ -325,18 +349,27 @@ def _padronizar(ticker: str, settings: Settings) -> _Padronizada:
             f"{', '.join(empresa.tickers)} é {empresa.tipo_modelo}: só o plano de contas "
             "não financeiro existe por enquanto (financeiras na Fase 10)."
         )
-    plano = pad.carregar_mapeamento()
+    normalizado = cad.normalizar_ticker(ticker)
+    caminho = pm.caminho_premissas(normalizado, DIR_EMPRESAS)
+    if caminho.is_file():
+        premissas = pm.carregar_premissas(caminho)
+        pm.conferir_cadastro(premissas, empresa.tickers, empresa.tipo_modelo)
+    else:
+        premissas = pm.premissas_padrao(normalizado, "nao_financeira", empresa.tickers)
+    plano = pad.carregar_mapeamento(extra=premissas.ajustes.mapeamento_extra)
     try:
         demonstracoes = pad.ler_demonstracoes(DIR_PROCESSED, empresa.cd_cvm)
     except FileNotFoundError as e:
         raise ErroContabil(
             f"{e.filename} não existe. Rode `valuation atualizar --tickers {ticker}`."
         ) from e
-    selecionadas = pad.selecionar_reapresentacoes(demonstracoes)
-    moeda = detectar_moeda(selecionadas)
-    contas = pad.padronizar(selecionadas, plano, ticker=cad.normalizar_ticker(ticker))
+    selecionadas = pad.selecionar_reapresentacoes(
+        demonstracoes, consolidado=premissas.ajustes.consolidado
+    )
+    moeda = detectar_moeda(selecionadas, premissas.moeda_relatorio)
+    contas = pad.padronizar(selecionadas, plano, ticker=normalizado)
     contas.to_parquet(pad.caminho_padronizadas(DIR_PROCESSED, empresa.cd_cvm), index=False)
-    return _Padronizada(empresa, plano, selecionadas, contas, moeda)
+    return _Padronizada(empresa, plano, selecionadas, contas, moeda, premissas, caminho)
 
 
 _COR_SEVERIDADE = {"erro": "red", "aviso": "yellow", "info": "cyan"}
@@ -453,8 +486,9 @@ def historico(
             tabela_m["dividendos_pagos"] = -tabela_m["dividendos_pagos"]
             colunas = [f"{d.month // 3}T{d:%y}" for d in tabela_m.index]
         else:
-            m = nf.metricas(per.anual(p.contas), aliquota_nominal=aliquota).tail(anos)
-            ltm = nf.metricas_ltm(p.contas, aliquota_nominal=aliquota)
+            m = nf.metricas(per.anual(p.contas), aliquota_nominal=aliquota, ajustes=p.ajustes)
+            m = m.tail(anos)
+            ltm = nf.metricas_ltm(p.contas, aliquota_nominal=aliquota, ajustes=p.ajustes)
             tabela_m = pd.concat([m, ltm.to_frame().T])
             fim = pd.Timestamp(str(ltm.name))
             colunas = [*map(str, m.index), f"LTM {fim:%m/%Y}"]
@@ -596,6 +630,205 @@ def perfil(
     caminho = reg.gravar(novo, CAMINHO_PERFIL)
     _mostrar_perfil(novo, settings, hoje)
     console.print(f"Gravado em {caminho}")
+
+
+def _setor(chave: str | None) -> Setor | None:
+    if chave is None:
+        return None
+    setores = carregar_setores(CAMINHO_SETORES)
+    if chave not in setores:
+        raise ErroConfiguracao(
+            f"pares.setor {chave!r} não está em {CAMINHO_SETORES.name} "
+            f"(disponíveis: {', '.join(sorted(setores))})."
+        )
+    return setores[chave]
+
+
+def _horizonte(
+    premissas: pm.PremissasEmpresa, settings: Settings, hoje: dt.date, override: NomePerfil | None
+) -> tuple[int, str]:
+    """Anos de projeção explícita: o número do YAML ou o do perfil do investidor."""
+    h = premissas.projecao.horizonte_anos
+    if h != "perfil":
+        return h, "YAML da empresa"
+    efetivo = reg.resolver_perfil(CAMINHO_PERFIL, hoje, override)
+    anos = parametros_do_perfil(efetivo.perfil, settings.perfil).horizonte_anos
+    return anos, f"perfil {efetivo.perfil} ({efetivo.origem})"
+
+
+# (rótulo, coluna em sugestor.razoes, sugestões, campo no YAML)
+_LINHAS_SUGESTAO = (
+    ("Crescimento da receita", "crescimento", ("crescimento_inicio", "crescimento_fim")),
+    ("Margem EBITDA ajustada", "margem_ebitda_ajustada", ("margem_inicio", "margem_fim")),
+    ("D&A / receita", "da_sobre_receita", ("da_sobre_receita",)),
+    ("Capex / receita", "capex_sobre_receita", ("capex_sobre_receita",)),
+    ("NWC / receita", "nwc_sobre_receita", ("nwc_sobre_receita",)),
+    ("Arrendamento / receita", "arrendamento_sobre_receita", ("arrendamento_sobre_receita",)),
+    ("Alíquota", "aliquota_efetiva", ("aliquota",)),
+)
+
+
+def _no_yaml(config: pm.ConfigProjecao, coluna: str) -> str:
+    valor: object = {
+        "crescimento": config.receita.crescimento,
+        "margem_ebitda_ajustada": config.margens.ebitda,
+        "aliquota_efetiva": config.aliquota_imposto.valor,
+    }.get(coluna, getattr(config, coluna, None))
+    if isinstance(valor, pm.Trajetoria):
+        partes = [x if x == pm.SUGERIDO else sg.pct(float(x)) for x in (valor.inicio, valor.fim)]
+        return " → ".join(str(x) for x in partes)
+    if isinstance(valor, tuple):
+        return "lista: " + ", ".join(sg.pct(x) for x in valor)
+    return str(valor) if valor == pm.SUGERIDO else sg.pct(float(str(valor)))
+
+
+def _mostrar_sugestoes(p: _Padronizada, s: sg.Sugestoes) -> None:
+    def e(linha: str, coluna: str) -> str:
+        return sg.pct(cast(float, s.estatisticas.at[linha, coluna]))
+
+    tabela = Table(
+        title=f"Premissas sugeridas x histórico — {p.premissas.ticker} (até {s.ano_base})"
+    )
+    for coluna in ("Premissa", str(s.ano_base), "Mediana 5a", "Mediana 10a", "Sugerido", "No YAML"):
+        tabela.add_column(coluna, justify="left" if coluna in ("Premissa", "No YAML") else "right")
+    for rotulo, coluna, campos in _LINHAS_SUGESTAO:
+        sugerido = " → ".join(sg.pct(getattr(s, c).valor) for c in campos)
+        tabela.add_row(
+            rotulo,
+            e("ultimo", coluna),
+            e("mediana_5a", coluna),
+            e("mediana_10a", coluna),
+            sugerido,
+            _no_yaml(p.premissas.projecao, coluna),
+        )
+    console.print(tabela)
+    cagrs = ", ".join(f"{n}a {e(f'cagr_{n}a', 'crescimento')}" for n in (3, 5, 10))
+    console.print(f"CAGR da receita: {cagrs}.")
+    console.print(
+        f"Deltas sugeridos dos cenários: crescimento ±{sg.pp(s.delta_crescimento.valor)}, "
+        f"margem ±{sg.pp(s.delta_margem.valor)}, capex ±{sg.pp(s.delta_capex.valor)} "
+        "(pessimista: -, -, +)."
+    )
+
+
+_LINHAS_PROJECAO = (
+    ("fracao", "Fração do ano por vir", "%"),
+    ("crescimento", "Crescimento", "%"),
+    ("receita_liquida", "Receita líquida", "mi"),
+    ("ebitda", "EBITDA", "mi"),
+    ("margem_ebitda", "Margem EBITDA", "%"),
+    ("ebit", "EBIT", "mi"),
+    ("imposto", "Imposto sobre EBIT", "mi"),
+    ("nopat", "NOPAT", "mi"),
+    ("da", "D&A", "mi"),
+    ("capex", "Capex", "mi"),
+    ("delta_nwc", "ΔNWC", "mi"),
+    ("arrendamento", "Arrendamento", "mi"),
+    ("fcff", "FCFF (ano inteiro)", "mi"),
+)
+
+
+def _mostrar_projecao(tabela_p: pd.DataFrame, titulo: str) -> None:
+    tabela = Table(title=titulo)
+    tabela.add_column("Métrica")
+    for ano in tabela_p.index:
+        tabela.add_column(str(ano), justify="right")
+    for chave, rotulo, unidade in _LINHAS_PROJECAO:
+        tabela.add_row(rotulo, *(_formatar(v, unidade) for v in tabela_p[chave]))
+    console.print(tabela)
+
+
+@premissas_app.command("sugerir")
+def premissas_sugerir(
+    ticker: str = typer.Argument(..., help="Ex.: PETR4."),
+    escrever: bool = typer.Option(
+        False,
+        "--escrever",
+        help="Grava config/empresas/{TICKER}.yaml comentado (anterior em .bak).",
+    ),
+    perfil_override: str | None = typer.Option(
+        None, "--perfil", help="conservador|moderado|arrojado (horizonte, se o YAML usar perfil)."
+    ),
+    data_base: str | None = typer.Option(
+        None, "--data-base", help="AAAA-MM-DD (padrão: settings)."
+    ),
+) -> None:
+    """Sugere premissas a partir do histórico, compara com o YAML e mostra a projeção base."""
+    hoje = dt.date.today()
+    if perfil_override not in (None, "conservador", "moderado", "arrojado"):
+        raise _erro("--perfil deve ser conservador, moderado ou arrojado.")
+    override = cast(NomePerfil | None, perfil_override)
+    try:
+        settings = carregar_settings()
+        base = dt.date.fromisoformat(data_base) if data_base else settings.resolver_data_base(hoje)
+        p = _padronizar(ticker, settings)
+        aliquota = settings.impostos.aliquota_nominal
+        historico = nf.metricas(per.anual(p.contas), aliquota_nominal=aliquota, ajustes=p.ajustes)
+        historico = historico[historico.index < pj.primeiro_ano_aberto(base)]
+        setor = _setor(p.premissas.pares.setor)
+        projecao = p.premissas.projecao
+        limite = projecao.aliquota_imposto.limite_superior
+        limite = aliquota if limite is None else limite
+        sugestoes = sg.sugerir(
+            historico,
+            g_terminal=pj.g_terminal(projecao.terminal, settings.terminal),
+            aliquota_limite=limite,
+            commodity=setor.commodity if setor else False,
+            setor=p.premissas.pares.setor,
+        )
+    except ValueError as e:
+        raise _erro(f"--data-base inválida: {e}") from e
+    except (ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroContabil, ErroProjecao) as e:
+        raise _erro(str(e)) from e
+
+    _mostrar_sugestoes(p, sugestoes)
+    if setor is None:
+        console.print(
+            "[yellow]Aviso:[/] pares.setor não definido no YAML: sem checagem de commodity."
+        )
+    try:
+        horizonte, origem = _horizonte(p.premissas, settings, hoje, override)
+    except ErroPerfil as e:
+        console.print(f"[yellow]Projeção não mostrada:[/] {e}")
+    else:
+        try:
+            anos = pj.anos_projetados(sugestoes.ano_base, base, horizonte)
+            resolvidas = pj.resolver(
+                projecao,
+                sugestoes,
+                anos=anos,
+                aliquota_limite=limite,
+                descontar_arrendamento=(
+                    p.premissas.ajustes.ifrs16 == "divida"
+                    and p.premissas.ajustes.capex_equivalente_arrendamento
+                ),
+            )
+            tabela_p = pj.projetar(historico, resolvidas, data_base=base)
+        except ErroProjecao as e:
+            raise _erro(str(e)) from e
+        _mostrar_projecao(
+            tabela_p,
+            f"Projeção base — {p.premissas.ticker} (R$ milhões, {p.moeda}; data-base {base}; "
+            f"{horizonte} anos pelo {origem})",
+        )
+        fechados = [str(a) for a, f in tabela_p["fracao"].items() if f == 0]
+        if fechados:
+            console.print(
+                f"[yellow]Aviso:[/] {', '.join(fechados)} já encerrado(s) sem DFP: projetado(s) "
+                "só como ponte, sem fluxo a descontar."
+            )
+    for aviso in sugestoes.avisos:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
+
+    if escrever:
+        caminho = p.caminho_premissas
+        if caminho.is_file():
+            caminho.replace(caminho.with_suffix(".yaml.bak"))
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        caminho.write_text(esc.renderizar(p.premissas, sugestoes, data_base=base), encoding="utf-8")
+        console.print(f"Gravado em {caminho}")
+    elif not p.caminho_premissas.is_file():
+        console.print(f"{p.caminho_premissas} não existe; use --escrever para criá-lo.")
 
 
 if __name__ == "__main__":  # pragma: no cover

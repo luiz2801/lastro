@@ -5,6 +5,23 @@
 ### Fase 5 — Premissas e projeção
 - `contabil/nao_financeiras.py`: ajustes `caixa_extra` (contas somadas ao caixa e à redução da
   dívida líquida) e `divida_extra` (métrica à parte, para a ponte EV → equity).
+- `projecao/premissas.py`: esquema pydantic de `config/empresas/{TICKER}.yaml` (seção 9.1), com
+  `sugerido`, número ou lista por ano, campo novo `arrendamento_sobre_receita`, conferência com o
+  cadastro e conversão dos ajustes para a camada contábil.
+- `projecao/sugestor.py`: premissas a partir dos exercícios encerrados (crescimento da mediana de
+  5a ao g terminal, margem EBITDA ajustada com reversão de metade à mediana de 10a, razões sobre a
+  receita, alíquota, deltas dos cenários de ±1 desvio-padrão) com a origem de cada uma; aviso
+  para setor de commodity.
+- `projecao/projetor.py`: anos projetados com ano-ponte e fração do ano corrente, resolução das
+  premissas, cenários pessimista/otimista e projeção pura de receita a FCFF (ΔNWC incremental,
+  arrendamento como reposição se IFRS 16 = dívida).
+- `projecao/escrita.py`: YAML da empresa regenerado com o valor sugerido e a origem em comentário.
+- `config/setores.yaml` (`commodity`, `tipo_modelo`, pares vazios) e
+  `config/empresas/{PETR4,VALE3,WEGE3}.yaml`.
+- CLI: `valuation premissas sugerir TICKER [--escrever] [--perfil] [--data-base]`; `qa`,
+  `historico` e `premissas` passam a ler o YAML da empresa (mapeamento extra, consolidado, moeda,
+  ajustes).
+- ADR 0006; `guia.md` 1.3 e 1.4.
 
 ### Fase 4 — Perfil do investidor
 - `perfil/questionario.py`: 10 perguntas de suitability (1 a 5 pontos cada) com vetos de horizonte

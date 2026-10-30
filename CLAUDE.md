@@ -517,6 +517,8 @@ Calcula e **grava no YAML** (com comentário da origem) a partir dos 10 anos:
 
 Sempre imprimir um resumo "premissas sugeridas × histórico" para o usuário revisar antes de rodar.
 
+> **ADR 0006:** o campo continua `sugerido` no YAML (recalculado a cada execução) e o valor sugerido vai em comentário; a margem é a EBITDA ajustada, com reversão de metade; ΔNWC incremental; deltas dos cenários de ±1 desvio-padrão; campo novo `arrendamento_sobre_receita`.
+
 ### 9.3 Projetor (`projetor.py`)
 
 Função pura `projetar(historico, premissas, horizonte) -> DataFrame` com colunas por ano: receita, EBITDA, D&A, EBIT, imposto, NOPAT, capex, ΔNWC, FCFF. Anos a partir do primeiro exercício **não encerrado** na `data_base`.
@@ -763,7 +765,7 @@ Repo, `pyproject.toml`, `uv`, `ruff`, `mypy`, `pytest`, Makefile, `settings.yaml
 Questionário, pontuação, JSON, validade, mapeamento de parâmetros.
 *Pronto:* `valuation perfil` gera JSON válido; testes de pontuação e vetos.
 
-**Fase 5 — Premissas e projeção**
+**Fase 5 — Premissas e projeção** ✅ concluída
 Schema pydantic, `sugestor.py`, `projetor.py`, ano parcial.
 *Pronto:* `valuation premissas sugerir PETR4 --escrever` produz YAML comentado; projeção reproduz exemplo manual.
 

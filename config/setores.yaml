@@ -1,0 +1,18 @@
+# Setores: tipo de modelo, se é de commodity e pares padrão (seção 11.4 do CLAUDE.md).
+# `commodity: true` faz o sugestor avisar que o histórico reflete o ciclo de preços e que as
+# premissas devem ser revistas à mão (seção 9.2). Os pares entram na Fase 8 (dúvida 19.4).
+petroleo_gas:
+  descricao: Petróleo, gás e biocombustíveis
+  tipo_modelo: nao_financeira
+  commodity: true
+  pares: []
+mineracao:
+  descricao: Mineração e siderurgia
+  tipo_modelo: nao_financeira
+  commodity: true
+  pares: []
+maquinas_equipamentos:
+  descricao: Máquinas e equipamentos industriais
+  tipo_modelo: nao_financeira
+  commodity: false
+  pares: []

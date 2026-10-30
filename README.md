@@ -35,10 +35,12 @@ uv run valuation historico PETR4 --trimestral
 uv run valuation cobertura --tickers PETR4,VALE3,WEGE3
 uv run valuation mercado PETR4               # preço, market cap, Ibovespa, dólar, Selic, IPCA, Rf
 uv run valuation perfil                      # questionário de perfil (--mostrar, --refazer)
+uv run valuation premissas sugerir PETR4     # sugestões × histórico e projeção base
+uv run valuation premissas sugerir PETR4 --escrever   # regenera config/empresas/PETR4.yaml
 ```
 
-`atualizar` precisa rodar antes de `qa`, `historico`, `cobertura` e `mercado`. `make rodar` e os
-comandos `premissas`, `rodar` e `comparar` ainda não existem (Fases 5 a 9). Parâmetros e
+`atualizar` precisa rodar antes de `qa`, `historico`, `cobertura`, `mercado` e `premissas`.
+`make rodar` e os comandos `rodar` e `comparar` ainda não existem (Fases 6 a 9). Parâmetros e
 efeitos de cada comando: seção 3 do [`guia.md`](guia.md).
 
 Para validar o preço de qualquer ticker na brapi (sem token, só PETR4, VALE3, MGLU3 e ITUB4), crie
@@ -47,9 +49,10 @@ um token gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
 ## Estrutura
 
 - `src/valuation/`: código, em camadas `data` → `contabil` → `projecao` → `custo_capital` →
-  `modelos` → `analise` → `saida` (as cinco últimas ainda vazias), mais `perfil`.
+  `modelos` → `analise` → `saida` (as quatro últimas ainda vazias), mais `perfil`.
 - `config/`: `settings.yaml` (parâmetros globais), `mapeamento_contas.yaml` (plano de contas
-  padronizado) e `cadastro_manual.csv` (holdings e escala de ações).
+  padronizado), `cadastro_manual.csv` (holdings e escala de ações), `setores.yaml` e
+  `empresas/{TICKER}.yaml` (ajustes e premissas de cada empresa).
 - `docs/`: fontes validadas e ADRs.
 - `tests/`: testes offline; `tests/golden/referencias.yaml` tem valores conferidos com documentos
   das companhias.
@@ -58,7 +61,7 @@ um token gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
 
 ## Estado atual
 
-**Fases 0 a 4 concluídas** (seção 17 do `CLAUDE.md`). Próxima: Fase 5, premissas e projeção.
+**Fases 0 a 5 concluídas** (seção 17 do `CLAUDE.md`). Próxima: Fase 6, custo de capital.
 Pilotos: PETR4, VALE3 e WEGE3.
 
 - **Coleta CVM** (Fase 1): cadastro, DFP de 10 anos, ITR dos dois últimos anos e composição do
@@ -80,10 +83,13 @@ Pilotos: PETR4, VALE3 e WEGE3.
 - **Perfil do investidor** (Fase 4): questionário de 10 perguntas com vetos, classificação em
   conservador/moderado/arrojado, `perfil/perfil_investidor.json` válido por 12 meses e parâmetros
   por perfil (margem de segurança, pesos dos cenários, horizonte, hurdle) em `settings.yaml`.
-- **Testes**: 292 (281 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
-- **Ainda não**: plano de contas de financeiras, YAML por empresa (`config/empresas/`), universo
-  do Ibovespa (`atualizar --tudo` falha sem ele), projeção, custo de capital, modelos,
-  sensibilidade e saídas. Lista completa na seção 12 do `guia.md`.
+- **Premissas e projeção** (Fase 5): `config/empresas/{TICKER}.yaml` com ajustes, premissas,
+  cenários e pares; sugestões a partir de 10 anos de histórico (com a origem de cada uma e aviso
+  para commodity); projeção de receita a FCFF com ano corrente parcial e cenários
+  pessimista/otimista; `valuation premissas sugerir TICKER [--escrever]`.
+- **Testes**: 335 (324 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
+- **Ainda não**: plano de contas de financeiras, universo do Ibovespa (`atualizar --tudo` falha
+  sem ele), custo de capital, modelos, sensibilidade e saídas. Lista completa na seção 12 do `guia.md`.
 
 ## Decisões que completam ou divergem do `CLAUDE.md`
 
@@ -103,6 +109,10 @@ Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
 - **Padronização contábil** ([ADR 0005](docs/decisoes/0005-padronizacao-contabil.md)): o documento
   mais recente vence por família e período; dívida financeira e arrendamento separados; D&A pela
   DFC; EBITDA pela definição das companhias; saldos com periodicidade `S`.
+- **Premissas e projeção** ([ADR 0006](docs/decisoes/0006-premissas-e-projecao.md)): `sugerido`
+  fica no YAML e é recalculado a cada execução (o valor de hoje vai em comentário); margem EBITDA
+  ajustada com reversão de metade à mediana de 10a; ΔNWC incremental; deltas dos cenários de ±1
+  desvio-padrão; arrendamento projetado como reposição; ano corrente pela fração restante.
 
 Os parâmetros de mercado de `config/settings.yaml` (ERP, teto do g terminal, Rf e inflação em USD)
 e o mapeamento perfil → parâmetros continuam **placeholders** até o usuário revisá-los (dúvidas em aberto na seção 19 do `CLAUDE.md`).

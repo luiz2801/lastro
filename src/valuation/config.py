@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import datetime as dt
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -17,6 +17,8 @@ DIR_CONFIG = RAIZ_PROJETO / "config"
 CAMINHO_SETTINGS = DIR_CONFIG / "settings.yaml"
 CAMINHO_CADASTRO_MANUAL = DIR_CONFIG / "cadastro_manual.csv"
 CAMINHO_UNIVERSO = DIR_CONFIG / "universo_ibovespa.csv"
+CAMINHO_SETORES = DIR_CONFIG / "setores.yaml"
+DIR_EMPRESAS = DIR_CONFIG / "empresas"
 DIR_RAW = RAIZ_PROJETO / "data" / "raw"
 DIR_PROCESSED = RAIZ_PROJETO / "data" / "processed"
 CAMINHO_PERFIL = RAIZ_PROJETO / "perfil" / "perfil_investidor.json"
@@ -151,18 +153,44 @@ class Settings(_Modelo):
         return hoje if self.data_base == "hoje" else self.data_base
 
 
+class Setor(_Modelo):
+    """Entrada de `config/setores.yaml`. `pares` (tickers comparáveis) é preenchido na Fase 8."""
+
+    descricao: str
+    tipo_modelo: Literal["nao_financeira", "financeira"]
+    commodity: bool
+    pares: tuple[str, ...] = ()
+
+
 class ErroConfiguracao(Exception):
     """Arquivo de configuração ausente ou inválido."""
 
 
-def carregar_settings(caminho: Path = CAMINHO_SETTINGS) -> Settings:
+def ler_yaml(caminho: Path) -> dict[str, Any]:
+    """Mapeamento YAML no topo do arquivo; ausente, ilegível ou outro tipo ⇒ `ErroConfiguracao`."""
     if not caminho.is_file():
         raise ErroConfiguracao(f"Arquivo de configuração não encontrado: {caminho}")
     with caminho.open(encoding="utf-8") as f:
-        bruto = yaml.safe_load(f)
+        try:
+            bruto = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            raise ErroConfiguracao(f"{caminho} não é YAML válido:\n{e}") from e
     if not isinstance(bruto, dict):
         raise ErroConfiguracao(f"{caminho} deve conter um mapeamento YAML no topo")
+    return bruto
+
+
+def carregar_settings(caminho: Path = CAMINHO_SETTINGS) -> Settings:
+    bruto = ler_yaml(caminho)
     try:
         return Settings.model_validate(bruto)
+    except ValueError as e:
+        raise ErroConfiguracao(f"{caminho} inválido:\n{e}") from e
+
+
+def carregar_setores(caminho: Path = CAMINHO_SETORES) -> dict[str, Setor]:
+    bruto = ler_yaml(caminho)
+    try:
+        return {chave: Setor.model_validate(valor) for chave, valor in bruto.items()}
     except ValueError as e:
         raise ErroConfiguracao(f"{caminho} inválido:\n{e}") from e

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+import yaml
 from typer.testing import CliRunner
 
 from conftest import DIR_FIXTURES_CVM, SessaoFalsa
@@ -14,6 +15,7 @@ from valuation.config import Settings, carregar_settings
 from valuation.data.cvm import url_cadastro, url_documento, url_fca
 from valuation.perfil import registro as reg
 from valuation.perfil.questionario import QUESTIONARIO
+from valuation.projecao import premissas as pm
 
 
 def test_versao() -> None:
@@ -43,6 +45,7 @@ def ambiente_offline(
     monkeypatch.setattr(cli, "DIR_PROCESSED", tmp_path / "processed")
     monkeypatch.setattr(cli, "CAMINHO_CADASTRO_MANUAL", tmp_path / "manual.csv")
     monkeypatch.setattr(cli, "CAMINHO_UNIVERSO", tmp_path / "universo.csv")
+    monkeypatch.setattr(cli, "DIR_EMPRESAS", tmp_path / "empresas")
 
     rotas = sessao_falsa.rotas
     rotas[url_cadastro()] = (200, (DIR_FIXTURES_CVM / "cad_cia_aberta.csv").read_bytes(), {})
@@ -210,3 +213,71 @@ def test_perfil_erros(caminho_perfil: Path) -> None:
     assert "--refazer" in quebrado.output
     refeito = CliRunner().invoke(app, ["perfil", "--refazer"], input="3\n" * 10)
     assert refeito.exit_code == 0, refeito.output
+
+
+def _sugerir(*args: str) -> tuple[int, str]:
+    resultado = CliRunner().invoke(
+        app, ["premissas", "sugerir", "WEGE3", "--data-base", "2026-10-30", *args]
+    )
+    return resultado.exit_code, " ".join(resultado.output.split())
+
+
+def test_premissas_sugerir_e_escrever(weg_sintetica: Path, caminho_perfil: Path) -> None:
+    yaml_weg = weg_sintetica / "empresas" / "WEGE3.yaml"
+    codigo, saida = _sugerir("--perfil", "moderado")
+    assert codigo == 0, saida
+    assert "Premissas sugeridas x histórico" in saida
+    assert "7 anos pelo perfil moderado (override)" in saida
+    assert "use --escrever para criá-lo" in saida
+    assert not yaml_weg.exists()
+
+    codigo, saida = _sugerir("--perfil", "moderado", "--escrever")
+    assert codigo == 0, saida
+    p = pm.carregar_premissas(yaml_weg)
+    assert p == pm.premissas_padrao("WEGE3", "nao_financeira", ["WEGE3"])
+
+    # Valor manual e setor sobrevivem à regeneração; o arquivo anterior vira .bak.
+    texto = yaml_weg.read_text(encoding="utf-8")
+    texto = texto.replace("capex_sobre_receita: sugerido", "capex_sobre_receita: 0.2")
+    texto = texto.replace("horizonte_anos: perfil", "horizonte_anos: 3")
+    yaml_weg.write_text(texto.replace("setor: null", "setor: maquinas_equipamentos"), "utf-8")
+    codigo, saida = _sugerir("--escrever")
+    assert codigo == 0, saida
+    assert "3 anos pelo YAML da empresa" in saida
+    assert "2028" in saida and "2029" not in saida
+    novo = yaml_weg.read_text(encoding="utf-8")
+    assert "capex_sobre_receita: 0.2" in novo
+    assert "manual; sugerido seria 12,0%" in novo  # capex 12 / receita 100 da DFP sintética
+    assert pm.carregar_premissas(yaml_weg).pares.setor == "maquinas_equipamentos"
+    assert yaml_weg.with_suffix(".yaml.bak").read_text(encoding="utf-8") == texto.replace(
+        "setor: null", "setor: maquinas_equipamentos"
+    )
+
+
+def test_premissas_sugerir_sem_perfil_mostra_so_sugestoes(
+    weg_sintetica: Path, caminho_perfil: Path
+) -> None:
+    codigo, saida = _sugerir()
+    assert codigo == 0, saida
+    assert "Premissas sugeridas" in saida
+    assert "Projeção não mostrada" in saida
+    assert "valuation perfil" in saida
+
+
+def test_premissas_sugerir_erros(weg_sintetica: Path, caminho_perfil: Path) -> None:
+    assert _sugerir("--perfil", "ousado")[0] == 1
+    resultado = CliRunner().invoke(app, ["premissas", "sugerir", "WEGE3", "--data-base", "30/10"])
+    assert resultado.exit_code == 1
+    assert "--data-base inválida" in resultado.output
+    yaml_weg = weg_sintetica / "empresas" / "WEGE3.yaml"
+    yaml_weg.parent.mkdir()
+    base = {"ticker": "WEGE3", "tipo_modelo": "nao_financeira"}
+    yaml_weg.write_text(yaml.safe_dump({**base, "classes_acao": ["WEGE4"]}), "utf-8")
+    codigo, saida = _sugerir()
+    assert codigo == 1
+    assert "classes_acao de WEGE3 (WEGE4) diferem do cadastro" in saida
+    setor = {**base, "classes_acao": ["WEGE3"], "pares": {"setor": "inexistente"}}
+    yaml_weg.write_text(yaml.safe_dump(setor), "utf-8")
+    codigo, saida = _sugerir()
+    assert codigo == 1
+    assert "pares.setor 'inexistente'" in saida

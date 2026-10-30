@@ -1,9 +1,9 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.3 — 2026-10-30**
+**Versão 1.4 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
-> (Fases 0 a 4 implementadas) para que você não precise reler os módulos. Para o que ainda
+> (Fases 0 a 5 implementadas) para que você não precise reler os módulos. Para o que ainda
 > **não** existe, veja a seção 12.
 > Política de commits, que documento atualizar em cada mudança e ADRs: `CONTRIBUTING.md` e
 > `docs/decisoes/README.md`.
@@ -37,10 +37,11 @@
 | Dados | `data/{http,cvm,cadastro,validacao,precos,macro}.py` | ✅ prontos |
 | Contábil | `contabil/{padronizacao,periodos,moeda,qa,nao_financeiras}.py` + `config/mapeamento_contas.yaml` | ✅ prontos (só plano `nao_financeira`) |
 | Perfil | `perfil/{questionario,pontuacao,registro,parametros}.py` | ✅ prontos (seção 17) |
-| CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil` |
-| `projecao`, `custo_capital`, `modelos`, `analise`, `saida` | `__init__.py` de 1 linha | ❌ vazios (Fases 5–10) |
+| Projeção | `projecao/{premissas,sugestor,projetor,escrita}.py` + `config/empresas/*.yaml` + `config/setores.yaml` | ✅ prontos (seção 18) |
+| CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir` |
+| `custo_capital`, `modelos`, `analise`, `saida` | `__init__.py` de 1 linha | ❌ vazios (Fases 6–10) |
 
-~3.900 linhas de código, 292 testes (11 golden pulados por motivo declarado), mypy `strict`,
+~5.100 linhas de código, 335 testes (11 golden pulados por motivo declarado), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -75,6 +76,12 @@ demonstracoes.parquet ─► padronizacao.selecionar_reapresentacoes (1 document
                           ├─► periodos.{anual, acumulado_no_ano, trimestral, ltm, saldos} (largas)
                           │      └─► nao_financeiras.metricas / metricas_ltm ► EBITDA, FCFF, ROIC…
                           └─► qa.verificar ► ResultadoQA ► data/processed/qa/qa_{TICKER}.json
+
+config/empresas/{TICKER}.yaml ─► premissas.carregar_premissas ► PremissasEmpresa (ajustes → métricas)
+métricas anuais (exercícios < data-base) ─► sugestor.sugerir ► Sugestoes (valor + origem)
+PremissasEmpresa + Sugestoes + horizonte ─► projetor.resolver ► PremissasResolvidas
+                                         ─► projetor.aplicar_cenario (deltas) ─► projetor.projetar
+                                            ► DataFrame ano a ano (receita … FCFF, fração do ano)
 ```
 
 Todo download passa por `http.baixar` (cache em `data/raw/` + `.meta.json`). Camada superior nunca
@@ -89,8 +96,13 @@ Callback global: `-v/--verbose` → logging DEBUG. Erros: `_erro()` imprime em v
 `typer.Exit(1)`. Funções auxiliares: `_carregar_cadastro(settings, data_base, forcar)` (chama
 `cad.atualizar_cadastro` com TTL de `cache_ttl_horas.cvm`), `_tickers_do_universo(caminho)`,
 `_linha_validada(v, formato)` (cor por status), `_padronizar(ticker, settings) -> _Padronizada`
-(cadastro → `ler_demonstracoes` → `selecionar_reapresentacoes` → `detectar_moeda` → `padronizar`
+(cadastro → YAML da empresa em `DIR_EMPRESAS`, se existir, conferido contra o cadastro; senão
+`premissas_padrao` → `carregar_mapeamento(extra=mapeamento_extra)` → `ler_demonstracoes` →
+`selecionar_reapresentacoes(consolidado=…)` → `detectar_moeda(…, moeda_relatorio)` → `padronizar`
 → grava `contas_padronizadas.parquet`; só `nao_financeira`, outro tipo ⇒ `ErroContabil`).
+`_Padronizada.ajustes` = `AjustesContabeis` do YAML (usado por `historico` e `premissas`).
+`_setor(chave)` (chave ausente de `setores.yaml` ⇒ `ErroConfiguracao`), `_horizonte(premissas,
+settings, hoje, override)` (inteiro do YAML ou horizonte do perfil via `resolver_perfil`).
 
 | Comando | Parâmetros | O que faz | Efeito de cada parâmetro |
 |---|---|---|---|
@@ -101,6 +113,7 @@ Callback global: `-v/--verbose` → logging DEBUG. Erros: `_erro()` imprime em v
 | `qa TICKER` | — | Padroniza, roda o QA, imprime verificações, cobertura e contas não mapeadas relevantes; grava `data/processed/qa/qa_{TICKER}.json` | **Sai com 1 se houver erro de QA.** Exige `atualizar` antes |
 | `historico TICKER` | `--anos N` (5); `--trimestral` | Métricas anuais (R$ mi) + coluna LTM | `--anos` = quantos exercícios; `--trimestral` mostra os 8 últimos trimestres (receita, EBITDA, lucro, D&A, capex, dividendos) |
 | `cobertura` | `--tickers A,B` ou `--tudo` | Matriz conta crítica × ticker com a fração dos exercícios mapeados (verde ≥ 95%) | igual a `atualizar` |
+| `premissas sugerir TICKER` | `--escrever`; `--perfil P`; `--data-base AAAA-MM-DD` | Sugere as premissas a partir dos exercícios encerrados antes da data-base e imprime "premissas sugeridas × histórico" (último ano, medianas 5a/10a, sugerido, valor no YAML), CAGR 3/5/10a, deltas dos cenários e a **projeção base** (R$ mi). Avisos: setor de commodity, setor não definido, ano-ponte sem DFP, histórico curto | `--escrever` regenera `config/empresas/{TICKER}.yaml` comentado (anterior em `.yaml.bak`; sem ele, só avisa que o YAML não existe). `--perfil` só define o horizonte quando o YAML usa `horizonte_anos: perfil`; sem perfil válido nem `--perfil`, mostra as sugestões e pula a projeção (sai com 0). `--data-base` corta o histórico e define a fração do ano corrente. Exige `atualizar` antes |
 | `perfil` | `--mostrar` ou `--refazer` | Sem perfil (ou vencido): roda o questionário (resposta = número da alternativa; inválida ⇒ pergunta de novo), grava `CAMINHO_PERFIL` e mostra perfil + parâmetros. Com perfil válido: só mostra | `--mostrar` só mostra (sem perfil ⇒ sai com 1); `--refazer` responde de novo mesmo válido e aceita JSON corrompido (sem ele, JSON inválido ⇒ sai com 1). Os dois juntos ⇒ erro. Validade conferida contra `date.today()`, **não** contra `data_base` |
 
 Observação: `mercado` usa `settings.custo_capital.rf_brl.override` como Rf manual **independentemente
@@ -113,8 +126,15 @@ e testar com `typer.testing.CliRunner` em `tests/test_cli.py`.
 ## 4. `config.py`
 
 Constantes de caminho (relativas à raiz do repo): `DIR_CONFIG`, `CAMINHO_SETTINGS`,
-`CAMINHO_CADASTRO_MANUAL`, `CAMINHO_UNIVERSO`, `DIR_RAW` (`data/raw`), `DIR_PROCESSED`
-(`data/processed`), `CAMINHO_PERFIL` (`perfil/perfil_investidor.json`, gitignored).
+`CAMINHO_CADASTRO_MANUAL`, `CAMINHO_UNIVERSO`, `CAMINHO_SETORES` (`config/setores.yaml`),
+`DIR_EMPRESAS` (`config/empresas/`), `DIR_RAW` (`data/raw`), `DIR_PROCESSED` (`data/processed`),
+`CAMINHO_PERFIL` (`perfil/perfil_investidor.json`, gitignored).
+
+`ler_yaml(caminho)` (mapeamento no topo; ausente, YAML inválido ou outro tipo ⇒
+`ErroConfiguracao`) é a leitura comum a settings, setores e YAML da empresa.
+`carregar_setores(caminho=CAMINHO_SETORES) -> dict[str, Setor]`; `Setor(descricao, tipo_modelo,
+commodity, pares=())`. Hoje: `petroleo_gas` e `mineracao` (commodity) e `maquinas_equipamentos`;
+`pares` vazios até a Fase 8.
 
 `Settings` (todos os submodelos herdam `_Modelo`: `extra="forbid"`, `frozen=True` → **campo novo no
 YAML exige campo novo na classe, e vice-versa**, senão `ErroConfiguracao`).
@@ -133,10 +153,11 @@ validados.
 | `moeda_saida` | BRL | ⏳ |
 | `csv.*` | `;` `,` `utf-8-sig` | ⏳ (Fase 9) |
 | `cache_ttl_horas.cvm/precos/macro` | 168 / 12 / 12 | TTL do cache de CVM+cadastro / preços yfinance / macro. Dentro do TTL não há rede |
-| `impostos.aliquota_nominal` | 0.34 | Teto da alíquota operacional do NOPAT histórico (`nao_financeiras.metricas`, via `historico`); alíquota usada quando LAIR ≤ 0 |
+| `impostos.aliquota_nominal` | 0.34 | Teto da alíquota operacional do NOPAT histórico (`nao_financeiras.metricas`, via `historico`); alíquota usada quando LAIR ≤ 0. Limite da alíquota projetada quando `aliquota_imposto.limite_superior` do YAML é `null` |
 | `custo_capital.rf_brl.override` | null | Se numérico, `carregar_macro` não consulta Tesouro e marca Rf como `manual` |
 | `custo_capital.*` (resto) | — | ⏳ (Fase 6) |
-| `terminal.*`, `dcf.*`, `sensibilidade.*` | — | ⏳ (Fase 7) |
+| `terminal.g_nominal_max` | 0.045 | g terminal quando o YAML da empresa tem `g_nominal: null`: fim da trajetória de crescimento sugerida (`projetor.g_terminal`). `g_nominal` do YAML acima dele ⇒ `ErroProjecao` |
+| `terminal.*` (resto), `dcf.*`, `sensibilidade.*` | — | ⏳ (Fase 7) |
 | `validacao_cruzada.preco_rel` | 0.02 | Tolerância relativa de preço (principal × alternativa) |
 | `validacao_cruzada.cambio_rel` | 0.015 | Idem dólar (PTAX × `BRL=X`) |
 | `validacao_cruzada.market_cap_rel` | 0.10 | ⏳ (declarado, sem uso) |
@@ -145,7 +166,7 @@ validados.
 | `validacao_cruzada.rf_abs` | 0.025 | Idem Rf (NTN-F × NTN-B+Focus). Apertar gera aviso permanente (spread de inflação ≈ 3 p.p.) |
 | `perfil.{conservador,moderado,arrojado}.margem_seguranca` | 0.30 / 0.20 / 0.10 | `parametros_do_perfil` (seção 17); exibido em `valuation perfil`. Uso no preço máximo de compra: Fase 7 |
 | `perfil.*.pesos_cenarios.{pessimista,base,otimista}` | 40/50/10, 25/50/25, 15/50/35 % | Idem; validador exige soma 1. Ponderação dos cenários: Fase 7 |
-| `perfil.*.horizonte_anos` | 5 / 7 / 10 | Idem; horizonte explícito da projeção quando `horizonte_anos: perfil` (Fase 5) |
+| `perfil.*.horizonte_anos` | 5 / 7 / 10 | Idem; horizonte explícito da projeção quando o YAML tem `horizonte_anos: perfil` (`cli._horizonte`) |
 | `perfil.*.hurdle_spread_selic` | 0.03 / 0.05 / 0.07 | `ParametrosPerfil.hurdle(selic)` = Selic + spread. Comparação com o retorno esperado: Fase 7 |
 
 Todos os números de mercado do YAML são **PLACEHOLDER** (regra do projeto: nunca inventar dado).
@@ -390,10 +411,13 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | Fase | Falta | Dica de onde conectar |
 |---|---|---|
 | 2 | `contabil/financeiras.py` e seção `financeira:` do mapeamento | Fase 10, após inspecionar ITUB4/BBAS3. `_padronizar` da CLI recusa tipo ≠ `nao_financeira` |
-| 5 | Leitura do YAML da empresa (`ajustes`, `mapeamento_extra`, `caixa_extra`, `divida_extra`, `moeda_relatorio`) | `AjustesContabeis`/`NaoRecorrente` e `carregar_mapeamento(extra=…)` já aceitam; hoje a CLI usa os padrões |
-| 5–10 | projeção, beta/CAPM/WACC, DCF, DDM, múltiplos, sensibilidade, saídas CSV/PNG | Parâmetros já validados em `Settings` |
-| — | `config/universo_ibovespa.csv`, `config/setores.yaml`, `config/empresas/*.yaml` | `--tudo` falha sem o universo |
-| — | comandos `premissas`, `rodar`, `comparar` | seção 14 do `CLAUDE.md`. `rodar --perfil` ⇒ `registro.resolver_perfil(CAMINHO_PERFIL, hoje, override)` e gravar `PerfilEfetivo.origem` no `meta.json` |
+| 6–10 | beta/CAPM/WACC, DCF, DDM, múltiplos, sensibilidade, saídas CSV/PNG | Parâmetros já validados em `Settings`. Cenários prontos: `resolver_cenarios` + `aplicar_cenario` + `projetar` dão a projeção de cada cenário; a coluna `fracao` diz quanto do FCFF do ano entra no DCF |
+| 6 | uso de `custo_capital` do YAML da empresa (`beta`, `kd`) | `PremissasEmpresa.custo_capital` já validado |
+| 7 | uso de `ajustes.minoritarios`, `divida_extra` na ponte, `terminal.ronic` do YAML | métrica `divida_extra` já calculada |
+| 8 | `pares` de `setores.yaml` e `pares.incluir/excluir` | listas vazias hoje |
+| 9 | `premissas_usadas.yaml` | serializar `PremissasResolvidas` de cada cenário |
+| — | `config/universo_ibovespa.csv` | `--tudo` falha sem o universo |
+| — | comandos `rodar`, `comparar` | seção 14 do `CLAUDE.md`. `rodar --perfil` ⇒ `cli._horizonte` / `registro.resolver_perfil` e gravar `PerfilEfetivo.origem` no `meta.json` |
 | 7 | uso dos parâmetros do perfil (valor ponderado, preço máximo de compra, TIR × hurdle) | `ParametrosPerfil` já pronto (seção 17) |
 
 ## 13. Convenções que o código já segue (siga também)
@@ -406,7 +430,9 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
   corrigida). Taxas em **decimal** (0,1375, não 13,75).
 - Exceções em português `ErroX` (N818 ignorado no ruff). Hierarquia: `ErroDownload ⊃
   ArquivoNaoEncontrado`; `ErroDadosExternos ⊃ ErroPrecos`; `ErroCadastro`, `ErroDadosCVM`,
-  `ErroConfiguracao`, `ErroContabil`.
+  `ErroConfiguracao`, `ErroContabil`, `ErroPerfil`, `ErroProjecao`.
+- Strings e docstrings do código em ASCII para símbolos (`x`, `-`, "desvio-padrão"): o ruff
+  (RUF001–003) recusa `×`, `−`, `–` e `σ`. Acentos do português são normais.
 - Dataclasses `frozen=True` para objetos trocados entre camadas; pydantic só para configuração.
 - Identificadores de domínio em português; mensagens ao usuário em PT-BR.
 - Dependência opcional pesada (`yfinance`) é importada **dentro** da função (`_baixar`).
@@ -421,8 +447,11 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | `test_cvm.py` | parsing, escala, versões, `coletar` | `zip_cvm("dfp_cia_aberta_2025")` etc. |
 | `test_cadastro.py` | FCA, manual, classificação, busca | `tests/fixtures/cvm/*` |
 | `test_validacao.py`, `test_precos.py`, `test_macro.py` | `cruzar`, providers falsos, market cap, SGS/Focus/Tesouro | respostas sintéticas |
-| `test_config.py`, `test_cli.py` | YAML real, `CliRunner` (`qa`/`historico`/`cobertura` sobre DFP sintética; `perfil` com `input=`) | `ambiente_offline`, `weg_sintetica`, `caminho_perfil` |
+| `test_config.py`, `test_cli.py` | YAML real, `CliRunner` (`qa`/`historico`/`cobertura`/`premissas sugerir` sobre DFP sintética; `perfil` com `input=`). `ambiente_offline` aponta `DIR_EMPRESAS` para `tmp_path` | `ambiente_offline`, `weg_sintetica`, `caminho_perfil` |
 | `test_perfil.py` | questionário (10 perguntas, 1–5 pontos, vetos), faixas, vetos, validade, JSON ida e volta e adulterado, `resolver_perfil`, parâmetros do settings | `respostas(padrao, **trocas)` |
+| `test_premissas.py` | esquema do YAML (padrões, manual, listas, inválidos), carga e ticker, conferência com o cadastro, conversão dos ajustes, YAMLs do repositório, escrita ida e volta | `MINIMO`, `historico_anual` |
+| `test_sugestor.py` | sugestões calculadas à mão (medianas, reversão da margem, desvios e limites), resumo, histórico curto e com buraco, commodity | `historico_anual` |
+| `test_projetor.py` | projeção de 3 anos calculada à mão, anos projetados, fração do ano, `resolver` (sugerido, manual, listas, erros), cenários, g terminal | `PREMISSAS`, `historico_anual` |
 | `test_padronizacao.py`, `test_periodos.py`, `test_moeda.py`, `test_nao_financeiras.py`, `test_qa.py` | regras, reapresentação, LTM/trimestre, métricas calculadas à mão, cada verificação do QA | `tests/sintetico.py` |
 | `test_golden.py` | 94 valores de `tests/golden/referencias.yaml` contra o pipeline | **dados reais** em `data/processed/cvm/`; pulado se ausentes |
 
@@ -433,6 +462,8 @@ fixture `zip_cvm`. Pytest roda com `pythonpath=tests` (importa `conftest` direto
 (linhas no formato de `demonstracoes.parquet`), `dfp_completa(ano, **trocas)` (DFP consistente com
 todas as críticas; `trocas={"DRE": {"3.02": 60}}`, `None` remove), `contas_padronizadas(registros)`
 com `ano()`, `ytd()`, `saldo()`.
+`historico_anual(crescimento, margem, *, inicio, da, capex, nwc, arrendamento, aliquota)`:
+métricas anuais mínimas para o sugestor/projetor (razões sobre a receita viram valores).
 `test_golden.py`: chaves da referência → métrica em `FLUXOS`/`SALDOS`; definições próprias das
 companhias em `NAO_COMPARAVEIS`; período ainda não publicado na CVM é pulado.
 Fixtures CVM são amostras minúsculas (uma empresa, 2025/2026): ao mudar parsing, atualize-as em
@@ -449,7 +480,12 @@ vez de baixar dados reais. Sem rede nos testes.
 | Mais anos de histórico | `settings.historico_anos` (DFP antes de 2010 não existe; composição de capital só ≥ 2020) |
 | Corrigir escala de ações de uma empresa | `cadastro_manual.csv > escala_acoes` (1 ou 1000) |
 | Mapear conta nova ou corrigir regra | `config/mapeamento_contas.yaml` (+ crítica em `contas_criticas` se for o caso); confira com `valuation cobertura --tickers …` e `valuation qa` |
-| Caso particular de uma empresa | `mapeamento_extra` → `carregar_mapeamento(extra=…)` (YAML da empresa só na Fase 5) |
+| Caso particular de uma empresa | `config/empresas/{TICKER}.yaml > ajustes.mapeamento_extra` (cria ou sobrepõe conta; entra antes das regras padrão) |
+| Somar uma conta ao caixa / subtrair na ponte | `ajustes.caixa_extra` / `divida_extra` com o nome da **conta padrão** (crie-a com `mapeamento_extra` se não existir) |
+| Fixar uma premissa | troque `sugerido` por número (ou lista em crescimento/margem) no YAML da empresa; `valuation premissas sugerir TICKER` mostra a sugestão ao lado |
+| Mudar a regra de sugestão (janelas, limites, reversão, deltas) | constantes no topo de `projecao/sugestor.py` + teste à mão em `test_sugestor.py` (decisão de negócio: ADR) |
+| Novo campo de premissa | classe em `projecao/premissas.py` + uso em `projetor.resolver` + linha em `escrita.renderizar` (o teste de ida e volta pega o esquecimento) |
+| Novo setor | `config/setores.yaml` (`descricao`, `tipo_modelo`, `commodity`, `pares`) |
 | Nova métrica histórica | `nao_financeiras.metricas` (+ `OPCIONAIS` se a conta pode faltar) + linha em `cli._LINHAS_HISTORICO` + teste à mão |
 | Nova verificação de QA | gerador `_x(...) -> Iterable[Verificacao]` em `qa.py`, chamado em `verificar`; colunas lidas em `_*_USADOS` |
 | Novo valor de conciliação | `tests/golden/referencias.yaml` (R$ mi) + chave em `FLUXOS`/`SALDOS` de `test_golden.py` |
@@ -489,6 +525,17 @@ vez de baixar dados reais. Sem rede nos testes.
     não baterem (editar o JSON à mão não funciona: refaça o questionário).
 17. A validade do perfil (12 meses, `VALIDADE_MESES`) é conferida contra a data real passada por
     quem chama (`date.today()` na CLI), não contra `data_base`.
+18. `--escrever` **regenera** o YAML da empresa inteiro: comentários próprios se perdem (o
+    anterior fica em `.yaml.bak`, gitignored). Anotações duráveis vão em `descricao` dos campos ou
+    num ADR.
+19. Lista explícita de crescimento/margem começa no exercício **seguinte ao último histórico**, não
+    no ano corrente: em fevereiro, sem a DFP do ano anterior, o 1º valor é o do ano-ponte.
+20. O 1º ano projetado parte do último exercício completo e ignora o YTD já divulgado (ADR 0006): a
+    trajetória sugerida pode contradizer o acumulado do ano. Confira com `valuation historico`.
+21. A margem sugerida é a **ajustada** (sem equivalência e não recorrentes); o `historico` mostra a
+    margem contábil (`margem_ebitda`), que pode ser maior.
+22. `caixa_extra` reduz a dívida líquida mas não sai do capital de giro: use contas fora do ativo
+    circulante.
 
 ## 17. `perfil/` — perfil do investidor
 
@@ -505,3 +552,37 @@ ambos em `perfil/__init__.py`.
 
 O perfil **não** altera fatos contábeis nem o custo de capital: o valor intrínseco por cenário é o
 mesmo para todos os perfis.
+
+## 18. `projecao/` — premissas, sugestor e projetor
+
+Seções 9.1–9.3 do `CLAUDE.md` e ADR 0006. Importa `config` e `contabil.nao_financeiras` (ajustes);
+não importa `data`, `perfil` nem a CLI. Exceção: `ErroProjecao` (`projecao/__init__.py`).
+
+| Módulo | Símbolos | Detalhe |
+|---|---|---|
+| `premissas.py` | `PremissasEmpresa` (pydantic, `extra=forbid`, frozen) com `Ajustes`, `ConfigProjecao`, `Cenarios`/`DeltaCenario`, `Pares`, `CustoCapitalEmpresa`; `Trajetoria(inicio, fim, curva=linear)`; `SUGERIDO`; `caminho_premissas(ticker, dir)`, `carregar_premissas(caminho)`, `premissas_padrao(ticker, tipo, classes)`, `conferir_cadastro(premissas, tickers, tipo)`, `ajustes_contabeis(ajustes) -> AjustesContabeis` | Todo campo de premissa aceita `sugerido` ou número; crescimento e margem aceitam também lista. Limites: frações em [0, 1] (NWC e trajetórias em [−1, 1]), deltas em [−0,5; 0,5], horizonte 1–30. Ticker ≠ nome do arquivo, `tipo_modelo` fora de `nao_financeira`/`financeira`, `metodo: manual` sem `valor`, alíquota acima de `limite_superior` ⇒ erro. `nao_recorrentes.valor` em **unidades** da moeda |
+| `sugestor.py` | `sugerir(historico, *, g_terminal, aliquota_limite, commodity, setor=None) -> Sugestoes`; `Sugestao(valor, origem)`; `razoes(historico)`; `cagr`; `pct`, `pp` (formatação pt-BR) | Janelas por ano: 5a = 5 últimos exercícios, 10a = 10. Anos faltantes viram NaN (sem crescimento atravessando o buraco). Mínimo de 2 exercícios. Constantes `JANELA_*`, `CRESCIMENTO_MIN/MAX`, `REVERSAO_MARGEM`, `DELTA_*`, `FATOR_DELTA_CAPEX`. `Sugestoes.estatisticas` = linhas `ultimo`, `mediana_5a`, `mediana_10a`, `cagr_{3,5,10}a` × colunas de `razoes` |
+| `projetor.py` | `primeiro_ano_aberto`, `anos_projetados(ano_base, data_base, horizonte)`, `fracao_restante(ano, data_base)`, `g_terminal(terminal, config) -> Sugestao`, `resolver(config, sugestoes, *, anos, aliquota_limite, descontar_arrendamento) -> PremissasResolvidas`, `resolver_cenarios(cenarios, sugestoes)`, `aplicar_cenario(base, delta, nome)`, `projetar(historico, premissas, *, data_base) -> DataFrame`; `COLUNAS_PROJECAO` | Funções puras. Histórico que inclui o exercício da data-base ⇒ erro (a CLI corta antes). Lista mais curta que os anos ⇒ erro; mais longa é cortada |
+| `escrita.py` | `renderizar(premissas, sugestoes, *, data_base) -> str` | YAML inteiro com comentários (`sugerido: X (origem)` ou `manual; sugerido seria X`), linhas de comentário ≤ 100 colunas. `carregar_premissas` do texto devolve as mesmas premissas (testado) |
+
+| Sugestão | Regra |
+|---|---|
+| Crescimento | início = mediana do crescimento de 5a limitada a [−5%, 20%]; fim = g terminal (`g_nominal` do YAML ou `settings.terminal.g_nominal_max`); linear |
+| Margem EBITDA | **ajustada** (`ebitda_ajustado / receita`): início = mediana 5a; fim = média das medianas de 5a e 10a; linear |
+| D&A, capex, NWC, arrendamento / receita | mediana 5a (arrendamento = pagamento da DFC; sem dado ⇒ 0) |
+| Alíquota | mediana da efetiva de 5a limitada a [0, limite]; sem LAIR positivo ⇒ limite |
+| Deltas dos cenários | crescimento e margem: 1 desvio-padrão de 10a em [1, 5] p.p.; capex: 0,5 desvio em [0,25; 2] p.p.; histórico curto ⇒ piso. Pessimista −, −, +; otimista +, +, − |
+
+| Coluna da projeção | Fórmula |
+|---|---|
+| `fracao` | 0 se o exercício já encerrou; (31/12 − data-base) / 365 no ano corrente; 1 depois |
+| `receita_liquida` | receita do ano anterior × (1 + `crescimento`); o 1º ano parte do último exercício |
+| `ebitda`, `da`, `ebit` | margem × receita; (D&A/receita) × receita; EBITDA − D&A (EBIT ajustado) |
+| `imposto`, `nopat` | alíquota × EBIT (também com EBIT negativo); EBIT − imposto |
+| `capex`, `arrendamento` | razão × receita |
+| `delta_nwc` | (NWC/receita) × (receita − receita anterior) |
+| `fcff` | NOPAT + D&A − capex − ΔNWC [− arrendamento se `ifrs16: divida` e `capex_equivalente_arrendamento`]. Ano inteiro: o DCF multiplica por `fracao` |
+
+Horizonte: `projecao.horizonte_anos` inteiro ou `perfil` (5/7/10 do `settings.perfil`); conta só os
+anos com fluxo por vir. Os anos projetados vão do exercício seguinte ao último histórico até o fim
+do horizonte, e o ano-ponte sem DFP tem `fracao` 0.

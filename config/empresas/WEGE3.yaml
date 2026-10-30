@@ -1,0 +1,66 @@
+# Premissas de WEGE3 (seção 9.1 do CLAUDE.md), geradas por
+# `valuation premissas sugerir WEGE3 --escrever` em 2026-10-30, com o histórico até 2025.
+# `sugerido` = recalculado do histórico a cada execução; o comentário mostra o valor de
+# hoje e a origem. Troque por um número para fixar (ou, em crescimento e margem, por uma
+# lista com um valor por ano projetado a partir de 2026).
+# Taxas em decimal (0.05 = 5%). Estudo pessoal; não é recomendação de investimento.
+ticker: WEGE3
+tipo_modelo: nao_financeira          # nao_financeira | financeira
+classes_acao: [WEGE3]
+moeda_relatorio: auto                # auto | BRL | USD
+
+ajustes:
+  consolidado: true
+  ifrs16: divida                     # divida | ignorar
+  capex_equivalente_arrendamento: true
+  minoritarios: contabil             # contabil | multiplo_pvp
+  coligadas: somar_investimento_contabil # somar_investimento_contabil | manter_no_ebit
+  caixa_extra: []                    # contas padrão somadas ao caixa
+  divida_extra: []                   # contas padrão subtraídas na ponte
+  # {ano, conta: ebit, valor (unidades da moeda; ganho > 0, perda < 0), descricao}
+  nao_recorrentes: []
+  mapeamento_extra: {}               # regras de mapeamento_contas.yaml
+
+projecao:
+  horizonte_anos: perfil             # perfil | inteiro (anos com fluxo por vir)
+  receita:
+    # inicio sugerido: 16,9% (mediana do crescimento 2021-2025, dentro de [-5%, 20%])
+    # fim sugerido: 4,5% (g terminal = settings.terminal.g_nominal_max (PLACEHOLDER))
+    crescimento: {inicio: sugerido, fim: sugerido, curva: linear}
+  margens:
+    # inicio sugerido: 21,8% (mediana da margem EBITDA ajustada 2021-2025)
+    # fim sugerido: 20,3% (média entre a mediana 2021-2025 (21,8%) e a de 2016-2025 (18,7%))
+    ebitda: {inicio: sugerido, fim: sugerido, curva: linear}
+  # sugerido: 2,1% (mediana 2021-2025)
+  da_sobre_receita: sugerido
+  # sugerido: 4,9% (mediana 2021-2025)
+  capex_sobre_receita: sugerido
+  # sugerido: 17,7% (mediana 2021-2025)
+  nwc_sobre_receita: sugerido
+  # sugerido: 0,0% (mediana 2021-2025)
+  arrendamento_sobre_receita: sugerido
+  # valor sugerido: 16,5% (mediana da alíquota efetiva 2021-2025, dentro de [0,0%, 34,0%])
+  # limite_superior null => nominal
+  aliquota_imposto: {valor: sugerido, limite_superior: null}
+  terminal:
+    g_nominal: null                  # null => settings.terminal.g_nominal_max
+    ronic: null                      # null => settings | wacc | roic_historico | número
+
+# Deltas somados ao cenário base em todos os anos explícitos (0.02 = 2 p.p.).
+# Pessimista: -crescimento, -margem, +capex; otimista: o contrário. Sugeridos:
+# crescimento ±5,00 p.p. (1 desvio-padrão de crescimento 2016-2025 = 13,10 p.p., limitado a [1,00
+#   p.p., 5,00 p.p.]);
+# margem ±2,92 p.p. (1 desvio-padrão de margem EBITDA 2016-2025 = 2,92 p.p.);
+# capex ±0,55 p.p. (0,5 desvio-padrão de capex/receita 2016-2025 = 0,55 p.p.).
+cenarios:
+  pessimista: {crescimento_pp: sugerido, margem_ebitda_pp: sugerido, capex_pp: sugerido}
+  otimista: {crescimento_pp: sugerido, margem_ebitda_pp: sugerido, capex_pp: sugerido}
+
+pares:
+  setor: maquinas_equipamentos       # chave em config/setores.yaml
+  incluir: []
+  excluir: []
+
+custo_capital:                      # sobrescritas opcionais (Fase 6)
+  beta: {metodo: regressao}          # regressao | comparaveis | manual (com valor)
+  kd: {metodo: historico}            # historico | manual (com valor)

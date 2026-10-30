@@ -16,6 +16,7 @@ Itens `[DECIDIDO]` não mudam por ADR sem o aval do usuário (regra 7 do `CLAUDE
 | [0003](0003-escala-das-acoes.md) | Escala da quantidade de ações: `escala_acoes` no cadastro manual + correção automática de datas em milhares | 6.1, 6.2 | aceito |
 | [0004](0004-validacao-cruzada-de-apis.md) | Preço, Selic, IPCA, dólar e Rf vêm de uma fonte principal e são conferidos numa segunda | 6.2, 6.3 | aceito |
 | [0005](0005-padronizacao-contabil.md) | Reapresentações por família e período, dívida × arrendamento separados, D&A pela DFC, métricas históricas, periodicidade `S` | 7.1, 7.3, 7.6 | aceito |
+| [0006](0006-premissas-e-projecao.md) | `sugerido` permanece no YAML (valor em comentário), margem ajustada com reversão de metade, ΔNWC incremental, deltas de ±1 desvio-padrão, `arrendamento_sobre_receita`, anos-ponte e fração do ano | 9.1, 9.2, 9.3 | aceito |
 
 ## Quando escrever um ADR
 
