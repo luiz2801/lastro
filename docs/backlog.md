@@ -4,7 +4,30 @@ Itens fora do roadmap das fases (seção 17 do `CLAUDE.md`), registrados para de
 
 ## Ordem de prioridade (decidida em 2026-10-30)
 
-Em andamento por escolha do usuário: **Fase 10 (financeiras)**. Depois, nesta ordem:
+Em andamento por escolha do usuário: **Fase 10 (financeiras)**. Feito (commits ef24c7a a
+8073b23, ADRs 0011–0014): plano de contas, métricas e QA; premissas e projeção do DDM; DDM com
+lucro residual, Ke, cenários e sensibilidade; múltiplos e pares (`bancos`, `seguradoras`).
+**Falta para fechar a Fase 10:**
+
+1. **Units no market cap** (`data/precos.market_cap`): BPAC11 (1 ON + 2 PN) e BRBI11 viram "par
+   ignorado". Sugestão: composição da unit no cadastro manual e preço por ação = preço da unit /
+   ações por unit (BPAC3/BPAC5 cotam com preço defasado). Exige ADR (0015) e testes.
+2. **YAMLs das financeiras**: `valuation premissas sugerir {T} --escrever` para ITUB4, BBAS3,
+   BBDC4, SANB11, BPAC11, BBSE3, CXSE3, PSSA3 e trocar `pares.setor: null` por `bancos` ou
+   `seguradoras`; depois `valuation rodar` em cada um e conferir.
+3. **Seguradoras**: rodar `comparar`/`rodar` de BBSE3, CXSE3, PSSA3, IRBR3 (BBSE3/CXSE3 são
+   holdings de seguros; conferir se o DDM faz sentido) e registrar ressalvas (float, sinistralidade).
+4. **Golden das financeiras**: pedir ao usuário a conferência de lucro, PL e ROE de ITUB4 e BBAS3
+   com os releases (`tests/golden/referencias.yaml`). CVM traz IFRS consolidado (Itaú 2025: lucro
+   da controladora 44.857 mi, PL da controladora 204.501 mi).
+5. **Fechamento**: seções 1, 12 e 14 do `guia.md` (contagem de testes: 441, 430 passam), README
+   (Estado atual: Fase 10 concluída), ✅ na seção 17 do `CLAUDE.md`, nota do ADR 0014 no README,
+   `make cobertura`.
+
+Resultado preliminar (30/10/2026, perfil moderado): ITUB4 R$ 18,86 ponderado × preço R$ 39,15
+(Ke 20,1%, ROE_LP 19,4%, Ke implícito 13,0%); BBAS3 R$ 19,51 × R$ 16,59.
+
+Depois, nesta ordem:
 
 1. **Fase 9 — Saídas** (roadmap): gráficos (football field com os quartis dos múltiplos, cascata
    da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`,
