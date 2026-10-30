@@ -798,7 +798,7 @@ Beta, CAPM (`brl_direto` e `usd_crp`), Kd, WACC.
 `multiplos.py`, `setores.yaml`, estatísticas dos pares.
 *Pronto:* múltiplos e valores implícitos para os pilotos, com tratamento de outliers e aviso de poucos pares.
 
-**Fase 9 — Saídas**
+**Fase 9 — Saídas** ✅ concluída
 CSVs completos, `meta.json`, gráficos, football field, relatório real (deflacionado).
 *Pronto:* `valuation rodar PETR4` gera a pasta de saída completa e reprodutível.
 

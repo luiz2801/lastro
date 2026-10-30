@@ -1,6 +1,6 @@
 # Justificativas e alternativas do valuation
 
-> Estado em 2026-10-30 (Fases 0 a 8 concluídas). Complementa o [`CLAUDE.md`](../CLAUDE.md)
+> Estado em 2026-10-30 (Fases 0 a 10 concluídas). Complementa o [`CLAUDE.md`](../CLAUDE.md)
 > (especificação), o [`guia.md`](../guia.md) (mapa do código) e os [ADRs](decisoes/README.md)
 > (registro de cada decisão). Aqui o foco é outro: **por que cada escolha foi feita e o que mudar
 > para fazer uma análise diferente**. Estudo pessoal; não é recomendação de investimento.

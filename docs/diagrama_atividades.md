@@ -142,7 +142,8 @@ flowchart TD
     %% -------------------------------------------------------------
     subgraph LANE_OUTPUT ["6. Exportação de Artefatos & Relatório"]
         implRates --> exportCSVs["Gravar Artefatos CSV em saida/{TICKER}/{data_base}/ (resumo, wacc, projecao, ponte, sensibilidade)"]
-        exportCSVs --> printTerminal["Exibir Relatório Educacional no Terminal (Preço Atual vs Preço Justo Ponderado vs Preço Teto)"]
+        exportCSVs --> complementos["Gravar historico.csv, qa.json, valores_reais.csv (IPCA do Focus), premissas_usadas.yaml, gráficos PNG (salvo --sem-graficos) e meta.json"]
+        complementos --> printTerminal["Exibir Relatório Educacional no Terminal (Preço Atual vs Preço Justo Ponderado vs Preço Teto)"]
         printTerminal --> endSuccess
     end
 ```
@@ -209,6 +210,9 @@ flowchart TD
   - `projecao_{cenario}.csv`: Demonstrações projetadas ano a ano até a perpetuidade.
   - `ponte_ev_equity.csv`: Conciliação minuciosa dos itens da ponte patrimonial.
   - `sensibilidade_*.csv`: Tabelas completas de estresse de parâmetros.
+  - `historico.csv`, `qa.json`, `valores_reais.csv` (fluxos e valor terminal deflacionados pelo IPCA do Focus) e `premissas_usadas.yaml`.
+  - `meta.json`: versão e commit do código, perfil, moeda, fontes (URL, data e sha256 da CVM), hash das contas padronizadas e avisos; gravado por último.
+  - Gráficos PNG (omitidos com `--sem-graficos`): `football_field`, `ponte_ev_equity` (só DCF), `sensibilidade_heatmap*`, `historico_vs_projecao` e `composicao_valor`.
 - **Terminal:** Apresentação formatada das recomendações e métricas de valuation com destaques visuais.
 
 ---

@@ -29,7 +29,7 @@ Resultado preliminar (30/10/2026, perfil moderado): ITUB4 R$ 18,86 ponderado × 
 
 Depois, nesta ordem:
 
-1. **Fase 9 — Saídas** (roadmap): gráficos (football field com os quartis dos múltiplos, cascata
+1. ✅ **Fase 9 — Saídas** (roadmap; ADR 0016): gráficos (football field com os quartis dos múltiplos, cascata
    da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`,
    `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos`.
 2. **Kd da PETR4**: fixar `custo_capital.kd: {metodo: manual, valor: ...}` no YAML dela. O piso
@@ -266,7 +266,7 @@ Pré-requisito para qualquer trabalho posterior em financeiras e para a consist�
 
 *Entrega:* Fase 10 fechada; pipeline de financeiras completo e testado. Falta só o item 4 (com o usuário).
 
-### Etapa 2 — Fase 9: Saídas completas
+### Etapa 2 — Fase 9: Saídas completas ✅ (ADR 0016)
 
 Depende das fases 7 e 8 (já concluídas) e é pré-requisito natural para GUI e cache de resultados.
 

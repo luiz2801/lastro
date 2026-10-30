@@ -1,11 +1,11 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.23 — 2026-10-30**
+**Versão 1.24 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
 > [`REGRAS_MODELOS.md`](docs/regras/REGRAS_MODELOS.md) e [`REGRAS_TESTES.md`](docs/regras/REGRAS_TESTES.md)).
-> Este arquivo descreve **o que existe hoje** (Fases 0 a 8 e 10 implementadas) para que você não precise reler os módulos. Para o que ainda **não** existe,
+> Este arquivo descreve **o que existe hoje** (Fases 0 a 10 implementadas) para que você não precise reler os módulos. Para o que ainda **não** existe,
 > veja a seção 12.
 > Política de commits, que documento atualizar em cada mudança e ADRs: `CONTRIBUTING.md` e
 > `docs/decisoes/README.md`.
@@ -48,10 +48,10 @@
 | Custo de capital | `custo_capital/{beta,capm,kd,wacc}.py` | ✅ prontos (seção 19), inclusive beta por comparáveis, estrutura do setor e Ke das financeiras |
 | Modelos | `modelos/{dcf,ponte,multiplos,ddm}.py` | ✅ DCF do FCFF, ponte EV → equity, múltiplos dos pares e DDM com lucro residual (seção 20) |
 | Análise | `analise/{cenarios,sensibilidade}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade, FCFF e DDM (seção 20) |
-| Saída | `saida/csv.py` | CSV e matrizes (seção 19); gráficos, `meta.json` e demais arquivos na Fase 9 |
+| Saída | `saida/{csv,arquivos,real,graficos}.py` | ✅ CSV e matrizes, `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais e gráficos PNG (seção 19) |
 | CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar` |
 
-~8.900 linhas de código, 446 testes (11 golden pulados por motivo declarado), mypy `strict`,
+~10.200 linhas de código, 454 testes (11 golden pulados por motivo declarado), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -107,6 +107,11 @@ PremissasResolvidas + deltas ─► cenarios.analisar ─► dcf.avaliar por cen
     projetor.projetar ─► dcf.descontar (WACC, g, RONIC) ─► ponte.ponte (saldos do balanço do WACC)
   ─► valor por ação (BRL) ─► ponderação pelo perfil, preço máximo, Ke e WACC implícitos no preço
 dcf.avaliar repetido ─► sensibilidade.wacc_x_g / margem_x_crescimento ─► sensibilidade_*.csv
+
+Avaliações por cenário + matrizes + múltiplos ─► cli._gravar_complementos (DCF e DDM):
+    arquivos.cenario_dcf/ddm ─► real.tabela (IPCA do Focus) ─► valores_reais.csv
+    metricas anuais + LTM ─► historico.csv; qa.verificar ─► qa.json; premissas ─► premissas_usadas.yaml
+    arquivos.faixas_football + graficos.* ─► PNG; montar_meta ─► meta.json (por último)
 
 setores.yaml pares + YAML (incluir/excluir) ─► cli._coletar_pares: por par, _padronizar +
     _mercado_par (market cap) + _fundamentos (metricas_ltm, itens da ponte, em BRL)
@@ -179,7 +184,7 @@ mediana de 5a), `_resumo` (linha do `resumo.csv`), `_mostrar_valuation`. Finance
 | `premissas sugerir TICKER` | `--escrever`; `--perfil P`; `--data-base AAAA-MM-DD` | Sugere as premissas a partir dos exercícios encerrados antes da data-base e imprime "premissas sugeridas × histórico" (último ano, medianas 5a/10a, sugerido, valor no YAML), CAGR 3/5/10a, deltas dos cenários e a **projeção base** (R$ mi). Financeira: ROE (início → longo prazo) e payout inicial × histórico, g, payout final, delta do ROE e a projeção do DDM (ROE, payout, PL, lucro, dividendos) a partir do PL do último balanço. Avisos: setor de commodity, setor não definido, ano-ponte sem DFP, histórico curto | `--escrever` regenera `config/empresas/{TICKER}.yaml` comentado (anterior em `.yaml.bak`; sem ele, só avisa que o YAML não existe). `--perfil` só define o horizonte quando o YAML usa `horizonte_anos: perfil`; sem perfil válido nem `--perfil`, mostra as sugestões e pula a projeção (sai com 0). `--data-base` corta o histórico e define a fração do ano corrente. Exige `atualizar` antes |
 | `wacc TICKER` | `--data-base AAAA-MM-DD`; `--forcar`; `--saida DIR`; `--formato-csv br\|intl` | Beta, Ke, Kd, estrutura e WACC na moeda de reporte; tabela no terminal e `{saida}/{TICKER}/{data-base}/wacc.csv` (`componente;valor;detalhe`, avisos em linhas `aviso`). Financeira: só beta e Ke (sem Kd, estrutura nem WACC) e a data do balanço | `--saida` muda a raiz (padrão `saida/`); `intl` grava `,`/`.`/utf-8. **WACC ≤ g terminal ⇒ sai com 1.** Exige `atualizar` antes; consulta preços e macro como `mercado`. Mede os pares só se o beta for por comparáveis ou a estrutura for `setor` |
 | `comparar TICKER` | `--data-base`; `--saida DIR`; `--formato-csv br\|intl`; `--forcar` | Múltiplos LTM do alvo e dos pares (P/L, EV/EBITDA, EV/EBIT, EV/Receita, P/VP, EV/FCF, dividend yield), P25/mediana/P75 dos pares e valor por ação implícito do alvo; grava `multiplos_pares.csv` e `multiplos_implicitos.csv` em `{saida}/{TICKER}/{data-base}/` | **Nenhum par medido ⇒ sai com 1** (par sem dados vira aviso). Exige `atualizar` do alvo e dos pares (`--com-pares`) |
-| `rodar TICKER` | `--cenario base\|pessimista\|otimista\|todos` (todos); `--perfil P`; `--data-base`; `--saida DIR`; `--formato-csv br\|intl`; `--forcar` | DCF por cenário (VP dos fluxos, VP do terminal, EV, VT/EV, EV/EBITDA terminal, equity, valor por ação), checagens de g/WACC/RONIC, valor ponderado, preço máximo de compra, upside, Ke implícito × hurdle e WACC implícito × WACC, projeção do cenário de referência e matriz WACC × g; mensagem neutra contra o preço máximo do perfil. Também mede os pares (múltiplos, valor implícito pela mediana, g implícito no EV/EBITDA mediano dos pares). Grava em `{saida}/{TICKER}/{data-base}/`: `resumo.csv`, `wacc.csv`, `projecao_{cenario}.csv`, `ponte_ev_equity.csv` (coluna por cenário), `sensibilidade_wacc_g.csv`, `sensibilidade_margem_crescimento.csv` e, com pares medidos, `multiplos_pares.csv` e `multiplos_implicitos.csv` | **Exige perfil válido ou `--perfil`** (senão sai com 1); o perfil dá pesos, margem, hurdle e, com `horizonte_anos: perfil`, o horizonte. `--cenario X` avalia só X (peso 100%, referência do preço máximo e da sensibilidade). Exige `atualizar`; consulta preços e macro como `mercado`. **Financeira**: DDM por cenário (VP dos dividendos, VP do terminal, valor, VT/valor, P/VP justificado, lucro residual, valor por ação), checagens (Ke > g, ROE de longo prazo, lucro residual − DDM), Ke implícito × hurdle, projeção e matriz Ke × g; grava `resumo.csv` (`modelo = ddm`), `wacc.csv` (só Ke), `projecao_{cenario}.csv` (com tau, fator, VP e lucro residual), `sensibilidade_ke_g.csv` e `sensibilidade_roe_ke.csv` (sem múltiplos ainda). Falta da Fase 9: gráficos, `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais |
+| `rodar TICKER` | `--cenario base\|pessimista\|otimista\|todos` (todos); `--perfil P`; `--data-base`; `--saida DIR`; `--formato-csv br\|intl`; `--forcar`; `--sem-graficos` | DCF por cenário (VP dos fluxos, VP do terminal, EV, VT/EV, EV/EBITDA terminal, equity, valor por ação), checagens de g/WACC/RONIC, valor ponderado, preço máximo de compra, upside, Ke implícito × hurdle e WACC implícito × WACC, projeção do cenário de referência e matriz WACC × g; mensagem neutra contra o preço máximo do perfil. Também mede os pares (múltiplos, valor implícito pela mediana, g implícito no EV/EBITDA mediano dos pares). Grava em `{saida}/{TICKER}/{data-base}/`: `resumo.csv`, `wacc.csv`, `projecao_{cenario}.csv`, `ponte_ev_equity.csv` (coluna por cenário), `sensibilidade_wacc_g.csv`, `sensibilidade_margem_crescimento.csv` e, com pares medidos, `multiplos_pares.csv` e `multiplos_implicitos.csv`. **Complementos (DCF e DDM, seção 19)**: `historico.csv`, `qa.json`, `valores_reais.csv`, `premissas_usadas.yaml`, `meta.json` (por último) e, sem `--sem-graficos`, `football_field.png`, `ponte_ev_equity.png` (só DCF), `sensibilidade_heatmap.png` (+ `_margem_crescimento` no DCF, `_roe_ke` no DDM), `historico_vs_projecao.png` e `composicao_valor.png` | **Exige perfil válido ou `--perfil`** (senão sai com 1); o perfil dá pesos, margem, hurdle e, com `horizonte_anos: perfil`, o horizonte. `--cenario X` avalia só X (peso 100%, referência do preço máximo e da sensibilidade). Exige `atualizar`; consulta preços e macro como `mercado`. **Financeira**: DDM por cenário (VP dos dividendos, VP do terminal, valor, VT/valor, P/VP justificado, lucro residual, valor por ação), checagens (Ke > g, ROE de longo prazo, lucro residual − DDM), Ke implícito × hurdle, projeção e matriz Ke × g; grava `resumo.csv` (`modelo = ddm`), `wacc.csv` (só Ke), `projecao_{cenario}.csv` (com tau, fator, VP e lucro residual), `sensibilidade_ke_g.csv` e `sensibilidade_roe_ke.csv` e, com pares medidos, os CSVs de múltiplos |
 | `perfil` | `--mostrar` ou `--refazer` | Sem perfil (ou vencido): roda o questionário (resposta = número da alternativa; inválida ⇒ pergunta de novo), grava `CAMINHO_PERFIL` e mostra perfil + parâmetros. Com perfil válido: só mostra | `--mostrar` só mostra (sem perfil ⇒ sai com 1); `--refazer` responde de novo mesmo válido e aceita JSON corrompido (sem ele, JSON inválido ⇒ sai com 1). Os dois juntos ⇒ erro. Validade conferida contra `date.today()`, **não** contra `data_base` |
 
 Observação: `mercado` usa `settings.custo_capital.rf_brl.override` como Rf manual **independentemente
@@ -525,7 +530,10 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 
 | Fase | Falta | Dica de onde conectar |
 |---|---|---|
-| 9 | gráficos (football field, cascata da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos` | `rodar` já tem tudo em memória: `ResultadoCenarios`, matrizes, `ResultadoMultiplos` (barras P/L, EV/EBITDA, P/VP pelos quartis: `implicitos.valor_p25/p75`; `mt.ROTULOS`) e `PerfilEfetivo.origem` (vai ao `meta.json`). `premissas_usadas.yaml` = serializar `Avaliacao.premissas` de cada cenário |
+| 11 | Só entra se o usuário pedir: modo em lote/screening, SOTP/NAV para holdings, Monte Carlo, deck de commodities, tratamento de JCP, diluição | `rodar` é uma empresa por vez; o motor (funções puras) já aceita qualquer `PremissasEmpresa` |
+
+Também fora do código hoje: a explicação de métricas na tela, GUI, ERP implícito do Ibovespa e o
+Kd manual da PETR4 (`docs/backlog.md`).
 
 ## 13. Convenções que o código já segue (siga também)
 
@@ -567,6 +575,9 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | `test_multiplos.py` | EV e múltiplos à mão, indefinidos, conversão para BRL e PL da controladora, winsorização, estatísticas (P25/mediana/P75 à mão), valor implícito por EV/P/L/P/VP/DY, `avaliar` (alvo fora dos pares, baixa confiança, escala implausível), `dcf.g_implicito` (RONIC = WACC e numérico) | `ALVO`, `PARES`, `par()` |
 | `test_ddm.py` | DDM à mão (tau 1 e 2, P/VP justificado, terminal), lucro residual à mão e igual ao DDM (inclusive com ano parcial e bissexto), erros e avisos, monotonia em Ke e ROE, `analisar_ddm` (Ke implícito = preço), sensibilidades Ke × g e ROE × Ke, `tabela_financeira` | `PREMISSAS`, `DADOS`, `PERFIL` |
 | `test_cenarios.py`, `test_sensibilidade.py` | pesos, ponderação, `taxa_implicita`, `analisar` (valor no Ke e no WACC implícitos = preço; um cenário; preço inalcançável), mensagem; eixos, matrizes (centro = valor base, NaN com g ≥ WACC, monotonia) e `gravar_matriz` | `custo_capital()` monta um `CustoCapital` manual |
+| `test_real.py` | IPCA por ano (Focus, lacunas, além do horizonte), fator acumulado à mão (um e dois anos, virada de ano), Fisher, `tabela` (fluxo, valor terminal, valor por ação, taxas) | — |
+| `test_saida_arquivos.py` | `serializavel` (dataclass, numpy, datas, NaN), JSON/YAML ida e volta, sha256, `fontes_cvm`, `commit_git` fora de repositório, `tabela_historico`, `faixa_52_semanas`, `faixas_football`, `montar_meta` | — |
+| `test_graficos.py` | formatação pt-BR; os cinco gráficos geram PNG válido (inclusive valores negativos) | — |
 | `test_golden.py` | 94 valores de `tests/golden/referencias.yaml` contra o pipeline | **dados reais** em `data/processed/cvm/`; pulado se ausentes |
 
 `conftest.py`: `SessaoFalsa` (rotas URL → `(status, bytes, headers)`; devolve 304 se
@@ -720,6 +731,15 @@ vez de baixar dados reais. Sem rede nos testes.
     um PL pequeno, ROE de 34% a 79%) e operadoras (PSSA3, IRBR3). O P/VP mediano dos pares fica
     alto e o valor implícito por P/VP das operadoras sai absurdo (PSSA3 R$ 116, IRBR3 R$ 303 em
     30/10/2026); use o DDM e o P/L delas, não o P/VP dos pares.
+39. Texto de gráfico com dois `$` ("R$ 10 ... R$ 20") vira fórmula no matplotlib: os gráficos
+    rodam sob `rc_context({"text.parse_math": False})` (`_sem_mathtext`). Texto novo em gráfico
+    herda isso se a função usar o decorador.
+40. No DDM, `lucro` e `dividendos` da projeção do ano corrente já vêm multiplicados pela fração
+    do ano por vir (CSV `projecao_*.csv`); só `historico_vs_projecao.png` os anualiza. Ao somar ou
+    comparar esses valores com o histórico, divida pela `fracao`.
+41. `meta.json` lista os arquivos que existem na pasta, inclusive de execuções anteriores (ex.: um
+    `rodar --cenario base` depois de um `todos` mantém `projecao_pessimista.csv`). A pasta nunca é
+    limpa. `valores_reais.csv` usa o último Focus além do horizonte dele (ADR 0016).
 
 ## 17. `perfil/` — perfil do investidor
 
@@ -772,9 +792,9 @@ Horizonte: `projecao.horizonte_anos` inteiro ou `perfil` (5/7/10 do `settings.pe
 anos com fluxo por vir. Os anos projetados vão do exercício seguinte ao último histórico até o fim
 do horizonte, e o ano-ponte sem DFP tem `fracao` 0.
 
-## 19. `custo_capital/` e `saida/csv.py`
+## 19. `custo_capital/` e `saida/`
 
-Seção 10 do `CLAUDE.md` e ADR 0007. Funções puras: preços, Rf e métricas entram por parâmetro;
+Seção 10 do `CLAUDE.md` e ADR 0007 (custo de capital); seções 11.5 e 13 e ADR 0016 (`saida/`). Funções puras: preços, Rf e métricas entram por parâmetro;
 nada consulta rede. Importa `config` (não importa `data`, `projecao` nem a CLI). Exceção:
 `ErroCustoCapital` (`custo_capital/__init__.py`). Taxas em decimal, valores na moeda de reporte.
 
@@ -785,7 +805,18 @@ nada consulta rede. Importa `config` (não importa `data`, `projecao` nem a CLI)
 | `kd.py` | `historico(despesas_financeiras, divida_bruta, *, piso, teto, janela=3) -> ResultadoKd`, `taxas_anuais`, `manual(valor)` | Despesas no sinal da DRE (negativas); dívida média de anos consecutivos; mediana dos últimos `JANELA_KD_ANOS`; sem nenhum ano ⇒ erro pedindo Kd manual |
 | `wacc.py` (financeiras) | `CustoCapitalFinanceira(data_base, beta, ke, data_balanco, avisos)`, `montar_financeira(...)`, `tabela_financeira(cc)` (linhas até o Ke + `data_balanco`) | Seção 10.4: sem Kd, estrutura nem WACC. `tabela` e `tabela_financeira` compartilham `_linhas_ke`/`_linhas_capm`/`_quadro` |
 | `wacc.py` | `estrutura(*, metodo, divida, equity, divida_sobre_capital_alvo=None) -> Estrutura` (`manual` e `setor` exigem o alvo), `beta_na_estrutura(beta, estrutura, aliquota)`, `wacc(ke, kd, aliquota, peso_divida)`, `montar(...) -> CustoCapital`, `validar_g(taxa, g, nome="WACC")`, `tabela(cc) -> DataFrame` | Só o beta da **regressão** é realavancado (comparáveis já saem no alvo; manual é tomado como dado). `CustoCapital(data_base, beta, beta_regressao, ke, kd, aliquota, estrutura, wacc, data_balanco, avisos)`, `.kd_liquido` |
+| `saida/real.py` | `IpcaProjetado(por_ano, ipca_12m).taxa(ano)`, `fator_acumulado(data_base, anos_a_frente, ipca)`, `FluxosCenario`, `fisher_real`, `tabela(data_base, ipca, cenarios) -> DataFrame` | Formato longo `cenario, item, ano, ipca_ano, deflator, nominal, real`; itens `fluxo`, `valor_terminal`, `valor_por_acao` (deflator 1), `taxa_desconto`, `g_terminal`. Fator = IPCA de cada ano civil elevado aos dias do trecho / 365 |
+| `saida/arquivos.py` | `CenarioSaida`, `cenario_dcf(av)`, `cenario_ddm(av)`, `serializavel`, `gravar_json`, `gravar_yaml`, `sha256_arquivo`, `commit_git`, `fontes_cvm(dir_raw)`, `montar_meta(...)`, `tabela_historico(anual, ltm)`, `Faixa`, `faixas_football(...)`, `faixa_52_semanas(historico, base)` | Camada de I/O (a única que chama `git`). `CenarioSaida` uniformiza DCF e DDM (`fluxos` com `fluxo` e `tau`, `projecao`, VP dos fluxos e do terminal, `ponte` só no DCF) |
+| `saida/graficos.py` | `football_field`, `cascata_ponte`, `heatmap`, `historico_vs_projecao` (com `Painel`), `composicao_valor`; `br`, `reais`, `pct` | `Figure` direto (sem `pyplot`), 150 dpi, superfície `#fcfcfb`, cores na ordem azul/laranja/verde-água, texto em tinta neutra. Cada função devolve o caminho do PNG |
 | `saida/csv.py` | `gravar_csv(df, caminho, config_csv, formato="br")`, `gravar_matriz(matriz, ...)`, `INTERNACIONAL` | `br` = `settings.csv`; `intl` = `,` `.` utf-8. Cria os diretórios; sem índice. `gravar_matriz`: 1ª coluna = índice (cabeçalho `linha\coluna`), rótulos das colunas com 4 casas e o decimal do formato |
+
+Complementos na CLI (`_gravar_complementos`, comum a DCF e DDM, chamada depois do `resumo.csv`):
+`_metricas_com_ltm` → `historico.csv`; `qa_mod.verificar` → `qa.json` (erro de QA vira aviso, não
+interrompe); `IpcaProjetado(macro.ipca_esperado, macro.ipca_12m)` → `valores_reais.csv`;
+`premissas_usadas.yaml` = `PremissasEmpresa.model_dump` + premissas resolvidas por cenário + perfil +
+`Settings.model_dump`; gráficos (se `--sem-graficos` ausente; faixa de 52 semanas via
+`m.yf.historico(simbolo_yahoo)`, indisponível vira aviso); `meta.json` por último. Devolve os avisos
+novos, que a CLI junta aos demais.
 
 Montagem na CLI (`_custo_capital`): moeda da padronização → `metodo_efetivo`; balanço =
 `_data_balanco` → `metricas_ltm(dt_fim=…)["divida_bruta"]`; equity = `MarketCap.valor` (÷ dólar se

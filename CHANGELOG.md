@@ -2,6 +2,19 @@
 
 ## [Não lançado]
 
+### Fase 9 concluída (saídas completas)
+- `valuation rodar` (DCF e DDM) grava também `meta.json` (versão e commit do código, comando,
+  perfil, moeda, fontes com URL/data/sha256 da CVM, hash das contas padronizadas, avisos),
+  `premissas_usadas.yaml`, `qa.json`, `historico.csv` (exercícios e LTM) e `valores_reais.csv`
+  (fluxos e valor terminal deflacionados pelo IPCA do Focus; taxas nominal e real).
+- Gráficos PNG em PT-BR (`saida/graficos.py`, `Figure` sem `pyplot`): `football_field.png`
+  (modelo, faixa da sensibilidade, múltiplos P25–P75, 52 semanas, preço atual e preço máximo),
+  `ponte_ev_equity.png` (só DCF), `sensibilidade_heatmap.png` e o da segunda matriz,
+  `historico_vs_projecao.png` e `composicao_valor.png`. Flag `--sem-graficos`.
+- ADR 0016; `guia.md` 1.24; diagrama de atividades, README, backlog e ✅ da Fase 9 no `CLAUDE.md`.
+- Testes: `test_real.py`, `test_saida_arquivos.py`, `test_graficos.py` e novas asserções em
+  `test_cli.py` (454 testes; `saida/` com 100% de cobertura).
+
 ### Documentação para Agentes de IA
 - Criação do `docs/contexto_rapido.md` (cheatsheet que indica o que ler por tipo de tarefa) e
   mensagens de g >= WACC / g >= Ke em `dcf.py` e `ddm.py` com a ação sugerida (`economizar.md`).

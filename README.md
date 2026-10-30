@@ -72,8 +72,7 @@ um token gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
 
 ## Estado atual
 
-**Fases 0 a 8 e 10 concluídas** (seção 17 do `CLAUDE.md`). Próxima: Fase 9, saídas (gráficos,
-`meta.json`, relatório real).
+**Fases 0 a 10 concluídas** (seção 17 do `CLAUDE.md`); a Fase 11 (extensões) só entra se o usuário pedir.
 Pilotos: PETR4, VALE3 e WEGE3.
 
 - **Coleta CVM** (Fase 1): cadastro, DFP de 10 anos, ITR dos dois últimos anos e composição do
@@ -123,8 +122,11 @@ Pilotos: PETR4, VALE3 e WEGE3.
   e matrizes Ke × g e ROE × Ke; múltiplos P/L, P/VP e DY com regressão P/VP × ROE (setores
   `bancos`, 18 pares, e `seguradoras`); units no market cap; YAMLs de 5 bancos e 4 seguradoras;
   todos os comandos aceitam financeiras. Golden das financeiras aguardam a conferência do usuário.
-- **Ainda não**: gráficos e demais saídas da Fase 9. Lista
-  completa na seção 12 do `guia.md`.
+- **Saídas** (Fase 9): `valuation rodar` grava, além dos CSVs, `meta.json`, `premissas_usadas.yaml`,
+  `qa.json`, `historico.csv`, `valores_reais.csv` (deflacionado pelo IPCA do Focus) e cinco gráficos
+  PNG em PT-BR (football field, cascata da ponte, heatmaps de sensibilidade, histórico × projeção,
+  composição do valor); `--sem-graficos` suprime os PNG.
+- **Ainda não**: o que está na seção 12 do `guia.md` (Fase 11, extensões).
 
 ## Decisões que completam ou divergem do `CLAUDE.md`
 
@@ -173,6 +175,9 @@ Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
   P/L, P/VP e DY sem EV, regressão P/VP × ROE, pares de todos os bancos cotados.
 - **Units** ([ADR 0015](docs/decisoes/0015-units-no-market-cap.md)): ON e PN pelo preço da unit
   quando a composição está no cadastro manual (BPAC11, BRBI11, SANB11).
+- **Saídas** ([ADR 0016](docs/decisoes/0016-saidas-da-fase-9.md)): valores reais pelo IPCA do Focus
+  (último Focus além do horizonte), `meta.json` com commit e hashes das fontes, gráficos sem
+  `pyplot`, cascata só no DCF.
 
 O ERP (5,0%) é premissa do usuário, sem fonte externa (`docs/fontes.md`). Os demais parâmetros de
 mercado de `config/settings.yaml` (faixa do Kd, Rf e inflação em USD) e o mapeamento perfil →

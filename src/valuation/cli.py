@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import platform
+import shlex
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import cast
@@ -62,6 +63,9 @@ from valuation.projecao import financeira as pf
 from valuation.projecao import premissas as pm
 from valuation.projecao import projetor as pj
 from valuation.projecao import sugestor as sg
+from valuation.saida import arquivos as arq
+from valuation.saida import graficos as gr
+from valuation.saida import real
 from valuation.saida.csv import FormatoCsv, gravar_csv, gravar_matriz
 
 app = typer.Typer(
@@ -1840,6 +1844,7 @@ def rodar(
     ),
     formato_csv: str = typer.Option("br", "--formato-csv", help="br | intl."),
     forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+    sem_graficos: bool = typer.Option(False, "--sem-graficos", help="Não gera os PNG."),
 ) -> None:
     """Valuation por DCF: cenários ponderados pelo perfil, ponte EV -> equity e sensibilidade."""
     hoje = dt.date.today()
@@ -1859,9 +1864,26 @@ def rodar(
         efetivo = reg.resolver_perfil(CAMINHO_PERFIL, hoje, override)
         parametros = parametros_do_perfil(efetivo.perfil, settings.perfil)
         p = _padronizar(ticker, settings)
+        comando = shlex.join(
+            ["valuation", "rodar", ticker, "--cenario", cenario, "--data-base", base.isoformat()]
+            + (["--perfil", perfil_override] if perfil_override else [])
+            + ["--formato-csv", formato_csv]
+            + (["--sem-graficos"] if sem_graficos else [])
+        )
+        execucao = _Execucao(
+            base,
+            hoje,
+            agora,
+            override,
+            efetivo,
+            cenarios,
+            referencia,
+            forcar,
+            graficos=not sem_graficos,
+            comando=comando,
+        )
         if p.plano.tipo == "financeira":
             raiz = (Path(saida) if saida else DIR_SAIDA) / p.premissas.ticker / base.isoformat()
-            execucao = _Execucao(base, hoje, agora, override, efetivo, cenarios, referencia, forcar)
             _rodar_financeira(p, settings, execucao, raiz, cast(FormatoCsv, formato_csv))
             return
         historico, _, sugestoes = _sugerir(p, settings, base)
@@ -1997,12 +2019,278 @@ def rodar(
         p.premissas.ticker, base, efetivo, p.moeda, cc, r, referencia, multiplos, g_saida, avisos
     )
     gravar_csv(resumo, raiz / "resumo.csv", settings.csv, fmt)
+    avisos += _gravar_complementos(
+        raiz,
+        fmt,
+        settings,
+        execucao,
+        p,
+        m,
+        modelo="dcf",
+        r=r,
+        cenarios={c: arq.cenario_dcf(av) for c, av in r.avaliacoes.items()},
+        sensibilidades=[
+            ("sensibilidade_heatmap", wacc_g, "Sensibilidade WACC x g", "g terminal", "WACC"),
+            (
+                "sensibilidade_heatmap_margem_crescimento",
+                margem_g,
+                "Sensibilidade margem EBITDA x crescimento",
+                "Delta de crescimento da receita",
+                "Delta de margem EBITDA",
+            ),
+        ],
+        rotulo_faixa="faixa WACC/g",
+        multiplos=multiplos,
+        ticker_preco=normalizado if normalizado in m.precos else next(iter(m.precos)),
+        avisos=avisos,
+        cambio=av_ref.cambio,
+    )
 
     for aviso in avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
     console.print(cen.mensagem(r, normalizado))
     console.print("Estudo pessoal; não é recomendação de investimento.")
     console.print(f"Gravado em {raiz}")
+
+
+def _metricas_com_ltm(p: _Padronizada, settings: Settings) -> tuple[pd.DataFrame, pd.Series]:
+    """Métricas anuais e a linha LTM do plano da empresa (como no comando `historico`)."""
+    anual = per.anual(p.contas)
+    if p.plano.tipo == "financeira":
+        return fin.metricas(anual), fin.metricas_ltm(p.contas)
+    aliquota = settings.impostos.aliquota_nominal
+    return (
+        nf.metricas(anual, aliquota_nominal=aliquota, ajustes=p.ajustes),
+        nf.metricas_ltm(p.contas, aliquota_nominal=aliquota, ajustes=p.ajustes),
+    )
+
+
+def _ano(indice: object) -> int:
+    return int(cast(int, getattr(indice, "year", indice)))
+
+
+def _serie_por_ano(serie: pd.Series) -> pd.Series:
+    return pd.Series(serie.to_numpy(dtype=float), index=[_ano(i) for i in serie.index])
+
+
+def _serie_anualizada(projecao: pd.DataFrame, coluna: str, modelo: str) -> pd.Series:
+    """Coluna da projeção em base anual: no DDM, lucro e dividendos já vêm multiplicados pela
+    fração do ano por vir (só o gráfico desfaz isso; os CSVs mantêm o valor do trecho)."""
+    serie = projecao[coluna]
+    if modelo == "ddm" and coluna in ("lucro", "dividendos"):
+        fracao = projecao["fracao"]
+        serie = (serie / fracao)[fracao > 0]
+    return _serie_por_ano(serie)
+
+
+def _paineis(
+    modelo: str,
+    anual: pd.DataFrame,
+    cenarios: dict[str, arq.CenarioSaida],
+) -> list[gr.Painel]:
+    """Séries do `historico_vs_projecao.png`: (título, coluna do histórico, coluna da projeção)."""
+    colunas = (
+        (
+            ("Receita líquida", "receita_liquida", "receita_liquida"),
+            ("EBITDA", "ebitda", "ebitda"),
+            ("FCFF", "fcff", "fcff"),
+        )
+        if modelo == "dcf"
+        else (
+            ("Lucro da controladora", "lucro_liquido_controladora", "lucro"),
+            ("Dividendos", "dividendos_pagos", "dividendos"),
+            ("PL da controladora", "patrimonio_liquido", "pl_final"),
+        )
+    )
+    paineis = []
+    for titulo, col_hist, col_proj in colunas:
+        if col_hist not in anual.columns:
+            continue
+        paineis.append(
+            gr.Painel(
+                titulo,
+                _serie_por_ano(anual[col_hist]),
+                {
+                    c: _serie_anualizada(cen.projecao, col_proj, modelo)
+                    for c, cen in cenarios.items()
+                },
+            )
+        )
+    return paineis
+
+
+def _faixa_52_semanas(m: _Mercado, ticker: str, base: dt.date) -> tuple[float, float] | None:
+    try:
+        hist = m.yf.historico(prc.simbolo_yahoo(ticker), base - dt.timedelta(days=370), base)
+    except (prc.ErroPrecos, ErroDadosExternos) as e:
+        console.print(f"[yellow]Aviso:[/] faixa de 52 semanas indisponível: {e}")
+        return None
+    return arq.faixa_52_semanas(hist, base)
+
+
+def _gravar_complementos(
+    raiz: Path,
+    fmt: FormatoCsv,
+    settings: Settings,
+    e: _Execucao,
+    p: _Padronizada,
+    m: _Mercado,
+    *,
+    modelo: str,
+    r: cen.ResultadoCenarios,  # type: ignore[type-arg]
+    cenarios: dict[str, arq.CenarioSaida],
+    sensibilidades: list[tuple[str, pd.DataFrame, str, str, str]],
+    rotulo_faixa: str,
+    multiplos: mt.ResultadoMultiplos | None,
+    ticker_preco: str,
+    avisos: list[str],
+    cambio: float,
+) -> list[str]:
+    """Arquivos da Fase 9: `historico.csv`, `qa.json`, `valores_reais.csv`,
+    `premissas_usadas.yaml`, gráficos e `meta.json`. Devolve avisos novos (QA, 52 semanas, IPCA)."""
+    ticker = p.premissas.ticker
+    novos: list[str] = []
+    referencia = e.referencia
+    try:
+        anual, ltm = _metricas_com_ltm(p, settings)
+        gravar_csv(arq.tabela_historico(anual, ltm), raiz / "historico.csv", settings.csv, fmt)
+        resultado_qa = qa_mod.verificar(
+            p.selecionadas,
+            p.contas,
+            p.plano,
+            ticker=ticker,
+            moeda=p.moeda,
+            historico_anos=settings.historico_anos,
+        )
+    except (ErroContabil, ErroModelo) as erro:
+        raise _erro(str(erro)) from erro
+    qa_mod.gravar(resultado_qa, raiz / "qa.json")
+    if resultado_qa.erros:
+        novos.append(f"QA com {len(resultado_qa.erros)} erro(s): veja qa.json.")
+
+    ipca = real.IpcaProjetado(m.macro.ipca_esperado, m.macro.ipca_12m.valor)
+    if not m.macro.ipca_esperado:
+        novos.append(
+            "Sem Focus: valores reais deflacionados pelo IPCA de 12 meses em todos os anos."
+        )
+    gravar_csv(
+        real.tabela(e.base, ipca, {c: cen_.para_real() for c, cen_ in cenarios.items()}),
+        raiz / "valores_reais.csv",
+        settings.csv,
+        fmt,
+    )
+
+    arq.gravar_yaml(
+        {
+            "ticker": ticker,
+            "data_base": e.base,
+            "modelo": modelo,
+            "perfil": r.perfil,
+            "empresa": p.premissas.model_dump(mode="json"),
+            "resolvidas_por_cenario": {c: v.premissas for c, v in r.avaliacoes.items()},
+            "settings": settings.model_dump(mode="json"),
+        },
+        raiz / "premissas_usadas.yaml",
+        "# Premissas usadas nesta execução (reprodutibilidade; não é a fonte editável:\n"
+        "# edite config/empresas/ e settings.yaml).\n",
+    )
+
+    if e.graficos:
+        faixa_52 = _faixa_52_semanas(m, ticker_preco, e.base)
+        if faixa_52 is None:
+            novos.append(
+                "Football field sem a faixa de 52 semanas (histórico de preços indisponível)."
+            )
+        valores = {c: v.valor_por_acao for c, v in cenarios.items()}
+        gr.football_field(
+            arq.faixas_football(
+                valores,
+                sensibilidades[0][1],
+                multiplos,
+                faixa_52,
+                modelo=modelo,
+                rotulo_matriz=rotulo_faixa,
+            ),
+            preco=r.preco,
+            preco_maximo=r.preco_maximo_compra,
+            caminho=raiz / "football_field.png",
+            ticker=ticker,
+            perfil=r.perfil.perfil,
+        )
+        for nome, matriz, titulo, rotulo_x, rotulo_y in sensibilidades:
+            gr.heatmap(
+                matriz,
+                caminho=raiz / f"{nome}.png",
+                titulo=f"{titulo} — {ticker} ({referencia})",
+                rotulo_x=rotulo_x,
+                rotulo_y=rotulo_y,
+                preco=r.preco,
+            )
+        gr.historico_vs_projecao(
+            _paineis(modelo, anual, cenarios),
+            caminho=raiz / "historico_vs_projecao.png",
+            ticker=ticker,
+            referencia=referencia,
+            moeda=p.moeda,
+        )
+        gr.composicao_valor(
+            cenarios,
+            caminho=raiz / "composicao_valor.png",
+            ticker=ticker,
+            rotulo_fluxos="VP dos dividendos" if modelo == "ddm" else "VP dos fluxos (FCFF)",
+            rotulo_total="Valor do patrimônio (DDM)" if modelo == "ddm" else "Valor da firma (EV)",
+            moeda=p.moeda,
+        )
+        ponte = cenarios[referencia].ponte
+        if ponte is not None:
+            gr.cascata_ponte(
+                ponte,
+                caminho=raiz / "ponte_ev_equity.png",
+                ticker=ticker,
+                cenario=referencia,
+                moeda=p.moeda,
+            )
+
+    todos = [*avisos, *novos]
+    arq.gravar_json(
+        arq.montar_meta(
+            versao=__version__,
+            agora=e.agora,
+            comando=e.comando,
+            commit=arq.commit_git(Path(__file__).resolve().parent),
+            ticker=ticker,
+            data_base=e.base,
+            modelo=modelo,
+            perfil=e.efetivo.perfil,
+            origem_perfil=e.efetivo.origem,
+            moeda_reporte=p.moeda,
+            cambio=cambio,
+            cenarios=list(cenarios),
+            referencia=referencia,
+            taxa_desconto={c: v.taxa for c, v in cenarios.items()},
+            fontes={
+                "precos": m.precos,
+                "ibovespa": m.ibov,
+                "macro": {
+                    "selic": m.macro.selic,
+                    "ipca_12m": m.macro.ipca_12m,
+                    "cambio": m.macro.cambio,
+                    "rf_brl": m.macro.rf_brl,
+                    "ipca_esperado_focus": m.macro.ipca_esperado,
+                    "data_focus": m.macro.data_focus,
+                },
+                "market_cap": m.cap,
+                "cvm": arq.fontes_cvm(DIR_RAW),
+            },
+            hash_contas=arq.sha256_arquivo(
+                pad.caminho_padronizadas(DIR_PROCESSED, p.empresa.cd_cvm)
+            ),
+            arquivos=sorted({*(f.name for f in raiz.iterdir()), "meta.json"}),
+            avisos=todos,
+        ),
+        raiz / "meta.json",
+    )
+    return novos
 
 
 @dataclass(frozen=True)
@@ -2017,6 +2305,8 @@ class _Execucao:
     cenarios: tuple[pj.NomeCenario, ...]
     referencia: pj.NomeCenario
     forcar: bool
+    graficos: bool = True
+    comando: str = ""
 
 
 def _rodar_financeira(
@@ -2126,6 +2416,32 @@ def _rodar_financeira(
     ]
     resumo = _resumo_financeira(ticker, e, cc, r, multiplos, avisos)
     gravar_csv(resumo, raiz / "resumo.csv", settings.csv, fmt)
+    avisos += _gravar_complementos(
+        raiz,
+        fmt,
+        settings,
+        e,
+        p,
+        m,
+        modelo="ddm",
+        r=r,
+        cenarios={c: arq.cenario_ddm(av) for c, av in r.avaliacoes.items()},
+        sensibilidades=[
+            ("sensibilidade_heatmap", ke_g, "Sensibilidade Ke x g", "g terminal", "Ke"),
+            (
+                "sensibilidade_heatmap_roe_ke",
+                roe_ke,
+                "Sensibilidade ROE de longo prazo x Ke",
+                "Ke",
+                "ROE de longo prazo",
+            ),
+        ],
+        rotulo_faixa="faixa Ke/g",
+        multiplos=multiplos,
+        ticker_preco=ticker if ticker in m.precos else next(iter(m.precos)),
+        avisos=avisos,
+        cambio=1.0,
+    )
     for aviso in avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
     console.print(cen.mensagem(r, ticker))

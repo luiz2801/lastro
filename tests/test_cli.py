@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 from collections.abc import Callable
 from pathlib import Path
 
@@ -450,14 +451,34 @@ def test_rodar_financeira(mercado_banco: Path, caminho_perfil: Path) -> None:
     assert resultado.exit_code == 0, resultado.output
     pasta = saida / "WEGE3" / "2026-10-30"
     assert sorted(x.name for x in pasta.iterdir()) == [
+        "composicao_valor.png",
+        "football_field.png",
+        "historico.csv",
+        "historico_vs_projecao.png",
+        "meta.json",
+        "premissas_usadas.yaml",
         "projecao_base.csv",
         "projecao_otimista.csv",
         "projecao_pessimista.csv",
+        "qa.json",
         "resumo.csv",
+        "sensibilidade_heatmap.png",
+        "sensibilidade_heatmap_roe_ke.png",
         "sensibilidade_ke_g.csv",
         "sensibilidade_roe_ke.csv",
+        "valores_reais.csv",
         "wacc.csv",
     ]
+    meta = json.loads((pasta / "meta.json").read_text("utf-8"))
+    assert meta["modelo"] == "ddm"
+    reais = ler_csv_br(pasta / "valores_reais.csv")
+    assert set(reais["item"]) == {
+        "fluxo",
+        "valor_terminal",
+        "valor_por_acao",
+        "taxa_desconto",
+        "g_terminal",
+    }
     r = ler_csv_br(pasta / "resumo.csv").iloc[0]
     assert r["modelo"] == "ddm"
     assert r["roe_longo_prazo"] == pytest.approx(22 / 90)
@@ -543,13 +564,24 @@ def test_rodar(mercado_falso: Path, caminho_perfil: Path) -> None:
     assert resultado.exit_code == 0, resultado.output
     pasta = saida / "WEGE3" / "2026-10-30"
     assert sorted(p.name for p in pasta.iterdir()) == [
+        "composicao_valor.png",
+        "football_field.png",
+        "historico.csv",
+        "historico_vs_projecao.png",
+        "meta.json",
         "ponte_ev_equity.csv",
+        "ponte_ev_equity.png",
+        "premissas_usadas.yaml",
         "projecao_base.csv",
         "projecao_otimista.csv",
         "projecao_pessimista.csv",
+        "qa.json",
         "resumo.csv",
+        "sensibilidade_heatmap.png",
+        "sensibilidade_heatmap_margem_crescimento.png",
         "sensibilidade_margem_crescimento.csv",
         "sensibilidade_wacc_g.csv",
+        "valores_reais.csv",
         "wacc.csv",
     ]
     r = ler_csv_br(pasta / "resumo.csv").iloc[0]
@@ -581,6 +613,63 @@ def test_rodar(mercado_falso: Path, caminho_perfil: Path) -> None:
     texto = " ".join(resultado.output.split())
     assert "preço máximo de compra para o perfil moderado" in texto
     assert "não é recomendação" in texto
+
+    meta = json.loads((pasta / "meta.json").read_text("utf-8"))
+    assert meta["ticker"] == "WEGE3"
+    assert meta["modelo"] == "dcf"
+    assert meta["perfil"] == {"nome": "moderado", "origem": "override"}
+    assert meta["moeda_reporte"] == "BRL"
+    assert meta["cenarios"] == ["pessimista", "base", "otimista"]
+    assert meta["codigo"]["versao"] == __version__
+    assert "--perfil moderado" in meta["comando"]
+    assert "meta.json" in meta["arquivos"] and "resumo.csv" in meta["arquivos"]
+    assert meta["hash_contas_padronizadas"]
+    assert meta["fontes"]["macro"]["ipca_esperado_focus"] == {"2027": 0.04, "2030": 0.035}
+    assert meta["taxa_desconto"]["base"] == pytest.approx(r["wacc"])
+
+    qa_json = json.loads((pasta / "qa.json").read_text("utf-8"))
+    assert qa_json["ticker"] == "WEGE3"
+
+    usadas = yaml.safe_load((pasta / "premissas_usadas.yaml").read_text("utf-8"))
+    assert usadas["perfil"]["perfil"] == "moderado"
+    assert usadas["empresa"]["ticker"] == "WEGE3"
+    assert set(usadas["resolvidas_por_cenario"]) == {"pessimista", "base", "otimista"}
+    assert usadas["resolvidas_por_cenario"]["base"]["g_terminal"] == pytest.approx(0.05)
+    assert usadas["settings"]["terminal"]["g_nominal_max"] == 0.05
+
+    hist = ler_csv_br(pasta / "historico.csv")
+    assert hist["periodo"].iloc[-1].startswith("LTM")
+    assert list(hist["tipo"].iloc[:-1].unique()) == ["anual"]
+
+    reais = ler_csv_br(pasta / "valores_reais.csv")
+    base_ = reais[reais["cenario"] == "base"]
+    fluxos = base_[base_["item"] == "fluxo"]
+    assert (fluxos["deflator"] > 1).all()
+    assert fluxos["real"].tolist() == pytest.approx(
+        (fluxos["nominal"] / fluxos["deflator"]).tolist()
+    )
+    assert fluxos["ipca_ano"].iloc[0] == pytest.approx(0.05)  # 2026: antes do Focus, IPCA 12m
+    valor = base_[base_["item"] == "valor_por_acao"].iloc[0]
+    assert valor["nominal"] == pytest.approx(r["valor_base"]) and valor["real"] == valor["nominal"]
+
+
+def test_rodar_sem_graficos(mercado_falso: Path, caminho_perfil: Path) -> None:
+    saida = mercado_falso / "saida"
+    resultado = CliRunner().invoke(
+        app, ["rodar", "WEGE3", "--perfil", "moderado", "--sem-graficos", "--saida", str(saida)]
+    )
+    assert resultado.exit_code == 0, resultado.output
+    pasta = saida / "WEGE3" / "2026-10-30"
+    assert not list(pasta.glob("*.png"))
+    for nome in (
+        "meta.json",
+        "qa.json",
+        "historico.csv",
+        "valores_reais.csv",
+        "premissas_usadas.yaml",
+    ):
+        assert (pasta / nome).is_file()
+    assert "--sem-graficos" in json.loads((pasta / "meta.json").read_text("utf-8"))["comando"]
 
 
 def test_rodar_um_cenario(mercado_falso: Path, caminho_perfil: Path) -> None:
