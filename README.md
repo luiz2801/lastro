@@ -109,13 +109,14 @@ Pilotos: PETR4, VALE3 e WEGE3.
   winsorização, quartis, aviso de poucos pares e de escala implausível; valor implícito do alvo;
   beta por comparáveis, estrutura-alvo do setor, minoritários pelo P/VP e g implícito no múltiplo
   de saída; `valuation comparar TICKER` e múltiplos no `rodar`.
-- **Testes**: 415 (404 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
+- **Testes**: 429 (418 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
 - **Universo**: `config/universo_ibovespa.csv` com os 76 ativos da carteira de 30/10/26 da B3;
   `valuation atualizar --tudo` baixa os dados de todos (holdings só avisam).
 - **Financeiras** (Fase 10, em andamento): plano de contas de bancos e seguradoras (25 companhias
-  conferidas), métricas (ROE, payout, PL da controladora), QA próprio; `qa`, `historico` e
-  `cobertura` aceitam financeiras.
-- **Ainda não**: DDM e premissas das financeiras, gráficos e demais saídas da Fase 9. Lista
+  conferidas), métricas (ROE, payout, PL da controladora), QA próprio; premissas do DDM (ROE
+  até o de longo prazo, payout até 1 − g/ROE) e projeção de lucro, dividendos e PL; `qa`,
+  `historico`, `cobertura` e `premissas sugerir` aceitam financeiras.
+- **Ainda não**: DDM e múltiplos das financeiras, gráficos e demais saídas da Fase 9. Lista
   completa na seção 12 do `guia.md`.
 
 ## Decisões que completam ou divergem do `CLAUDE.md`
@@ -157,6 +158,8 @@ Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
 - **Financeiras** ([ADR 0011](docs/decisoes/0011-plano-de-contas-das-financeiras.md)): plano de
   contas por descrição para bancos, seguradoras e o plano comercial; individuais quando não há
   consolidado; ROE sobre o PL inicial; corretoras (WIZC3, QUAL3) avaliadas como não financeiras.
+- **Premissas das financeiras** ([ADR 0012](docs/decisoes/0012-premissas-e-projecao-das-financeiras.md)):
+  ROE de longo prazo pela mediana de 10 anos, payout até 1 − g/ROE, cenários pelo ROE.
 
 O ERP (5,0%) é premissa do usuário, sem fonte externa (`docs/fontes.md`). Os demais parâmetros de
 mercado de `config/settings.yaml` (faixa do Kd, Rf e inflação em USD) e o mapeamento perfil →

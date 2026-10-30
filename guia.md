@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.12 — 2026-10-30**
+**Versão 1.13 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
 > (Fases 0 a 8 implementadas; Fase 10, financeiras, em andamento) para que você não precise reler os módulos. Para o que ainda
@@ -37,14 +37,14 @@
 | Dados | `data/{http,cvm,cadastro,validacao,precos,macro}.py` | ✅ prontos |
 | Contábil | `contabil/{padronizacao,periodos,moeda,qa,nao_financeiras,financeiras}.py` + `config/mapeamento_contas.yaml` | ✅ prontos (planos `nao_financeira` e `financeira`) |
 | Perfil | `perfil/{questionario,pontuacao,registro,parametros}.py` | ✅ prontos (seção 17) |
-| Projeção | `projecao/{premissas,sugestor,projetor,escrita}.py` + `config/empresas/*.yaml` + `config/setores.yaml` | ✅ prontos (seção 18) |
+| Projeção | `projecao/{premissas,sugestor,projetor,escrita,financeira}.py` + `config/empresas/*.yaml` + `config/setores.yaml` | ✅ prontos (seção 18), FCFF e DDM |
 | Custo de capital | `custo_capital/{beta,capm,kd,wacc}.py` | ✅ prontos (seção 19), inclusive beta por comparáveis e estrutura do setor |
 | Modelos | `modelos/{dcf,ponte,multiplos}.py` | ✅ DCF do FCFF, ponte EV → equity e múltiplos dos pares (seção 20); DDM na Fase 10 |
 | Análise | `analise/{cenarios,sensibilidade}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade (seção 20) |
 | Saída | `saida/csv.py` | CSV e matrizes (seção 19); gráficos, `meta.json` e demais arquivos na Fase 9 |
 | CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar` |
 
-~7.700 linhas de código, 415 testes (11 golden pulados por motivo declarado), mypy `strict`,
+~8.100 linhas de código, 429 testes (11 golden pulados por motivo declarado), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -141,7 +141,10 @@ do par; trocado nos testes), `_fundamentos` (LTM + itens da ponte com minoritár
 BRL), `_multiplos` (`None` sem pares), `_precisa_pares` (beta por comparáveis, estrutura `setor` ou
 `multiplo_pvp`), `_mostrar_pares`, `_mostrar_implicitos`, `_gravar_multiplos`. `_sugerir(p, settings, base) -> (histórico, setor, Sugestoes)`
 (métricas dos exercícios < data-base) e `_resolver(p, settings, sugestoes, base, horizonte)`
-(premissas do cenário base) servem a `premissas sugerir` e a `rodar`. Do `rodar`:
+(premissas do cenário base) servem a `premissas sugerir` e a `rodar`. Financeiras:
+`_sugerir_financeira(p, settings, base) -> (histórico, SugestoesFinanceira)`, `_pl_inicial(p, base)`
+(PL da controladora no balanço de `_data_balanco`), `_premissas_sugerir_financeira` e
+`_escrever_premissas(p, texto, escrever)` (comum aos dois tipos). Do `rodar`:
 `_dados_avaliacao` (itens da ponte no balanço de `CustoCapital.data_balanco`, ações =
 soma de `MarketCap.classes`, câmbio 1 ou dólar), `_ronic` (YAML > settings; `roic_historico` =
 mediana de 5a), `_resumo` (linha do `resumo.csv`), `_mostrar_valuation`.
@@ -155,7 +158,7 @@ mediana de 5a), `_resumo` (linha do `resumo.csv`), `_mostrar_valuation`.
 | `qa TICKER` | — | Padroniza, roda o QA (verificações do plano da companhia), imprime verificações, cobertura e contas não mapeadas relevantes (só não financeiras); grava `data/processed/qa/qa_{TICKER}.json` | **Sai com 1 se houver erro de QA.** Exige `atualizar` antes |
 | `historico TICKER` | `--anos N` (5); `--trimestral` | Métricas anuais (R$ mi) + coluna LTM. Financeiras: receitas e resultado bruto (`3.01`/`3.03`), lucro, lucro da controladora, alíquota, PL da controladora, ROE, dividendos, payout, ativo, ativo/PL, ROA | `--anos` = quantos exercícios; `--trimestral` mostra os 8 últimos trimestres (receita, EBITDA, lucro, D&A, capex, dividendos; financeiras: lucro da controladora e dividendos) |
 | `cobertura` | `--tickers A,B` ou `--tudo` | Matriz conta crítica × ticker com a fração dos exercícios mapeados (verde ≥ 95%); conta do outro plano aparece como `—` | igual a `atualizar` |
-| `premissas sugerir TICKER` | `--escrever`; `--perfil P`; `--data-base AAAA-MM-DD` | Sugere as premissas a partir dos exercícios encerrados antes da data-base e imprime "premissas sugeridas × histórico" (último ano, medianas 5a/10a, sugerido, valor no YAML), CAGR 3/5/10a, deltas dos cenários e a **projeção base** (R$ mi). Avisos: setor de commodity, setor não definido, ano-ponte sem DFP, histórico curto | `--escrever` regenera `config/empresas/{TICKER}.yaml` comentado (anterior em `.yaml.bak`; sem ele, só avisa que o YAML não existe). `--perfil` só define o horizonte quando o YAML usa `horizonte_anos: perfil`; sem perfil válido nem `--perfil`, mostra as sugestões e pula a projeção (sai com 0). `--data-base` corta o histórico e define a fração do ano corrente. Exige `atualizar` antes |
+| `premissas sugerir TICKER` | `--escrever`; `--perfil P`; `--data-base AAAA-MM-DD` | Sugere as premissas a partir dos exercícios encerrados antes da data-base e imprime "premissas sugeridas × histórico" (último ano, medianas 5a/10a, sugerido, valor no YAML), CAGR 3/5/10a, deltas dos cenários e a **projeção base** (R$ mi). Financeira: ROE (início → longo prazo) e payout inicial × histórico, g, payout final, delta do ROE e a projeção do DDM (ROE, payout, PL, lucro, dividendos) a partir do PL do último balanço. Avisos: setor de commodity, setor não definido, ano-ponte sem DFP, histórico curto | `--escrever` regenera `config/empresas/{TICKER}.yaml` comentado (anterior em `.yaml.bak`; sem ele, só avisa que o YAML não existe). `--perfil` só define o horizonte quando o YAML usa `horizonte_anos: perfil`; sem perfil válido nem `--perfil`, mostra as sugestões e pula a projeção (sai com 0). `--data-base` corta o histórico e define a fração do ano corrente. Exige `atualizar` antes |
 | `wacc TICKER` | `--data-base AAAA-MM-DD`; `--forcar`; `--saida DIR`; `--formato-csv br\|intl` | Beta, Ke, Kd, estrutura e WACC na moeda de reporte; tabela no terminal e `{saida}/{TICKER}/{data-base}/wacc.csv` (`componente;valor;detalhe`, avisos em linhas `aviso`) | `--saida` muda a raiz (padrão `saida/`); `intl` grava `,`/`.`/utf-8. **WACC ≤ g terminal ⇒ sai com 1.** Exige `atualizar` antes; consulta preços e macro como `mercado`. Mede os pares só se o beta for por comparáveis ou a estrutura for `setor` |
 | `comparar TICKER` | `--data-base`; `--saida DIR`; `--formato-csv br\|intl`; `--forcar` | Múltiplos LTM do alvo e dos pares (P/L, EV/EBITDA, EV/EBIT, EV/Receita, P/VP, EV/FCF, dividend yield), P25/mediana/P75 dos pares e valor por ação implícito do alvo; grava `multiplos_pares.csv` e `multiplos_implicitos.csv` em `{saida}/{TICKER}/{data-base}/` | **Nenhum par medido ⇒ sai com 1** (par sem dados vira aviso). Exige `atualizar` do alvo e dos pares (`--com-pares`) |
 | `rodar TICKER` | `--cenario base\|pessimista\|otimista\|todos` (todos); `--perfil P`; `--data-base`; `--saida DIR`; `--formato-csv br\|intl`; `--forcar` | DCF por cenário (VP dos fluxos, VP do terminal, EV, VT/EV, EV/EBITDA terminal, equity, valor por ação), checagens de g/WACC/RONIC, valor ponderado, preço máximo de compra, upside, Ke implícito × hurdle e WACC implícito × WACC, projeção do cenário de referência e matriz WACC × g; mensagem neutra contra o preço máximo do perfil. Também mede os pares (múltiplos, valor implícito pela mediana, g implícito no EV/EBITDA mediano dos pares). Grava em `{saida}/{TICKER}/{data-base}/`: `resumo.csv`, `wacc.csv`, `projecao_{cenario}.csv`, `ponte_ev_equity.csv` (coluna por cenário), `sensibilidade_wacc_g.csv`, `sensibilidade_margem_crescimento.csv` e, com pares medidos, `multiplos_pares.csv` e `multiplos_implicitos.csv` | **Exige perfil válido ou `--perfil`** (senão sai com 1); o perfil dá pesos, margem, hurdle e, com `horizonte_anos: perfil`, o horizonte. `--cenario X` avalia só X (peso 100%, referência do preço máximo e da sensibilidade). Exige `atualizar`; consulta preços e macro como `mercado`. Falta da Fase 9: gráficos, `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais |
@@ -503,7 +506,7 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | Fase | Falta | Dica de onde conectar |
 |---|---|---|
 | 9 | gráficos (football field, cascata da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos` | `rodar` já tem tudo em memória: `ResultadoCenarios`, matrizes, `ResultadoMultiplos` (barras P/L, EV/EBITDA, P/VP pelos quartis: `implicitos.valor_p25/p75`; `mt.ROTULOS`) e `PerfilEfetivo.origem` (vai ao `meta.json`). `premissas_usadas.yaml` = serializar `Avaliacao.premissas` de cada cenário |
-| 10 | Premissas, DDM, lucro residual, P/VP justificado, Ke das financeiras, múltiplos financeiros | `qa`, `historico` e `cobertura` já aceitam financeiras; `premissas`, `wacc`, `comparar` e `rodar` ainda supõem as métricas não financeiras |
+| 10 | DDM, lucro residual, P/VP justificado, Ke das financeiras, múltiplos financeiros | `qa`, `historico`, `cobertura` e `premissas sugerir` já aceitam financeiras (premissas e projeção em `projecao/financeira.py`); `wacc`, `comparar` e `rodar` ainda supõem as métricas não financeiras |
 
 ## 13. Convenções que o código já segue (siga também)
 
@@ -536,6 +539,7 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | `test_perfil.py` | questionário (10 perguntas, 1–5 pontos, vetos), faixas, vetos, validade, JSON ida e volta e adulterado, `resolver_perfil`, parâmetros do settings | `respostas(padrao, **trocas)` |
 | `test_premissas.py` | esquema do YAML (padrões, manual, listas, inválidos), carga e ticker, conferência com o cadastro, conversão dos ajustes, YAMLs do repositório, escrita ida e volta | `MINIMO`, `historico_anual` |
 | `test_sugestor.py` | sugestões calculadas à mão (medianas, reversão da margem, desvios e limites), resumo, histórico curto e com buraco, commodity | `historico_anual` |
+| `test_projecao_financeira.py` | sugestões do DDM à mão (medianas, limites, piso do delta), `payout_final`, resolução (sugerido, manual, lista), cenários, projeção à mão, esquema do YAML financeiro (inválidos, tipo errado) e escrita ida e volta | `historico(roe, payout)` |
 | `test_projetor.py` | projeção de 3 anos calculada à mão, anos projetados, fração do ano, `resolver` (sugerido, manual, listas, erros), cenários, g terminal | `PREMISSAS`, `historico_anual` |
 | `test_beta.py`, `test_capm.py`, `test_kd.py`, `test_wacc.py` | regressão em série sintética com beta exato, Blume, Hamada, comparáveis, classe mais líquida; Ke dos dois métodos e coerência por Fisher; Kd com dívida média, buracos e limites; WACC à mão, estrutura, realavancagem, `validar_g`, tabela e CSV br/intl | `precos(retornos)` (sextas) |
 | `test_financeiras.py` | plano `financeira` (bancos antigo e novo, atribuição dupla do BB, individual, período zerado), métricas à mão, sem atribuição, dividendos ausentes, LTM, QA das financeiras | `dfp_banco` |
@@ -684,6 +688,8 @@ vez de baixar dados reais. Sem rede nos testes.
 35. Atribuição do lucro zerada (ABCB4 2020–2023, IRBR3 2022–2025) vira lucro todo da controladora
     e aviso `lucro_atribuido`. Dividendos sem linha (Santander 2021+, DFC direto) ficam NaN no
     payout. O payout histórico é de caixa e inclui extraordinários (Itaú 2025: 108%).
+36. Na financeira, a lista de ROE do YAML começa no **primeiro exercício aberto** (o corrente);
+    no FCFF, as listas começam no exercício seguinte ao último histórico.
 
 ## 17. `perfil/` — perfil do investidor
 
@@ -708,10 +714,11 @@ não importa `data`, `perfil` nem a CLI. Exceção: `ErroProjecao` (`projecao/__
 
 | Módulo | Símbolos | Detalhe |
 |---|---|---|
-| `premissas.py` | `PremissasEmpresa` (pydantic, `extra=forbid`, frozen) com `Ajustes`, `ConfigProjecao`, `Cenarios`/`DeltaCenario`, `Pares`, `CustoCapitalEmpresa`; `Trajetoria(inicio, fim, curva=linear)`; `SUGERIDO`; `caminho_premissas(ticker, dir)`, `carregar_premissas(caminho)`, `premissas_padrao(ticker, tipo, classes)`, `conferir_cadastro(premissas, tickers, tipo)`, `ajustes_contabeis(ajustes) -> AjustesContabeis` | Todo campo de premissa aceita `sugerido` ou número; crescimento e margem aceitam também lista. Limites: frações em [0, 1] (NWC e trajetórias em [−1, 1]), deltas em [−0,5; 0,5], horizonte 1–30. Ticker ≠ nome do arquivo, `tipo_modelo` fora de `nao_financeira`/`financeira`, `metodo: manual` sem `valor`, alíquota acima de `limite_superior` ⇒ erro. `nao_recorrentes.valor` em **unidades** da moeda |
+| `premissas.py` | `PremissasEmpresa` (pydantic, `extra=forbid`, frozen) com `Ajustes`, `projecao` (`ConfigProjecao` ou, se `tipo_modelo: financeira`, `ProjecaoFinanceira(horizonte_anos, roe, payout_inicio, terminal: TerminalFinanceira(g_nominal))`), `cenarios` (`Cenarios`/`DeltaCenario` ou `CenariosFinanceira`/`DeltaCenarioFinanceira(roe_pp)`), `Pares`, `CustoCapitalEmpresa`; acesso tipado por `.projecao_dcf`, `.cenarios_dcf`, `.projecao_ddm`, `.cenarios_ddm` (tipo errado ⇒ `ErroConfiguracao`); financeira com outro ajuste que não `consolidado`/`mapeamento_extra` (`AJUSTES_FINANCEIRA`) ou com `custo_capital.kd` ⇒ erro; `Trajetoria(inicio, fim, curva=linear)`; `SUGERIDO`; `caminho_premissas(ticker, dir)`, `carregar_premissas(caminho)`, `premissas_padrao(ticker, tipo, classes)`, `conferir_cadastro(premissas, tickers, tipo)`, `ajustes_contabeis(ajustes) -> AjustesContabeis` | Todo campo de premissa aceita `sugerido` ou número; crescimento e margem aceitam também lista. Limites: frações em [0, 1] (NWC e trajetórias em [−1, 1]), deltas em [−0,5; 0,5], horizonte 1–30. Ticker ≠ nome do arquivo, `tipo_modelo` fora de `nao_financeira`/`financeira`, `metodo: manual` sem `valor`, alíquota acima de `limite_superior` ⇒ erro. `nao_recorrentes.valor` em **unidades** da moeda |
 | `sugestor.py` | `sugerir(historico, *, g_terminal, aliquota_limite, commodity, setor=None) -> Sugestoes`; `Sugestao(valor, origem)`; `razoes(historico)`; `cagr`; `pct`, `pp` (formatação pt-BR) | Janelas por ano: 5a = 5 últimos exercícios, 10a = 10. Anos faltantes viram NaN (sem crescimento atravessando o buraco). Mínimo de 2 exercícios. Constantes `JANELA_*`, `CRESCIMENTO_MIN/MAX`, `REVERSAO_MARGEM`, `DELTA_*`, `FATOR_DELTA_CAPEX`. `Sugestoes.estatisticas` = linhas `ultimo`, `mediana_5a`, `mediana_10a`, `cagr_{3,5,10}a` × colunas de `razoes` |
-| `projetor.py` | `primeiro_ano_aberto`, `anos_projetados(ano_base, data_base, horizonte)`, `fracao_restante(ano, data_base)`, `g_terminal(terminal, config) -> Sugestao`, `resolver(config, sugestoes, *, anos, aliquota_limite, descontar_arrendamento) -> PremissasResolvidas`, `resolver_cenarios(cenarios, sugestoes)`, `aplicar_cenario(base, delta, nome)`, `projetar(historico, premissas, *, data_base) -> DataFrame`; `COLUNAS_PROJECAO` | Funções puras. Histórico que inclui o exercício da data-base ⇒ erro (a CLI corta antes). Lista mais curta que os anos ⇒ erro; mais longa é cortada |
-| `escrita.py` | `renderizar(premissas, sugestoes, *, data_base) -> str` | YAML inteiro com comentários (`sugerido: X (origem)` ou `manual; sugerido seria X`), linhas de comentário ≤ 100 colunas. `carregar_premissas` do texto devolve as mesmas premissas (testado) |
+| `financeira.py` | `sugerir(historico, *, g_terminal) -> SugestoesFinanceira` (`roe_inicio`, `roe_fim`, `payout_inicio`, `g_terminal`, `delta_roe`, `estatisticas`, `avisos`), `razoes`, `payout_final(roe_lp, g)`, `PremissasFinanceiras(anos, roe, payout_inicio, g_terminal, cenario)` com `.roe_longo_prazo` e `.payout` (linear até 1 − g/ROE_LP), `anos_projetados(data_base, horizonte)`, `resolver(config, sugestoes, *, anos)`, `resolver_cenarios`, `aplicar_cenario(base, delta_roe, cenario)`, `projetar(pl_inicial, premissas, *, data_base) -> DataFrame` (`COLUNAS_PROJECAO`) | ADR 0012. Histórico = `contabil.financeiras.metricas` dos exercícios < data-base. ROE_LP ≤ g ⇒ `ErroProjecao`; PL inicial ≤ 0 ⇒ erro. Projeção a partir do primeiro exercício aberto (sem ano-ponte) |
+| `projetor.py` | `primeiro_ano_aberto`, `anos_projetados(ano_base, data_base, horizonte)`, `fracao_restante(ano, data_base)`, `g_terminal(terminal, config) -> Sugestao` (aceita o terminal do FCFF e o do DDM), `linear`, `escolher`, `trajetoria` (públicas: o DDM usa), `resolver(config, sugestoes, *, anos, aliquota_limite, descontar_arrendamento) -> PremissasResolvidas`, `resolver_cenarios(cenarios, sugestoes)`, `aplicar_cenario(base, delta, nome)`, `projetar(historico, premissas, *, data_base) -> DataFrame`; `COLUNAS_PROJECAO` | Funções puras. Histórico que inclui o exercício da data-base ⇒ erro (a CLI corta antes). Lista mais curta que os anos ⇒ erro; mais longa é cortada |
+| `escrita.py` | `renderizar(premissas, sugestoes, *, data_base) -> str`; `renderizar_financeira(premissas, sugestoes_financeira, *, data_base)` (só `consolidado` e `mapeamento_extra` em `ajustes`, sem `kd`) | YAML inteiro com comentários (`sugerido: X (origem)` ou `manual; sugerido seria X`), linhas de comentário ≤ 100 colunas. `carregar_premissas` do texto devolve as mesmas premissas (testado) |
 
 | Sugestão | Regra |
 |---|---|

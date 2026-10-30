@@ -33,6 +33,7 @@ from valuation.projecao.premissas import (
     ConfigProjecao,
     DeltaCenario,
     TerminalEmpresa,
+    TerminalFinanceira,
 )
 from valuation.projecao.sugestor import Sugestao, Sugestoes, pct
 
@@ -108,7 +109,7 @@ def fracao_restante(ano: int, data_base: dt.date) -> float:
     return min(1.0, (fim - data_base).days / 365)
 
 
-def g_terminal(terminal: TerminalEmpresa, config: ConfigTerminal) -> Sugestao:
+def g_terminal(terminal: TerminalEmpresa | TerminalFinanceira, config: ConfigTerminal) -> Sugestao:
     """Crescimento perpétuo nominal: o do YAML da empresa ou o teto do settings."""
     if terminal.g_nominal is None:
         return Sugestao(config.g_nominal_max, "g terminal = settings.terminal.g_nominal_max")
@@ -120,15 +121,15 @@ def g_terminal(terminal: TerminalEmpresa, config: ConfigTerminal) -> Sugestao:
     return Sugestao(terminal.g_nominal, "g terminal do YAML da empresa")
 
 
-def _linear(inicio: float, fim: float, n: int) -> tuple[float, ...]:
+def linear(inicio: float, fim: float, n: int) -> tuple[float, ...]:
     return tuple(float(x) for x in np.linspace(inicio, fim, n)) if n > 1 else (inicio,)
 
 
-def _escolher(valor: float | str, sugestao: Sugestao) -> float:
+def escolher(valor: float | str, sugestao: Sugestao) -> float:
     return sugestao.valor if valor == SUGERIDO else float(valor)
 
 
-def _trajetoria(
+def trajetoria(
     caminho: Caminho, inicio: Sugestao, fim: Sugestao, n: int, nome: str
 ) -> tuple[float, ...]:
     if isinstance(caminho, tuple):
@@ -137,7 +138,7 @@ def _trajetoria(
                 f"{nome}: a lista tem {len(caminho)} valores e a projeção tem {n} anos."
             )
         return tuple(caminho[:n])
-    return _linear(_escolher(caminho.inicio, inicio), _escolher(caminho.fim, fim), n)
+    return linear(escolher(caminho.inicio, inicio), escolher(caminho.fim, fim), n)
 
 
 def resolver(
@@ -155,31 +156,31 @@ def resolver(
             f"{sugestoes.ano_base}."
         )
     n = len(anos)
-    aliquota = _escolher(config.aliquota_imposto.valor, sugestoes.aliquota)
+    aliquota = escolher(config.aliquota_imposto.valor, sugestoes.aliquota)
     limite = config.aliquota_imposto.limite_superior
     limite = aliquota_limite if limite is None else limite
     if aliquota > limite:
         raise ErroProjecao(f"Alíquota {pct(aliquota)} acima do limite {pct(limite)}.")
     return PremissasResolvidas(
         anos=anos,
-        crescimento=_trajetoria(
+        crescimento=trajetoria(
             config.receita.crescimento,
             sugestoes.crescimento_inicio,
             sugestoes.crescimento_fim,
             n,
             "receita.crescimento",
         ),
-        margem_ebitda=_trajetoria(
+        margem_ebitda=trajetoria(
             config.margens.ebitda,
             sugestoes.margem_inicio,
             sugestoes.margem_fim,
             n,
             "margens.ebitda",
         ),
-        da_sobre_receita=_escolher(config.da_sobre_receita, sugestoes.da_sobre_receita),
-        capex_sobre_receita=_escolher(config.capex_sobre_receita, sugestoes.capex_sobre_receita),
-        nwc_sobre_receita=_escolher(config.nwc_sobre_receita, sugestoes.nwc_sobre_receita),
-        arrendamento_sobre_receita=_escolher(
+        da_sobre_receita=escolher(config.da_sobre_receita, sugestoes.da_sobre_receita),
+        capex_sobre_receita=escolher(config.capex_sobre_receita, sugestoes.capex_sobre_receita),
+        nwc_sobre_receita=escolher(config.nwc_sobre_receita, sugestoes.nwc_sobre_receita),
+        arrendamento_sobre_receita=escolher(
             config.arrendamento_sobre_receita, sugestoes.arrendamento_sobre_receita
         ),
         aliquota=aliquota,

@@ -58,6 +58,7 @@ from valuation.perfil.parametros import parametros_do_perfil
 from valuation.perfil.questionario import QUESTIONARIO
 from valuation.projecao import ErroProjecao
 from valuation.projecao import escrita as esc
+from valuation.projecao import financeira as pf
 from valuation.projecao import premissas as pm
 from valuation.projecao import projetor as pj
 from valuation.projecao import sugestor as sg
@@ -758,7 +759,7 @@ def _horizonte(
 
 
 def _limite_aliquota(p: _Padronizada, settings: Settings) -> float:
-    limite = p.premissas.projecao.aliquota_imposto.limite_superior
+    limite = p.premissas.projecao_dcf.aliquota_imposto.limite_superior
     return settings.impostos.aliquota_nominal if limite is None else limite
 
 
@@ -786,7 +787,7 @@ def _resolver(
     """Premissas numéricas do cenário base."""
     ajustes = p.premissas.ajustes
     return pj.resolver(
-        p.premissas.projecao,
+        p.premissas.projecao_dcf,
         sugestoes,
         anos=pj.anos_projetados(sugestoes.ano_base, base, horizonte),
         aliquota_limite=_limite_aliquota(p, settings),
@@ -838,7 +839,7 @@ def _mostrar_sugestoes(p: _Padronizada, s: sg.Sugestoes) -> None:
             e("mediana_5a", coluna),
             e("mediana_10a", coluna),
             sugerido,
-            _no_yaml(p.premissas.projecao, coluna),
+            _no_yaml(p.premissas.projecao_dcf, coluna),
         )
     console.print(tabela)
     cagrs = ", ".join(f"{n}a {e(f'cagr_{n}a', 'crescimento')}" for n in (3, 5, 10))
@@ -901,6 +902,9 @@ def premissas_sugerir(
         settings = carregar_settings()
         base = dt.date.fromisoformat(data_base) if data_base else settings.resolver_data_base(hoje)
         p = _padronizar(ticker, settings)
+        if p.plano.tipo == "financeira":
+            _premissas_sugerir_financeira(p, settings, base, hoje, override, escrever)
+            return
         historico, setor, sugestoes = _sugerir(p, settings, base)
     except ValueError as e:
         raise _erro(f"--data-base inválida: {e}") from e
@@ -936,15 +940,141 @@ def premissas_sugerir(
     for aviso in sugestoes.avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
 
+    _escrever_premissas(p, esc.renderizar(p.premissas, sugestoes, data_base=base), escrever)
+
+
+def _escrever_premissas(p: _Padronizada, texto: str, escrever: bool) -> None:
+    """Grava o YAML da empresa (o anterior vira .bak) ou avisa que ele não existe."""
     if escrever:
         caminho = p.caminho_premissas
         if caminho.is_file():
             caminho.replace(caminho.with_suffix(".yaml.bak"))
         caminho.parent.mkdir(parents=True, exist_ok=True)
-        caminho.write_text(esc.renderizar(p.premissas, sugestoes, data_base=base), encoding="utf-8")
+        caminho.write_text(texto, encoding="utf-8")
         console.print(f"Gravado em {caminho}")
     elif not p.caminho_premissas.is_file():
         console.print(f"{p.caminho_premissas} não existe; use --escrever para criá-lo.")
+
+
+def _sugerir_financeira(
+    p: _Padronizada, settings: Settings, base: dt.date
+) -> tuple[pd.DataFrame, pf.SugestoesFinanceira]:
+    """Métricas dos exercícios encerrados antes da data-base e premissas do DDM sugeridas."""
+    historico = fin.metricas(per.anual(p.contas))
+    historico = historico[historico.index < pj.primeiro_ano_aberto(base)]
+    g = pj.g_terminal(p.premissas.projecao_ddm.terminal, settings.terminal)
+    return historico, pf.sugerir(historico, g_terminal=g)
+
+
+def _pl_inicial(p: _Padronizada, base: dt.date) -> tuple[float, dt.date]:
+    """PL da controladora no último balanço até a data-base (ponto de partida do DDM)."""
+    data = _data_balanco(p.contas, base)
+    bal = cast(pd.Series, per.saldos(p.contas).loc[data])
+    minoritarios = float(cast(float, bal.get("minoritarios", 0.0)))
+    pl = float(cast(float, bal["patrimonio_liquido_total"]))
+    return pl - (0.0 if pd.isna(minoritarios) else minoritarios), data.date()
+
+
+def _mostrar_sugestoes_financeira(p: _Padronizada, s: pf.SugestoesFinanceira) -> None:
+    def e(linha: str, coluna: str) -> str:
+        return sg.pct(cast(float, s.estatisticas.at[linha, coluna]))
+
+    pr = p.premissas.projecao_ddm
+    tabela = Table(
+        title=f"Premissas sugeridas x histórico — {p.premissas.ticker} (DDM, até {s.ano_base})"
+    )
+    for coluna in ("Premissa", str(s.ano_base), "Mediana 5a", "Mediana 10a", "Sugerido", "No YAML"):
+        tabela.add_column(coluna, justify="left" if coluna in ("Premissa", "No YAML") else "right")
+    roe_yaml = (
+        "lista: " + ", ".join(sg.pct(x) for x in pr.roe)
+        if isinstance(pr.roe, tuple)
+        else " → ".join(
+            str(x) if x == pm.SUGERIDO else sg.pct(float(x)) for x in (pr.roe.inicio, pr.roe.fim)
+        )
+    )
+    payout_yaml = (
+        str(pr.payout_inicio)
+        if pr.payout_inicio == pm.SUGERIDO
+        else sg.pct(float(pr.payout_inicio))
+    )
+    tabela.add_row(
+        "ROE (início → longo prazo)",
+        e("ultimo", "roe"),
+        e("mediana_5a", "roe"),
+        e("mediana_10a", "roe"),
+        f"{sg.pct(s.roe_inicio.valor)} → {sg.pct(s.roe_fim.valor)}",
+        roe_yaml,
+    )
+    tabela.add_row(
+        "Payout inicial",
+        e("ultimo", "payout"),
+        e("mediana_5a", "payout"),
+        e("mediana_10a", "payout"),
+        sg.pct(s.payout_inicio.valor),
+        payout_yaml,
+    )
+    console.print(tabela)
+    g = s.g_terminal.valor
+    final = sg.pct(pf.payout_final(s.roe_fim.valor, g)) if s.roe_fim.valor > g else "—"
+    console.print(
+        f"g terminal {sg.pct(g)} ({s.g_terminal.origem}); payout de longo prazo sugerido "
+        f"1 - g / ROE = {final}. Delta dos cenários: ROE ±{sg.pp(s.delta_roe.valor)} "
+        "(pessimista -)."
+    )
+
+
+_LINHAS_PROJECAO_FINANCEIRA = (
+    ("fracao", "Fração do ano por vir", "%"),
+    ("roe", "ROE", "%"),
+    ("payout", "Payout", "%"),
+    ("pl_inicial", "PL inicial", "mi"),
+    ("lucro", "Lucro (parte por vir)", "mi"),
+    ("dividendos", "Dividendos", "mi"),
+    ("pl_final", "PL final", "mi"),
+)
+
+
+def _mostrar_projecao_financeira(tabela_p: pd.DataFrame, titulo: str) -> None:
+    tabela = Table(title=titulo)
+    tabela.add_column("Métrica")
+    for ano in tabela_p.index:
+        tabela.add_column(str(ano), justify="right")
+    for chave, rotulo, unidade in _LINHAS_PROJECAO_FINANCEIRA:
+        tabela.add_row(rotulo, *(_formatar(v, unidade) for v in tabela_p[chave]))
+    console.print(tabela)
+
+
+def _premissas_sugerir_financeira(
+    p: _Padronizada,
+    settings: Settings,
+    base: dt.date,
+    hoje: dt.date,
+    override: NomePerfil | None,
+    escrever: bool,
+) -> None:
+    """`premissas sugerir` de uma financeira: ROE e payout x histórico e a projeção do DDM."""
+    _, sugestoes = _sugerir_financeira(p, settings, base)
+    _mostrar_sugestoes_financeira(p, sugestoes)
+    if p.premissas.pares.setor is None:
+        console.print("[yellow]Aviso:[/] pares.setor não definido no YAML.")
+    try:
+        horizonte, origem = _horizonte(p.premissas, settings, hoje, override)
+    except ErroPerfil as e:
+        console.print(f"[yellow]Projeção não mostrada:[/] {e}")
+    else:
+        resolvidas = pf.resolver(
+            p.premissas.projecao_ddm, sugestoes, anos=pf.anos_projetados(base, horizonte)
+        )
+        pl, data = _pl_inicial(p, base)
+        _mostrar_projecao_financeira(
+            pf.projetar(pl, resolvidas, data_base=base),
+            f"Projeção base (DDM) — {p.premissas.ticker} (R$ milhões; PL da controladora em "
+            f"{data}; data-base {base}; {horizonte} anos pelo {origem})",
+        )
+    for aviso in sugestoes.avisos:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
+    texto = esc.renderizar_financeira(p.premissas, sugestoes, data_base=base)
+    _escrever_premissas(p, texto, escrever)
 
 
 # Prazo do ITR é de 45 dias após o trimestre: até ~140 dias de defasagem é o normal.
@@ -1368,7 +1498,7 @@ def _dados_avaliacao(
 
 def _ronic(p: _Padronizada, settings: Settings, historico: pd.DataFrame) -> dcf.Ronic:
     """RONIC do YAML da empresa ou do settings; `roic_historico` = mediana dos 5 últimos anos."""
-    escolha = p.premissas.projecao.terminal.ronic
+    escolha = p.premissas.projecao_dcf.terminal.ronic
     escolha = settings.terminal.ronic if escolha is None else escolha
     roic = historico["roic"].dropna().tail(sg.JANELA_CURTA)
     return dcf.resolver_ronic(escolha, roic_historico=float(roic.median()) if len(roic) else None)
@@ -1649,7 +1779,7 @@ def rodar(
         historico, _, sugestoes = _sugerir(p, settings, base)
         horizonte, origem = _horizonte(p.premissas, settings, hoje, override)
         resolvidas = _resolver(p, settings, sugestoes, base, horizonte)
-        deltas = pj.resolver_cenarios(p.premissas.cenarios, sugestoes)
+        deltas = pj.resolver_cenarios(p.premissas.cenarios_dcf, sugestoes)
         m = _mercado(ticker, settings, base, agora, forcar)
         comps = _coletar_pares(p, m, settings, base)
         cc = _custo_capital(p, m, settings, base, comps)

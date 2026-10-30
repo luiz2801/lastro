@@ -2,6 +2,16 @@
 
 ## [Não lançado]
 
+### Fase 10 — Financeiras: premissas e projeção do DDM
+- `projecao/premissas.py`: `projecao` e `cenarios` com esquema conforme o `tipo_modelo`
+  (financeira: ROE em trajetória ou lista, `payout_inicio`, `terminal.g_nominal`, `roe_pp`).
+- `projecao/financeira.py`: ROE da mediana de 5 anos até o de longo prazo (mediana de 10 anos,
+  decisão do usuário), payout até 1 − g/ROE_LP, cenários de ±1 desvio-padrão do ROE e projeção de
+  lucro, dividendos e PL a partir do PL da controladora do último balanço.
+- `projecao/escrita.py`: YAML comentado das financeiras.
+- CLI: `premissas sugerir` de financeiras (sugestões × histórico, projeção, `--escrever`).
+- ADR 0012; `guia.md` 1.13.
+
 ### Fase 10 — Financeiras: plano de contas e métricas
 - `config/mapeamento_contas.yaml`: seção `financeira:` por regex de descrição, conferida em 25
   bancos e seguradoras (planos de bancos, de seguradoras e comercial; demonstrações individuais).

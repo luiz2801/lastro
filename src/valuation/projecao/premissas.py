@@ -2,13 +2,17 @@
 
 `sugerido` é recalculado pelo sugestor a partir do histórico a cada execução; um número (ou lista,
 um valor por ano projetado) é sobrescrita manual. Campos desconhecidos geram erro.
+
+`projecao` e `cenarios` dependem do `tipo_modelo`: FCFF (`ConfigProjecao`, `Cenarios`) nas não
+financeiras e DDM (`ProjecaoFinanceira`, `CenariosFinanceira`, ADR 0012) nas financeiras. Use
+`projecao_dcf`/`cenarios_dcf` ou `projecao_ddm`/`cenarios_ddm`, que conferem o tipo.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated, Any, Final, Literal
+from typing import Annotated, Any, Final, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -92,6 +96,32 @@ class Cenarios(_Modelo):
     otimista: DeltaCenario = DeltaCenario()
 
 
+class TerminalFinanceira(_Modelo):
+    g_nominal: float | None = None  # None ⇒ settings.terminal.g_nominal_max
+
+
+class ProjecaoFinanceira(_Modelo):
+    """DDM (seção 11.3 do CLAUDE.md): o ROE converge linearmente para o de longo prazo (`roe.fim`)
+    e o payout, de `payout_inicio` para 1 - g / ROE de longo prazo. Lista de ROE: um valor por
+    ano a partir do primeiro exercício aberto na data-base."""
+
+    horizonte_anos: Literal["perfil"] | Annotated[int, Field(gt=0, le=30)] = "perfil"
+    roe: Caminho = Trajetoria()
+    payout_inicio: Fracao | Sugerido = SUGERIDO
+    terminal: TerminalFinanceira = TerminalFinanceira()
+
+
+class DeltaCenarioFinanceira(_Modelo):
+    """Delta somado ao ROE de todos os anos, inclusive o de longo prazo (0,02 = 2 p.p.)."""
+
+    roe_pp: Delta | Sugerido = SUGERIDO
+
+
+class CenariosFinanceira(_Modelo):
+    pessimista: DeltaCenarioFinanceira = DeltaCenarioFinanceira()
+    otimista: DeltaCenarioFinanceira = DeltaCenarioFinanceira()
+
+
 class NaoRecorrenteConfig(_Modelo):
     ano: int
     conta: Literal["ebit"] = "ebit"
@@ -142,16 +172,80 @@ class CustoCapitalEmpresa(_Modelo):
     kd: MetodoKd = MetodoKd()
 
 
+# Ajustes que valem para as financeiras (os demais são do FCFF e da ponte EV -> equity).
+AJUSTES_FINANCEIRA = frozenset({"consolidado", "mapeamento_extra"})
+
+
 class PremissasEmpresa(_Modelo):
     ticker: str
     tipo_modelo: Literal["nao_financeira", "financeira"]
     classes_acao: tuple[str, ...] = Field(min_length=1)
     moeda_relatorio: Literal["auto", "BRL", "USD"] = "auto"
     ajustes: Ajustes = Ajustes()
-    projecao: ConfigProjecao = ConfigProjecao()
-    cenarios: Cenarios = Cenarios()
+    projecao: ConfigProjecao | ProjecaoFinanceira = ConfigProjecao()
+    cenarios: Cenarios | CenariosFinanceira = Cenarios()
     pares: Pares = Pares()
     custo_capital: CustoCapitalEmpresa = CustoCapitalEmpresa()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _blocos_do_tipo(cls, dados: Any) -> Any:
+        """`projecao` e `cenarios` com o esquema do `tipo_modelo` (FCFF ou DDM)."""
+        if not isinstance(dados, dict):
+            return dados
+        financeira = dados.get("tipo_modelo") == "financeira"
+        modelos: dict[str, type[_Modelo]] = {
+            "projecao": ProjecaoFinanceira if financeira else ConfigProjecao,
+            "cenarios": CenariosFinanceira if financeira else Cenarios,
+        }
+        saida = dict(dados)
+        for chave, modelo in modelos.items():
+            valor = saida.get(chave)
+            if not isinstance(valor, _Modelo):
+                saida[chave] = modelo.model_validate({} if valor is None else valor)
+        return saida
+
+    @model_validator(mode="after")
+    def _so_o_que_se_aplica(self) -> PremissasEmpresa:
+        if self.tipo_modelo != "financeira":
+            return self
+        sobra = self.ajustes.model_fields_set - AJUSTES_FINANCEIRA
+        if sobra:
+            raise ValueError(
+                f"ajustes {', '.join(sorted(sobra))} não se aplicam a financeiras "
+                f"(só {', '.join(sorted(AJUSTES_FINANCEIRA))})"
+            )
+        if "kd" in self.custo_capital.model_fields_set:
+            raise ValueError("custo_capital.kd não se aplica a financeiras (o DDM usa só o Ke)")
+        return self
+
+    @property
+    def projecao_dcf(self) -> ConfigProjecao:
+        return _do_tipo(self.projecao, ConfigProjecao, self)
+
+    @property
+    def cenarios_dcf(self) -> Cenarios:
+        return _do_tipo(self.cenarios, Cenarios, self)
+
+    @property
+    def projecao_ddm(self) -> ProjecaoFinanceira:
+        return _do_tipo(self.projecao, ProjecaoFinanceira, self)
+
+    @property
+    def cenarios_ddm(self) -> CenariosFinanceira:
+        return _do_tipo(self.cenarios, CenariosFinanceira, self)
+
+
+_T = TypeVar("_T")
+
+
+def _do_tipo(valor: object, tipo: type[_T], premissas: PremissasEmpresa) -> _T:
+    if not isinstance(valor, tipo):
+        modelo = "DDM" if tipo in (ProjecaoFinanceira, CenariosFinanceira) else "FCFF"
+        raise ErroConfiguracao(
+            f"{premissas.ticker} é {premissas.tipo_modelo}: premissas de {modelo} não se aplicam."
+        )
+    return valor
 
 
 def caminho_premissas(ticker: str, dir_empresas: Path = DIR_EMPRESAS) -> Path:

@@ -201,6 +201,30 @@ def test_qa_e_historico_de_financeira(banco_sintetico: Path) -> None:
     assert cobertura.exit_code == 0, cobertura.output
 
 
+def test_premissas_sugerir_financeira(banco_sintetico: Path, caminho_perfil: Path) -> None:
+    resultado = CliRunner().invoke(
+        app,
+        ["premissas", "sugerir", "WEGE3", "--data-base", "2026-10-30", "--perfil", "moderado"],
+    )
+    assert resultado.exit_code == 0, resultado.output
+    texto = " ".join(resultado.output.split())
+    assert "(DDM, até 2025)" in texto
+    assert "24,4%" in texto  # ROE 22 / 90, único exercício com PL inicial
+    assert "PL da controladora em 2025-12-31" in texto
+    assert "2032" in texto and "2033" not in texto  # 7 anos a partir de 2026
+    escrito = CliRunner().invoke(
+        app, ["premissas", "sugerir", "WEGE3", "--data-base", "2026-10-30", "--escrever"]
+    )
+    assert escrito.exit_code == 0, escrito.output
+    yaml_banco = banco_sintetico / "empresas" / "WEGE3.yaml"
+    assert pm.carregar_premissas(yaml_banco) == pm.premissas_padrao(
+        "WEGE3", "financeira", ["WEGE3"]
+    )
+    gravado = yaml_banco.read_text(encoding="utf-8")
+    assert "fim sugerido: 24,4% (mediana do ROE 2025-2025)" in gravado
+    assert "sugerido: 50,0% (mediana do payout 2024-2025)" in gravado
+
+
 def test_padronizar_usa_individual_quando_nao_ha_consolidado(banco_sintetico: Path) -> None:
     pasta = banco_sintetico / "processed" / "cvm" / "5410"
     dados = pd.read_parquet(pasta / "demonstracoes.parquet").assign(consolidado=False)
