@@ -140,3 +140,24 @@ def test_metricas_ltm_compara_com_balanco_de_um_ano_antes() -> None:
     ]
     with pytest.raises(ErroContabil, match="ΔNWC"):
         nf.metricas_ltm(sem_balanco_anterior, aliquota_nominal=0.34)
+
+
+def test_caixa_extra_e_divida_extra() -> None:
+    largo = ANUAL.assign(aplicacoes_financeiras_lp=[7.0, 8.0], provisoes_lp=[float("nan"), 25.0])
+    ajustes = nf.AjustesContabeis(
+        caixa_extra=("aplicacoes_financeiras_lp",), divida_extra=("provisoes_lp",)
+    )
+    base = nf.metricas(ANUAL, aliquota_nominal=0.34).loc[2025]
+    m = nf.metricas(largo, aliquota_nominal=0.34, ajustes=ajustes)
+    assert m.loc[2025, "caixa_e_aplicacoes"] == 140 + 8
+    assert m.loc[2025, "divida_liquida"] == base["divida_liquida"] - 8
+    assert m.loc[2025, "nwc"] == base["nwc"]  # caixa extra não sai do capital de giro
+    assert list(m["divida_extra"]) == [0.0, 25.0]
+    assert base["caixa_extra"] == 0 and base["divida_extra"] == 0
+
+
+def test_caixa_extra_conta_inexistente() -> None:
+    with pytest.raises(ErroContabil, match="caixa_extra: conta 'nao_existe'"):
+        nf.metricas(
+            ANUAL, aliquota_nominal=0.34, ajustes=nf.AjustesContabeis(caixa_extra=("nao_existe",))
+        )

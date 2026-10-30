@@ -2,6 +2,10 @@
 
 ## [Não lançado]
 
+### Fase 5 — Premissas e projeção
+- `contabil/nao_financeiras.py`: ajustes `caixa_extra` (contas somadas ao caixa e à redução da
+  dívida líquida) e `divida_extra` (métrica à parte, para a ponte EV → equity).
+
 ### Fase 4 — Perfil do investidor
 - `perfil/questionario.py`: 10 perguntas de suitability (1 a 5 pontos cada) com vetos de horizonte
   menor que 2 anos e de "não aceito perdas"; `VERSAO_QUESTIONARIO`.

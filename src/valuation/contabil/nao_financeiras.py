@@ -58,6 +58,8 @@ class AjustesContabeis:
         "somar_investimento_contabil"
     )
     nao_recorrentes: Sequence[NaoRecorrente] = field(default_factory=tuple)
+    caixa_extra: Sequence[str] = ()  # contas padrão somadas ao caixa (ex.: aplicações de LP)
+    divida_extra: Sequence[str] = ()  # contas padrão subtraídas na ponte (pensão, contingências)
 
 
 def _coluna(largo: pd.DataFrame, nome: str) -> pd.Series:
@@ -67,6 +69,16 @@ def _coluna(largo: pd.DataFrame, nome: str) -> pd.Series:
     if nome in OPCIONAIS:
         return pd.Series(0.0, index=largo.index)
     raise ErroContabil(f"Conta {nome!r} ausente: não dá para calcular as métricas.")
+
+
+def _soma_contas(largo: pd.DataFrame, contas: Sequence[str], campo: str) -> pd.Series:
+    """Soma das contas configuradas; período sem a conta conta zero, conta inexistente é erro."""
+    total = pd.Series(0.0, index=largo.index)
+    for nome in contas:
+        if nome not in largo.columns:
+            raise ErroContabil(f"{campo}: conta {nome!r} não existe na tabela padronizada.")
+        total += largo[nome].astype(float).fillna(0.0)
+    return total
 
 
 def _nao_recorrentes(indice: pd.Index, itens: Sequence[NaoRecorrente]) -> pd.Series:
@@ -89,6 +101,8 @@ def metricas(
     - `fcff` = NOPAT + D&A - capex - ΔNWC [- pagamento de arrendamento, se IFRS 16 = dívida e
       `capex_equivalente_arrendamento`].
     - `roic` = NOPAT / capital investido médio (PL + dívida líquida).
+    - `caixa_extra` entra em `caixa_e_aplicacoes` (e reduz a dívida líquida), não no capital de
+      giro; `divida_extra` só é somada à parte (a ponte EV -> equity a subtrai, Fase 7).
     """
     aj = ajustes or AjustesContabeis()
 
@@ -136,10 +150,12 @@ def metricas(
     m["divida_bruta"] = m["divida_financeira"]
     if aj.ifrs16 == "divida":
         m["divida_bruta"] += m["arrendamento"]
-    m["caixa_e_aplicacoes"] = c("caixa") + c("aplicacoes_financeiras")
+    m["caixa_extra"] = _soma_contas(largo, aj.caixa_extra, "caixa_extra")
+    m["caixa_e_aplicacoes"] = c("caixa") + c("aplicacoes_financeiras") + m["caixa_extra"]
+    m["divida_extra"] = _soma_contas(largo, aj.divida_extra, "divida_extra")
     m["divida_liquida"] = m["divida_bruta"] - m["caixa_e_aplicacoes"]
 
-    ativo_operacional = c("ativo_circulante") - m["caixa_e_aplicacoes"]
+    ativo_operacional = c("ativo_circulante") - c("caixa") - c("aplicacoes_financeiras")
     passivo_operacional = c("passivo_circulante") - divida_cp - m["arrendamento_cp"]
     m["nwc"] = ativo_operacional - passivo_operacional
     m["delta_nwc"] = m["nwc"].diff()

@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.2 — 2026-10-30**
+**Versão 1.3 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
 > (Fases 0 a 4 implementadas) para que você não precise reler os módulos. Para o que ainda
@@ -337,9 +337,11 @@ reporte).
 ΔNWC/ROIC da 1ª linha = NaN) e `metricas_ltm(contas, *, aliquota_nominal, dt_fim=None, ajustes=None)
 -> Series` (ΔNWC/ROIC contra o balanço de 12 meses antes; sem ele ⇒ `ErroContabil`).
 `AjustesContabeis(ifrs16="divida", capex_equivalente_arrendamento=True,
-coligadas="somar_investimento_contabil", nao_recorrentes=())`, `NaoRecorrente(ano, valor, descricao)`
-(ganho positivo, perda negativa; só casa índice inteiro = visão anual). Contas em `OPCIONAIS`
-ausentes = 0; demais ausentes ⇒ `ErroContabil`.
+coligadas="somar_investimento_contabil", nao_recorrentes=(), caixa_extra=(), divida_extra=())`,
+`NaoRecorrente(ano, valor, descricao)` (ganho positivo, perda negativa; só casa índice inteiro =
+visão anual). `caixa_extra`/`divida_extra` são nomes de **contas padrão** (crie a conta com
+`mapeamento_extra` se preciso); conta que não existe na tabela ⇒ `ErroContabil`, período sem ela =
+0. Contas em `OPCIONAIS` ausentes = 0; demais ausentes ⇒ `ErroContabil`.
 
 | Métrica | Fórmula |
 |---|---|
@@ -351,8 +353,9 @@ ausentes = 0; demais ausentes ⇒ `ErroContabil`.
 | `divida_financeira` | empréstimos CP + LP − arrendamento dentro de empréstimos |
 | `arrendamento` (`arrendamento_cp`) | dentro + fora de empréstimos |
 | `divida_bruta` | financeira [+ arrendamento se `ifrs16=divida`] |
-| `caixa_e_aplicacoes`, `divida_liquida` | caixa + aplicações CP; bruta − caixa |
-| `nwc`, `delta_nwc` | (AC − caixa − aplic.) − (PC − dívida financeira CP − arrendamento CP) |
+| `caixa_e_aplicacoes`, `divida_liquida` | caixa + aplicações CP + `caixa_extra`; bruta − caixa |
+| `divida_extra` | soma das contas de `divida_extra` (fora da dívida bruta; a ponte subtrai) |
+| `nwc`, `delta_nwc` | (AC − caixa − aplic. CP) − (PC − dívida financeira CP − arrendamento CP); `caixa_extra` **não** sai do AC |
 | `fcff` | NOPAT + D&A − capex − ΔNWC [− pagamento de arrendamento se `ifrs16=divida` e `capex_equivalente_arrendamento`] |
 | `fcf_caixa` | CFO − capex |
 | `capital_investido`, `roic` | PL total + dívida líquida; NOPAT / média do capital (NaN se ≤ 0) |
