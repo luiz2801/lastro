@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.9 — 2026-10-30**
+**Versão 1.10 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
 > (Fases 0 a 8 implementadas) para que você não precise reler os módulos. Para o que ainda
@@ -569,8 +569,11 @@ vez de baixar dados reais. Sem rede nos testes.
 2. `MOEDA` na CVM é `REAL` até para a Vale (ADR 0002): detecção de moeda não vem do campo hoje.
 3. Composição do capital: sem escala e semântica do "total" varia (seção 9). Escala em milhares
    em todas as datas é comum (VALE3, CBAV3, EMBJ3, RAPT3/4, TUPY3, KEPL3, MYPK3, FRAS3): a
-   correção automática não pega, é preciso `escala_acoes: 1000` no cadastro manual. Sintoma:
-   market cap de poucos milhões e P/VP perto de zero.
+   correção automática não pega, é preciso `escala_acoes: 1000` no cadastro manual (todas as
+   classes da companhia). No universo do Ibovespa são 19 companhias além dessas (lista em
+   `docs/fontes.md`). Sintoma: market cap de poucos milhões e P/VP perto de zero. Teste
+   independente: razão entre as ações da CVM e a `theoricalQty` da carteira da B3 (≈ 1 a 10 se a
+   escala está certa; ≈ 0,001 se estiver em milhares).
 3a. Alguns FCA trazem o código CVM no lugar do ticker (CSN `4030`, CSN Mineração `25585`), `000000`
    para units (BPAC11) ou uma data de fim de negociação igual à de início (CEAB3), e a Marfrig
    (MBRF3) só lista o ADR: o ticker some do cadastro e entra pelo `cadastro_manual.csv` com

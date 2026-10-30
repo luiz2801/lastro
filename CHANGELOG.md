@@ -3,6 +3,9 @@
 ## [Não lançado]
 
 ### Universo do Ibovespa e pares da mineração
+- `config/cadastro_manual.csv`: `escala_acoes` 1000 para outras 19 companhias do universo (23
+  tickers; ITUB4, ABEV3, AXIA3 etc.), detectadas pela razão entre as ações da CVM e a quantidade
+  teórica da B3. Sem isso o market cap saía 1.000 vezes menor.
 - `config/universo_ibovespa.csv`: 76 ativos da carteira de 30/10/26 da B3 (`ticker;cnpj;setor_cvm;
   tipo_modelo`); `valuation atualizar --tudo` passa a funcionar.
 - `config/cadastro_manual.csv`: BPAC11, CEAB3 e MBRF3, que o FCA não resolvia.

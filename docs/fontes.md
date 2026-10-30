@@ -48,6 +48,14 @@ Legenda: ✅ confirmado · ⚠️ diferente do guia · ⏳ pendente
   1000 no cadastro manual): CBAV3 651.073, EMBJ3 740.465, RAPT3/4 349.725, TUPY3 132.450, KEPL3
   179.720, MYPK3 153.720, FRAS3 280.335. Em unidades: PRIO3, RECV3, BRAV3, CMIN3, POMO3/4, ROMI3,
   LEVE3. Sintoma do erro: market cap de poucos milhões de reais e P/VP perto de zero.
+- Universo do Ibovespa (2026-10-30): outras 19 companhias também publicam em milhares em todas as
+  datas (`escala_acoes` 1000 no cadastro manual, todas as classes de cada uma): ABEV3, ASAI3,
+  AURE3, AXIA3/7, BRAP3/4, CMIG3/4, CSMG3, CXSE3, CYRE3/4, ENEV3, ITSA3/4, ITUB3/4, LREN3, MRVE3,
+  NATU3, TAEE3/4/11, TEND3, VBBR3, YDUQ3. Detecção: razão entre as ações da CVM (ON + PN sem
+  tesouraria) e a quantidade teórica da carteira da B3 (`theoricalQty`, soma dos tickers da
+  companhia): 0,0005 a 0,005 nessas 19; 0,9 a 10 nas demais (a B3 conta só o free float e as units
+  pesam mais); VALE3 e EMBJ3, já corrigidas, dão ≈ 1. SANB11 (unit; razão 0,021, não comparável)
+  ficou como está, e units não têm market cap no cálculo.
 - ⚠️ **Significado de `QT_ACAO_TOTAL_CAP_INTEGR` varia por companhia.** Na Vale é o total **sem**
   tesouraria (4.255.763 mil = "Total (sem ações em tesouraria)" do RI; capital total 4.439.159.764).
   Na WEG é o capital total (4.197.317.998). Calcular "total − tesouraria" para todas subtrai a
