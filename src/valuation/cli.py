@@ -70,6 +70,7 @@ from valuation.saida import glossario as gl
 from valuation.saida import graficos as gr
 from valuation.saida import real
 from valuation.saida.csv import FormatoCsv, gravar_csv, gravar_matriz
+from valuation.universo import SetorCVM, buscar_setor, carregar_universo, empresas_do_setor
 
 app = typer.Typer(
     help="Valuation de ações da B3. Uso pessoal e educacional; não é recomendação de investimento.",
@@ -2833,6 +2834,102 @@ def _resumo_financeira(
     numericas = [c for c, v in linha.items() if v is None or isinstance(v, float | int)]
     df[numericas] = df[numericas].astype("float64")
     return df
+
+
+@app.command()
+def setores(
+    setor: str | None = typer.Argument(
+        None, help="Nome do setor (ex.: BANCOS ou Bancos). Sem argumento, lista todos."
+    ),
+) -> None:
+    """Setores do universo (enum) ou as empresas de um setor."""
+    try:
+        universo = carregar_universo()
+        if setor is None:
+            tabela = Table(title="Setores do universo")
+            tabela.add_column("Membro")
+            tabela.add_column("Setor CVM")
+            tabela.add_column("Empresas", justify="right")
+            for s in SetorCVM:
+                tabela.add_row(s.name, s.value, str(len(empresas_do_setor(universo, s))))
+            console.print(tabela)
+            return
+        escolhido = buscar_setor(setor)
+    except ErroConfiguracao as e:
+        raise _erro(str(e)) from e
+    tabela = Table(title=f"{escolhido.value} ({escolhido.name})")
+    tabela.add_column("Ticker")
+    tabela.add_column("Tipo do modelo")
+    for empresa in empresas_do_setor(universo, escolhido):
+        tabela.add_row(empresa.ticker, empresa.tipo_modelo)
+    console.print(tabela)
+
+
+@app.command("rodar-setor")
+def rodar_setor(
+    setor: str = typer.Argument(..., help="Nome do setor (ver `valuation setores`)."),
+    cenario: str = typer.Option(
+        "todos", "--cenario", help="base | pessimista | otimista | todos (ponderados pelo perfil)."
+    ),
+    data_base: str | None = typer.Option(
+        None, "--data-base", help="AAAA-MM-DD (padrão: settings)."
+    ),
+    perfil_override: str | None = typer.Option(
+        None, "--perfil", help="conservador|moderado|arrojado (sobrescreve o perfil gravado)."
+    ),
+    saida: str | None = typer.Option(
+        None, "--saida", help="Diretório raiz da saída (padrão: saida/)."
+    ),
+    formato_csv: str = typer.Option("br", "--formato-csv", help="br | intl."),
+    forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+    sem_graficos: bool = typer.Option(False, "--sem-graficos", help="Não gera os PNG."),
+    explicar: bool = EXPLICAR,
+) -> None:
+    """Roda `rodar` em cada empresa do setor, uma após a outra. Holdings ficam de fora (v1)."""
+    try:
+        escolhido = buscar_setor(setor)
+        empresas = empresas_do_setor(carregar_universo(), escolhido)
+    except ErroConfiguracao as e:
+        raise _erro(str(e)) from e
+    if not empresas:
+        raise _erro(f"Nenhuma empresa no setor {escolhido.name}.")
+    try:
+        reg.resolver_perfil(
+            CAMINHO_PERFIL, dt.date.today(), cast(NomePerfil | None, perfil_override)
+        )
+    except ErroPerfil as e:
+        raise _erro(str(e)) from e
+    resultados: list[tuple[str, str]] = []
+    for empresa in empresas:
+        if empresa.tipo_modelo not in ("nao_financeira", "financeira"):
+            resultados.append((empresa.ticker, "pulado (fora da v1)"))
+            continue
+        console.rule(empresa.ticker)
+        try:
+            rodar(
+                ticker=empresa.ticker,
+                cenario=cenario,
+                data_base=data_base,
+                perfil_override=perfil_override,
+                saida=saida,
+                formato_csv=formato_csv,
+                forcar=forcar,
+                sem_graficos=sem_graficos,
+                explicar=explicar,
+            )
+        except typer.Exit:
+            resultados.append((empresa.ticker, "falhou"))
+        else:
+            resultados.append((empresa.ticker, "ok"))
+    tabela = Table(title=f"Setor {escolhido.value}: resultado por empresa")
+    tabela.add_column("Ticker")
+    tabela.add_column("Resultado")
+    for ticker, resultado in resultados:
+        tabela.add_row(ticker, resultado)
+    console.print(tabela)
+    falhas = [ticker for ticker, resultado in resultados if resultado == "falhou"]
+    if falhas:
+        raise _erro(f"{len(falhas)} empresa(s) falharam: {', '.join(falhas)}.")
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -2,6 +2,15 @@
 
 ## [Não lançado]
 
+### Setores como enum e execução por setor (ADR 0019)
+- `src/valuation/universo.py`: enum `SetorCVM` (33 setores do `setor_cvm` de
+  `config/universo_ibovespa.csv`), `carregar_universo`, `buscar_setor` (nome do membro ou texto
+  da CVM, sem caixa/acento) e `empresas_do_setor`. Setor do CSV fora do enum ⇒ erro.
+- `valuation setores [SETOR]`: lista os setores com o nº de empresas, ou as empresas de um setor.
+- `valuation rodar-setor SETOR`: roda `rodar` em cada empresa do setor, em sequência; holdings
+  são puladas; uma falha não interrompe as demais; tabela final e saída 1 se houver falha.
+- Testes em `tests/test_universo.py` (enum × CSV, busca, comandos com `rodar` substituído).
+
 ### Glossário das métricas (Etapa 7 do backlog)
 - `valuation glossario [TERMO]`: 37 termos (WACC, Ke, g, RONIC, VT/EV, múltiplos, hurdle…) com o
   que é, como se calcula e como ler; busca sem distinguir caixa, acento ou símbolos.

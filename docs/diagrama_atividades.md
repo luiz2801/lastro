@@ -157,6 +157,8 @@ flowchart TD
   - `valuation perfil`: Executa questionário com 10 perguntas e regras de veto para classificar o perfil em *Conservador*, *Moderado* ou *Arrojado* (`perfil/questionario.py`), gerando `perfil/perfil_investidor.json` válido por 12 meses.
   - `valuation atualizar`: Dispara o download e atualização da base contábil e de mercado.
   - `valuation rodar TICKER`: Executa a avaliação completa. Requer perfil cadastrado dentro da validade ou passagem explícita de `--perfil`.
+  - `valuation setores [SETOR]`: lista os setores do enum `SetorCVM` (`src/valuation/universo.py`, do `setor_cvm` do universo) ou as empresas de um setor.
+  - `valuation rodar-setor SETOR`: confere o perfil uma vez, depois roda `rodar` em cada empresa do setor, em sequência. Holdings são puladas; uma falha não interrompe as demais, e a tabela final sai com 1 se houver falha (ADR 0019).
 - **Configuração:** Leitura estrita de `config/settings.yaml` (tipado via Pydantic com `extra="forbid"`) e premissas específicas da empresa em `config/empresas/{TICKER}.yaml`.
 
 ### Raia 2: Coleta de Dados & Validação Cruzada

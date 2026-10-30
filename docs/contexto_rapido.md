@@ -7,7 +7,7 @@ divergência, valem o código, o `guia.md` e os ADRs, nessa ordem.
 ## O que é
 
 Valuation de ações da B3 em Python, uso pessoal e local, sem recomendação de investimento. Uma
-empresa por execução (`valuation rodar TICKER`). Não financeiras: DCF (FCFF) + múltiplos.
+empresa por execução (`valuation rodar TICKER`); por setor, `valuation rodar-setor SETOR` (ADR 0019). Não financeiras: DCF (FCFF) + múltiplos.
 Financeiras: DDM / lucro residual + P/VP justificado + múltiplos.
 
 ## Camadas (de baixo para cima; a de cima nunca é importada pela de baixo)
