@@ -1,0 +1,54 @@
+# Valores de referência para os testes "golden" (Fase 2).
+#
+# Cada valor vem de documento publicado pela própria companhia (fonte) e foi conferido em
+# 2026-10-30 contra os dados abertos da CVM (DFP/ITR consolidados). Unidade: R$ milhões.
+# Períodos: "2025" = exercício; "1T26" = trimestre; "1S26" = acumulado no semestre;
+# datas (AAAA-MM-DD) = saldos de balanço.
+#
+# Definições usadas pelas companhias:
+# - ebitda = lucro líquido + tributos + resultado financeiro + D&A = EBIT (DRE 3.05) + D&A
+#   (bate com a CVM para Petrobras e Vale; o "ajustado" de cada uma tem outros itens e não está aqui)
+# - lucro_controladora = DRE 3.11.01; lucro_total = DRE 3.11
+
+PETR4:
+  fonte: "Desempenho Financeiro Petrobras 2T26.pdf (Tabelas 1 e 10; Endividamento)"
+  periodos:
+    1S26: {receita_liquida: 293216, lucro_controladora: 85108, lucro_total: 85256, da: 43117, ebitda: 156743}
+    2T26: {receita_liquida: 169530, lucro_controladora: 52445, lucro_total: 52495}
+    1S25: {receita_liquida: 242272, lucro_controladora: 61861, lucro_total: 62105, da: 39928, ebitda: 113436}
+    2T25: {receita_liquida: 119128, lucro_controladora: 26652, lucro_total: 26774}
+  saldos:
+    2026-06-30:
+      divida_financeira_sem_arrendamento: 133734
+      arrendamento: 232799
+      # "Disponibilidades ajustadas" da Petrobras = 53.931; caixa + aplicações de curto prazo na CVM
+      # (BPA 1.01.01 + 1.01.02) = 53.764. A diferença (167) são títulos que a companhia soma ao caixa.
+      disponibilidades_ajustadas: 53931
+      divida_liquida_companhia: 312602
+
+VALE3:
+  fontes:
+    - "Relatório da Administração 2025.pdf (Destaques; Indicadores financeiros; Gestão de dívidas)"
+    - "Desempenho da Vale no 1T26 - BRGAAP.pdf (Indicadores; Reconciliação LAJIDA)"
+    - "vale_brgaap_3q26.pdf (Indicadores; Reconciliação LAJIDA)"
+    - "August_Shareholder Structure_p.pdf (Composição acionária em 31/08/2026)"
+  periodos:
+    "2025": {receita_liquida: 213595}
+    1T25: {receita_liquida: 47411, lucro_controladora: 8164, lucro_total: 8173, da: 4105, ebitda: 14991}
+    4T25: {receita_liquida: 59676, lucro_controladora: -21048, lucro_total: -23220, da: 4649, ebitda: -1335}
+    1T26: {receita_liquida: 48680, lucro_controladora: 9953, lucro_total: 10199, da: 4435, ebitda: 17103}
+    2T26: {receita_liquida: 53012, lucro_controladora: 6847, lucro_total: 7041, da: 4603, ebitda: 15945}
+    # 3T26 ainda não estava nos dados abertos da CVM em 2026-10-30.
+    3T26: {receita_liquida: 54462, lucro_controladora: 6436, lucro_total: 6536, da: 4756, ebitda: 11933}
+    3T25: {receita_liquida: 56701, lucro_controladora: 14617, lucro_total: 14671, da: 4136, ebitda: 20220}
+  # Arredondados a R$ 0,1 bi no relatório: comparar com tolerância de 50.
+  aproximados:
+    "2025": {lucro_controladora: 13800}
+    2025-12-31: {caixa_e_aplicacoes_cp: 41600, divida_bruta_com_arrendamento: 103500}
+  acoes:
+    # Na composição do capital da CVM (×1000), QT_ACAO_TOTAL_CAP_INTEGR da Vale = ações SEM tesouraria.
+    2026-06-30: {em_circulacao: 4255762795, tesouraria: 183396969, capital_total: 4439159764}
+
+WEGE3:
+  # Pendente: nenhum documento da WEG conferido ainda.
+  periodos: {}

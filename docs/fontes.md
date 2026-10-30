@@ -43,6 +43,24 @@ Legenda: ✅ confirmado · ⚠️ diferente do guia · ⏳ pendente
 - Existe na DFP a partir de 2020 (DFP 2010–2019 não trazem o arquivo) e em todos os ITR.
 - ⚠️ **Sem coluna de escala.** A Vale informa em milhares em todas as datas (4.262.534 em 2026-03-31);
   a Petrobras informou em milhares só na DFP 2020 (13.044.497). Ver [ADR 0003](decisoes/0003-escala-das-acoes.md).
+  Escala da Vale confirmada pela composição acionária publicada pela companhia (31/08/2026).
+- ⚠️ **Significado de `QT_ACAO_TOTAL_CAP_INTEGR` varia por companhia.** Na Vale é o total **sem**
+  tesouraria (4.255.763 mil = "Total (sem ações em tesouraria)" do RI; capital total 4.439.159.764).
+  Na WEG é o capital total (4.197.317.998). Calcular "total − tesouraria" para todas subtrai a
+  tesouraria duas vezes na Vale. Tratar na Fase 3 (market cap).
+
+### Conciliação com documentos das companhias (2026-10-30)
+
+Valores em `tests/golden/referencias.yaml`. Resultado:
+
+- Receita, lucro (controladora e total) e EBITDA (= EBIT + D&A) batem **exatamente** com a CVM para
+  Petrobras (1S26, 2T26, 1S25) e Vale (1T25, 4T25, 1T26, 2T26; 4T25 = DFP − ITR 9M25).
+- Vale 2025: receita, lucro atribuído, caixa e dívida bruta do Relatório da Administração batem.
+- ⚠️ **Códigos de conta mudam entre períodos da mesma companhia.** D&A da Vale na DFC é
+  `6.01.01.06` no 1T26 e `6.01.01.05` no 2T26. O mapeamento da Fase 2 precisa de regex em
+  `DS_CONTA` (ou da DVA `7.04.01`, que é conta fixa).
+- Petrobras: "disponibilidades ajustadas" (53.931) > caixa + aplicações CP da CVM (53.764). Diferença
+  de títulos que a companhia soma ao caixa; candidata a `caixa_extra`.
 
 ### Cadastro (`cad_cia_aberta.csv`)
 
