@@ -25,7 +25,7 @@ projecao:
   horizonte_anos: perfil             # perfil | inteiro (anos com fluxo por vir)
   receita:
     # inicio sugerido: 1,4% (mediana do crescimento 2021-2025, dentro de [-5%, 20%])
-    # fim sugerido: 4,5% (g terminal = settings.terminal.g_nominal_max (PLACEHOLDER))
+    # fim sugerido: 5,0% (g terminal = settings.terminal.g_nominal_max)
     crescimento: {inicio: sugerido, fim: sugerido, curva: linear}
   margens:
     # inicio sugerido: 50,2% (mediana da margem EBITDA ajustada 2021-2025)

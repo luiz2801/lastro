@@ -115,6 +115,10 @@ class ConfigSensibilidade(_Modelo):
     wacc_faixa: float = Field(gt=0)
     g_passo: float = Field(gt=0)
     g_faixa: float = Field(gt=0)
+    margem_passo: float = Field(gt=0)
+    margem_faixa: float = Field(gt=0)
+    crescimento_passo: float = Field(gt=0)
+    crescimento_faixa: float = Field(gt=0)
 
 
 class ValidacaoCruzada(_Modelo):

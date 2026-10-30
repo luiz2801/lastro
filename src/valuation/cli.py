@@ -15,6 +15,8 @@ from rich.console import Console
 from rich.table import Table
 
 from valuation import __version__
+from valuation.analise import cenarios as cen
+from valuation.analise import sensibilidade as sens
 from valuation.config import (
     CAMINHO_CADASTRO_MANUAL,
     CAMINHO_PERFIL,
@@ -46,6 +48,8 @@ from valuation.data import macro as mac
 from valuation.data import precos as prc
 from valuation.data.http import ErroDownload, criar_sessao
 from valuation.data.validacao import ErroDadosExternos, Leitura, Validado
+from valuation.modelos import ErroModelo, dcf
+from valuation.modelos import ponte as pt
 from valuation.perfil import ErroPerfil, NomePerfil
 from valuation.perfil import registro as reg
 from valuation.perfil.parametros import parametros_do_perfil
@@ -55,7 +59,7 @@ from valuation.projecao import escrita as esc
 from valuation.projecao import premissas as pm
 from valuation.projecao import projetor as pj
 from valuation.projecao import sugestor as sg
-from valuation.saida.csv import FormatoCsv, gravar_csv
+from valuation.saida.csv import FormatoCsv, gravar_csv, gravar_matriz
 
 app = typer.Typer(
     help="Valuation de ações da B3. Uso pessoal e educacional; não é recomendação de investimento.",
@@ -684,6 +688,44 @@ def _horizonte(
     return anos, f"perfil {efetivo.perfil} ({efetivo.origem})"
 
 
+def _limite_aliquota(p: _Padronizada, settings: Settings) -> float:
+    limite = p.premissas.projecao.aliquota_imposto.limite_superior
+    return settings.impostos.aliquota_nominal if limite is None else limite
+
+
+def _sugerir(
+    p: _Padronizada, settings: Settings, base: dt.date
+) -> tuple[pd.DataFrame, Setor | None, sg.Sugestoes]:
+    """Métricas dos exercícios encerrados antes da data-base, setor e premissas sugeridas."""
+    aliquota = settings.impostos.aliquota_nominal
+    historico = nf.metricas(per.anual(p.contas), aliquota_nominal=aliquota, ajustes=p.ajustes)
+    historico = historico[historico.index < pj.primeiro_ano_aberto(base)]
+    setor = _setor(p.premissas.pares.setor)
+    sugestoes = sg.sugerir(
+        historico,
+        g_terminal=pj.g_terminal(p.premissas.projecao.terminal, settings.terminal),
+        aliquota_limite=_limite_aliquota(p, settings),
+        commodity=setor.commodity if setor else False,
+        setor=p.premissas.pares.setor,
+    )
+    return historico, setor, sugestoes
+
+
+def _resolver(
+    p: _Padronizada, settings: Settings, sugestoes: sg.Sugestoes, base: dt.date, horizonte: int
+) -> pj.PremissasResolvidas:
+    """Premissas numéricas do cenário base."""
+    ajustes = p.premissas.ajustes
+    return pj.resolver(
+        p.premissas.projecao,
+        sugestoes,
+        anos=pj.anos_projetados(sugestoes.ano_base, base, horizonte),
+        aliquota_limite=_limite_aliquota(p, settings),
+        descontar_arrendamento=ajustes.ifrs16 == "divida"
+        and ajustes.capex_equivalente_arrendamento,
+    )
+
+
 # (rótulo, coluna em sugestor.razoes, sugestões, campo no YAML)
 _LINHAS_SUGESTAO = (
     ("Crescimento da receita", "crescimento", ("crescimento_inicio", "crescimento_fim")),
@@ -790,20 +832,7 @@ def premissas_sugerir(
         settings = carregar_settings()
         base = dt.date.fromisoformat(data_base) if data_base else settings.resolver_data_base(hoje)
         p = _padronizar(ticker, settings)
-        aliquota = settings.impostos.aliquota_nominal
-        historico = nf.metricas(per.anual(p.contas), aliquota_nominal=aliquota, ajustes=p.ajustes)
-        historico = historico[historico.index < pj.primeiro_ano_aberto(base)]
-        setor = _setor(p.premissas.pares.setor)
-        projecao = p.premissas.projecao
-        limite = projecao.aliquota_imposto.limite_superior
-        limite = aliquota if limite is None else limite
-        sugestoes = sg.sugerir(
-            historico,
-            g_terminal=pj.g_terminal(projecao.terminal, settings.terminal),
-            aliquota_limite=limite,
-            commodity=setor.commodity if setor else False,
-            setor=p.premissas.pares.setor,
-        )
+        historico, setor, sugestoes = _sugerir(p, settings, base)
     except ValueError as e:
         raise _erro(f"--data-base inválida: {e}") from e
     except (ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroContabil, ErroProjecao) as e:
@@ -820,17 +849,7 @@ def premissas_sugerir(
         console.print(f"[yellow]Projeção não mostrada:[/] {e}")
     else:
         try:
-            anos = pj.anos_projetados(sugestoes.ano_base, base, horizonte)
-            resolvidas = pj.resolver(
-                projecao,
-                sugestoes,
-                anos=anos,
-                aliquota_limite=limite,
-                descontar_arrendamento=(
-                    p.premissas.ajustes.ifrs16 == "divida"
-                    and p.premissas.ajustes.capex_equivalente_arrendamento
-                ),
-            )
+            resolvidas = _resolver(p, settings, sugestoes, base, horizonte)
             tabela_p = pj.projetar(historico, resolvidas, data_base=base)
         except ErroProjecao as e:
             raise _erro(str(e)) from e
@@ -1047,6 +1066,283 @@ def wacc(
     for aviso in [*cc.avisos, *m.avisos]:
         console.print(f"[yellow]Aviso:[/] {aviso}")
     console.print(f"Gravado em {caminho}")
+
+
+def _dados_avaliacao(
+    p: _Padronizada,
+    m: _Mercado,
+    cc: wc.CustoCapital,
+    settings: Settings,
+    base: dt.date,
+    historico: pd.DataFrame,
+) -> dcf.DadosAvaliacao:
+    """Ponte com o balanço dos pesos do WACC, ações em circulação do market cap e câmbio."""
+    balanco = nf.metricas_ltm(
+        p.contas,
+        aliquota_nominal=settings.impostos.aliquota_nominal,
+        dt_fim=pd.Timestamp(cc.data_balanco),
+        ajustes=p.ajustes,
+    )
+    itens = pt.itens_do_balanco(
+        balanco,
+        acoes=sum(c.acoes for c in m.cap.classes),
+        data_balanco=cc.data_balanco,
+        coligadas=p.premissas.ajustes.coligadas,
+        minoritarios=p.premissas.ajustes.minoritarios,
+    )
+    return dcf.DadosAvaliacao(
+        historico=historico,
+        ponte=itens,
+        data_base=base,
+        meio_periodo=settings.dcf.convencao_meio_periodo,
+        alerta_tv_sobre_ev=settings.dcf.alerta_tv_sobre_ev,
+        cambio=1.0 if p.moeda == "BRL" else m.macro.cambio.valor,
+    )
+
+
+def _ronic(p: _Padronizada, settings: Settings, historico: pd.DataFrame) -> dcf.Ronic:
+    """RONIC do YAML da empresa ou do settings; `roic_historico` = mediana dos 5 últimos anos."""
+    escolha = p.premissas.projecao.terminal.ronic
+    escolha = settings.terminal.ronic if escolha is None else escolha
+    roic = historico["roic"].dropna().tail(sg.JANELA_CURTA)
+    return dcf.resolver_ronic(escolha, roic_historico=float(roic.median()) if len(roic) else None)
+
+
+def _reais(valor: float) -> str:
+    return "—" if pd.isna(valor) else f"R$ {valor:,.2f}".translate(str.maketrans(",.", ".,"))
+
+
+def _taxa(valor: float | None) -> str:
+    return "sem solução" if valor is None or pd.isna(valor) else f"{valor:.2%}".replace(".", ",")
+
+
+def _resumo(
+    ticker: str,
+    base: dt.date,
+    efetivo: reg.PerfilEfetivo,
+    moeda: str,
+    cc: wc.CustoCapital,
+    r: cen.ResultadoCenarios,
+    referencia: pj.NomeCenario,
+    avisos: list[str],
+) -> pd.DataFrame:
+    """Linha única de `resumo.csv` (seção 13 do CLAUDE.md; múltiplos entram na Fase 8)."""
+    av = r.avaliacoes[referencia]
+    valores = {
+        c: r.avaliacoes[c].valor_por_acao if c in r.avaliacoes else None for c in pj.CENARIOS
+    }
+    linha: dict[str, object] = {
+        "ticker": ticker,
+        "data_base": base.isoformat(),
+        "perfil": efetivo.perfil,
+        "origem_perfil": efetivo.origem,
+        "moeda_reporte": moeda,
+        "cambio": av.cambio,
+        "preco": r.preco,
+        **{f"valor_{c}": v for c, v in valores.items()},
+        "cenarios": ",".join(r.pesos),
+        "valor_ponderado": r.valor_ponderado,
+        "margem_seguranca": r.perfil.margem_seguranca,
+        "preco_maximo_compra": r.preco_maximo_compra,
+        "upside": r.upside,
+        "ke_implicito": r.ke_implicito,
+        "hurdle": r.hurdle,
+        "wacc_implicito": r.wacc_implicito,
+        "wacc": cc.wacc,
+        "ke": cc.ke.ke,
+        "g": av.dcf.g,
+        "ronic": av.dcf.ronic,
+        "vt_sobre_ev": av.dcf.tv_sobre_ev,
+        "ev_ebitda_terminal": av.dcf.ev_ebitda_terminal,
+        "data_balanco": cc.data_balanco.isoformat(),
+        "avisos": " | ".join(avisos),
+    }
+    df = pd.DataFrame([linha])
+    numericas = [c for c, v in linha.items() if v is None or isinstance(v, float | int)]
+    df[numericas] = df[numericas].astype("float64")
+    return df
+
+
+def _mostrar_valuation(
+    r: cen.ResultadoCenarios, cc: wc.CustoCapital, settings: Settings, titulo: str
+) -> None:
+    tabela = Table(title=titulo)
+    colunas = ["Cenário", "Peso", "VP fluxos", "VP terminal", "EV", "VT/EV"]
+    if settings.terminal.checagem_multiplo_saida:
+        colunas.append("EV/EBITDA term.")
+    for coluna in (*colunas, "Equity", "Valor por ação"):
+        tabela.add_column(coluna, justify="left" if coluna == "Cenário" else "right")
+    for c, av in r.avaliacoes.items():
+        d = av.dcf
+        linha = [
+            c,
+            f"{r.pesos[c]:.0%}",
+            _formatar(d.vp_fluxos, "mi"),
+            _formatar(d.vp_terminal, "mi"),
+            _formatar(d.ev, "mi"),
+            _formatar(d.tv_sobre_ev, "%"),
+        ]
+        if settings.terminal.checagem_multiplo_saida:
+            x = d.ev_ebitda_terminal
+            linha.append("—" if pd.isna(x) else f"{x:.1f}x".replace(".", ","))
+        linha += [_formatar(av.ponte.equity, "mi"), _reais(av.valor_por_acao)]
+        tabela.add_row(*linha)
+    console.print(tabela)
+
+    d = next(iter(r.avaliacoes.values())).dcf
+    console.print(
+        f"Checagens: WACC {_taxa(cc.wacc)} > g {_taxa(d.g)} "
+        f"(teto {_taxa(settings.terminal.g_nominal_max)}); RONIC {_taxa(d.ronic)}; "
+        f"alerta de VT/EV acima de {settings.dcf.alerta_tv_sobre_ev:.0%}."
+    )
+    p = r.perfil
+    console.print(
+        f"Valor ponderado ({p.perfil}): [bold]{_reais(r.valor_ponderado)}[/]; margem de segurança "
+        f"{p.margem_seguranca:.0%} ⇒ preço máximo de compra [bold]{_reais(r.preco_maximo_compra)}"
+        f"[/]; preço {_reais(r.preco)} (upside {_taxa(r.upside)})."
+    )
+    console.print(
+        f"Retorno implícito no preço: Ke {_taxa(r.ke_implicito)} contra hurdle "
+        f"{_taxa(r.hurdle)} (Selic + {sg.pp(p.hurdle_spread_selic)}); "
+        f"WACC {_taxa(r.wacc_implicito)} contra WACC de {_taxa(cc.wacc)}."
+    )
+
+
+@app.command()
+def rodar(
+    ticker: str = typer.Argument(..., help="Ex.: PETR4."),
+    cenario: str = typer.Option(
+        "todos", "--cenario", help="base | pessimista | otimista | todos (ponderados pelo perfil)."
+    ),
+    data_base: str | None = typer.Option(
+        None, "--data-base", help="AAAA-MM-DD (padrão: settings)."
+    ),
+    perfil_override: str | None = typer.Option(
+        None, "--perfil", help="conservador|moderado|arrojado (sobrescreve o perfil gravado)."
+    ),
+    saida: str | None = typer.Option(
+        None, "--saida", help="Diretório raiz da saída (padrão: saida/)."
+    ),
+    formato_csv: str = typer.Option("br", "--formato-csv", help="br | intl."),
+    forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+) -> None:
+    """Valuation por DCF: cenários ponderados pelo perfil, ponte EV -> equity e sensibilidade."""
+    hoje = dt.date.today()
+    agora = dt.datetime.now(dt.UTC)
+    if cenario not in (*pj.CENARIOS, "todos"):
+        raise _erro("--cenario deve ser base, pessimista, otimista ou todos.")
+    if formato_csv not in ("br", "intl"):
+        raise _erro("--formato-csv deve ser br ou intl.")
+    if perfil_override not in (None, "conservador", "moderado", "arrojado"):
+        raise _erro("--perfil deve ser conservador, moderado ou arrojado.")
+    override = cast(NomePerfil | None, perfil_override)
+    cenarios = pj.CENARIOS if cenario == "todos" else (cast(pj.NomeCenario, cenario),)
+    referencia: pj.NomeCenario = "base" if cenario == "todos" else cenarios[0]
+    try:
+        settings = carregar_settings()
+        base = dt.date.fromisoformat(data_base) if data_base else settings.resolver_data_base(hoje)
+        efetivo = reg.resolver_perfil(CAMINHO_PERFIL, hoje, override)
+        parametros = parametros_do_perfil(efetivo.perfil, settings.perfil)
+        p = _padronizar(ticker, settings)
+        historico, _, sugestoes = _sugerir(p, settings, base)
+        horizonte, origem = _horizonte(p.premissas, settings, hoje, override)
+        resolvidas = _resolver(p, settings, sugestoes, base, horizonte)
+        deltas = pj.resolver_cenarios(p.premissas.cenarios, sugestoes)
+        m = _mercado(ticker, settings, base, agora, forcar)
+        cc = _custo_capital(p, m, settings, base)
+        dados = _dados_avaliacao(p, m, cc, settings, base, historico)
+        ronic = _ronic(p, settings, historico)
+        normalizado = cad.normalizar_ticker(ticker)
+        preco = (m.precos.get(normalizado) or next(iter(m.precos.values()))).valor
+        r = cen.analisar(
+            resolvidas,
+            deltas,
+            dados,
+            custo_capital=cc,
+            ronic=ronic,
+            perfil=parametros,
+            preco=preco,
+            selic=m.macro.selic.valor,
+            cenarios=cenarios,
+        )
+        ref = r.avaliacoes[referencia].premissas
+        s = settings.sensibilidade
+        wacc_g = sens.wacc_x_g(
+            ref,
+            dados,
+            wacc=cc.wacc,
+            ronic=ronic,
+            passo_wacc=s.wacc_passo,
+            faixa_wacc=s.wacc_faixa,
+            passo_g=s.g_passo,
+            faixa_g=s.g_faixa,
+        )
+        margem_g = sens.margem_x_crescimento(
+            ref,
+            dados,
+            wacc=cc.wacc,
+            ronic=ronic,
+            passo_margem=s.margem_passo,
+            faixa_margem=s.margem_faixa,
+            passo_crescimento=s.crescimento_passo,
+            faixa_crescimento=s.crescimento_faixa,
+        )
+    except ValueError as e:
+        raise _erro(f"--data-base inválida: {e}") from e
+    except (
+        ErroConfiguracao,
+        ErroDownload,
+        cad.ErroCadastro,
+        ErroDadosExternos,
+        ErroContabil,
+        ErroPerfil,
+        ErroProjecao,
+        ErroCustoCapital,
+        ErroModelo,
+    ) as e:
+        raise _erro(str(e)) from e
+
+    moeda = f"{p.moeda}" + ("" if p.moeda == "BRL" else f" convertido a {m.macro.cambio.valor:.4f}")
+    _mostrar_valuation(
+        r,
+        cc,
+        settings,
+        f"DCF — {p.premissas.ticker} em {base} ({moeda}; R$ milhões; {horizonte} anos pelo "
+        f"{origem})",
+    )
+    _mostrar_projecao(
+        r.avaliacoes[referencia].projecao,
+        f"Projeção {referencia} — {p.premissas.ticker} (R$ milhões, {p.moeda})",
+    )
+    tabela = Table(title=f"Sensibilidade WACC x g — valor por ação ({referencia})")
+    tabela.add_column("WACC \\ g")
+    for g in wacc_g.columns:
+        tabela.add_column(_taxa(cast(float, g)), justify="right")
+    for w, linha in wacc_g.iterrows():
+        tabela.add_row(_taxa(cast(float, w)), *(_reais(v) for v in linha))
+    console.print(tabela)
+
+    raiz = (Path(saida) if saida else DIR_SAIDA) / p.premissas.ticker / base.isoformat()
+    fmt = cast(FormatoCsv, formato_csv)
+    gravar_csv(wc.tabela(cc), raiz / "wacc.csv", settings.csv, fmt)
+    for c, av in r.avaliacoes.items():
+        gravar_csv(dcf.tabela(av), raiz / f"projecao_{c}.csv", settings.csv, fmt)
+    ponte_df = pd.concat(
+        {c: pt.tabela(av.ponte).set_index("item")["valor"] for c, av in r.avaliacoes.items()},
+        axis=1,
+    ).reset_index()
+    gravar_csv(ponte_df, raiz / "ponte_ev_equity.csv", settings.csv, fmt)
+    gravar_matriz(wacc_g, raiz / "sensibilidade_wacc_g.csv", settings.csv, fmt)
+    gravar_matriz(margem_g, raiz / "sensibilidade_margem_crescimento.csv", settings.csv, fmt)
+    avisos = [*r.avisos, *cc.avisos, *m.avisos, *sugestoes.avisos]
+    resumo = _resumo(p.premissas.ticker, base, efetivo, p.moeda, cc, r, referencia, avisos)
+    gravar_csv(resumo, raiz / "resumo.csv", settings.csv, fmt)
+
+    for aviso in avisos:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
+    console.print(cen.mensagem(r, normalizado))
+    console.print("Estudo pessoal; não é recomendação de investimento.")
+    console.print(f"Gravado em {raiz}")
 
 
 if __name__ == "__main__":  # pragma: no cover

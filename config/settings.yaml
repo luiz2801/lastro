@@ -30,7 +30,7 @@ custo_capital:
   estrutura_alvo: {metodo: mercado_atual, divida_sobre_capital: null}
 
 terminal:
-  g_nominal_max: 0.045             # PLACEHOLDER: teto do crescimento perpétuo
+  g_nominal_max: 0.05              # teto do crescimento perpétuo nominal (decidido em 2026-10-30)
   ronic: wacc                      # wacc | roic_historico | valor numérico
   checagem_multiplo_saida: true
 
@@ -38,11 +38,17 @@ dcf:
   convencao_meio_periodo: true
   alerta_tv_sobre_ev: 0.75
 
+# Eixos das tabelas de sensibilidade: centro (valor do cenário base) +- faixa, de passo em passo.
+# Margem e crescimento são deltas somados a todos os anos explícitos.
 sensibilidade:
   wacc_passo: 0.005
   wacc_faixa: 0.02
   g_passo: 0.0025
   g_faixa: 0.01
+  margem_passo: 0.01
+  margem_faixa: 0.03
+  crescimento_passo: 0.01
+  crescimento_faixa: 0.03
 
 # Tolerância para aceitar que duas fontes "concordam" (ver docs/decisoes/0004).
 # Preço, câmbio e market cap: diferença relativa. Taxas: diferença absoluta em decimal.

@@ -2,6 +2,25 @@
 
 ## [Não lançado]
 
+### Fase 7 — DCF, ponte, sensibilidade e cenários
+- `modelos/dcf.py`: DCF do FCFF com ano corrente parcial e convenção de meio período, valor
+  terminal por value driver (RONIC = WACC, ROIC histórico ou número), EV/EBITDA implícito no
+  terminal, aviso de VT/EV e erros de WACC/RONIC ≤ g; `avaliar` (projeção → DCF → ponte) puro.
+- `modelos/ponte.py`: ponte EV → equity → valor por ação (dívida bruta, caixa, minoritários
+  contábeis, coligadas, `divida_extra`, ações em circulação) com o balanço dos pesos do WACC.
+- `analise/cenarios.py`: cenários pessimista/base/otimista ponderados pelo perfil, preço máximo de
+  compra, upside, Ke implícito no preço (contra o hurdle) e WACC implícito; mensagem neutra.
+- `analise/sensibilidade.py`: matrizes WACC × g e margem EBITDA × crescimento.
+- `saida/csv.py`: `gravar_matriz`.
+- `settings.yaml`: teto do g terminal em 5,0% (decisão do usuário) e eixos de margem e
+  crescimento da sensibilidade.
+- CLI: `valuation rodar TICKER [--cenario] [--perfil] [--data-base] [--saida] [--formato-csv]
+  [--forcar]`, que grava `resumo.csv`, `wacc.csv`, `projecao_{cenario}.csv`,
+  `ponte_ev_equity.csv` e `sensibilidade_*.csv`; `premissas sugerir` e `rodar` compartilham a
+  montagem das sugestões.
+- `config/empresas/*.yaml` regenerados (comentário do g terminal).
+- ADR 0008; `guia.md` 1.6.
+
 ### Fase 6 — Custo de capital
 - `custo_capital/beta.py`: regressão OLS semanal (260 semanas, `adj_close`) contra o Ibovespa com
   erro-padrão, R² e avisos de R² baixo, janela incompleta e baixa liquidez; Blume; Hamada

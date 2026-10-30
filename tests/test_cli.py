@@ -309,7 +309,8 @@ class _PrecosFalsos:
 
 @pytest.fixture
 def mercado_falso(weg_sintetica: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """WEGE3 sintética com dívida 100, despesa financeira 12 e market cap 900 (D/(D+E) = 10%)."""
+    """WEGE3 sintética com dívida 100, despesa financeira 12 e market cap 900 (90 ações a R$ 10;
+    D/(D+E) = 10%)."""
     pasta = weg_sintetica / "processed" / "cvm" / "5410"
     dados = juntar(
         dfp_completa(2024, cd_cvm=5410, DRE={"3.06.02": -12}),
@@ -330,8 +331,8 @@ def mercado_falso(weg_sintetica: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             ipca_esperado={2027: 0.04, 2030: 0.035},
             data_focus=base,
         )
-        cap = prc.MarketCap(900.0, (), base, ())
-        precos = {"WEGE3": manual("Preço WEGE3", 40.0)}
+        cap = prc.MarketCap(900.0, (prc.ClasseMarketCap("WEGE3", "ON", 90, 10.0),), base, ())
+        precos = {"WEGE3": manual("Preço WEGE3", 10.0)}
         return cli._Mercado(empresa, precos, manual("^BVSP", 1.0), macro, cap, _PrecosFalsos())  # type: ignore[arg-type]
 
     monkeypatch.setattr(cli, "_mercado", mercado)
@@ -389,3 +390,77 @@ def test_wacc_beta_manual_e_formato_invalido(mercado_falso: Path) -> None:
     assert resultado.exit_code == 0, resultado.output
     texto = (mercado_falso / "WEGE3" / "2026-10-30" / "wacc.csv").read_text("utf-8")
     assert "beta,0.8," in texto
+
+
+def ler_csv_br(caminho: Path) -> pd.DataFrame:
+    return pd.read_csv(caminho, sep=";", decimal=",", encoding="utf-8-sig")
+
+
+def test_rodar(mercado_falso: Path, caminho_perfil: Path) -> None:
+    saida = mercado_falso / "saida"
+    resultado = CliRunner().invoke(
+        app, ["rodar", "WEGE3", "--perfil", "moderado", "--saida", str(saida)]
+    )
+    assert resultado.exit_code == 0, resultado.output
+    pasta = saida / "WEGE3" / "2026-10-30"
+    assert sorted(p.name for p in pasta.iterdir()) == [
+        "ponte_ev_equity.csv",
+        "projecao_base.csv",
+        "projecao_otimista.csv",
+        "projecao_pessimista.csv",
+        "resumo.csv",
+        "sensibilidade_margem_crescimento.csv",
+        "sensibilidade_wacc_g.csv",
+        "wacc.csv",
+    ]
+    r = ler_csv_br(pasta / "resumo.csv").iloc[0]
+    assert r["perfil"] == "moderado"
+    assert r["origem_perfil"] == "override"
+    assert r["preco"] == 10.0
+    assert r["valor_ponderado"] == pytest.approx(
+        0.25 * r["valor_pessimista"] + 0.5 * r["valor_base"] + 0.25 * r["valor_otimista"]
+    )
+    assert r["preco_maximo_compra"] == pytest.approx(0.8 * r["valor_ponderado"])
+    assert r["hurdle"] == pytest.approx(0.15 + 0.05)
+    assert r["g"] == pytest.approx(0.05)
+    assert r["ronic"] == pytest.approx(r["wacc"])
+    wacc_csv = ler_csv_br(pasta / "wacc.csv").set_index("componente")["valor"]
+    assert r["wacc"] == pytest.approx(wacc_csv["wacc"])
+
+    ponte = ler_csv_br(pasta / "ponte_ev_equity.csv").set_index("item")
+    assert list(ponte.columns) == ["pessimista", "base", "otimista"]
+    assert ponte.loc["acoes", "base"] == 90
+    assert ponte.loc["valor_por_acao", "base"] == pytest.approx(r["valor_base"])
+    assert ponte.loc["equity", "base"] == pytest.approx(90 * r["valor_base"])
+
+    sens = ler_csv_br(pasta / "sensibilidade_wacc_g.csv").set_index("wacc\\g")
+    assert sens.shape == (9, 9)
+    assert sens.loc[sens.index[4], "0,0500"] == pytest.approx(r["valor_base"])
+    projecao = ler_csv_br(pasta / "projecao_base.csv")
+    assert projecao["ano"].iloc[0] == 2026
+    assert projecao["vp"].notna().all()
+    texto = " ".join(resultado.output.split())
+    assert "preço máximo de compra para o perfil moderado" in texto
+    assert "não é recomendação" in texto
+
+
+def test_rodar_um_cenario(mercado_falso: Path, caminho_perfil: Path) -> None:
+    saida = mercado_falso / "saida"
+    resultado = CliRunner().invoke(
+        app,
+        ["rodar", "WEGE3", "--perfil", "arrojado", "--cenario", "otimista", "--saida", str(saida)],
+    )
+    assert resultado.exit_code == 0, resultado.output
+    r = ler_csv_br(saida / "WEGE3" / "2026-10-30" / "resumo.csv").iloc[0]
+    assert r["cenarios"] == "otimista"
+    assert pd.isna(r["valor_base"])
+    assert r["valor_ponderado"] == pytest.approx(r["valor_otimista"])
+    assert not (saida / "WEGE3" / "2026-10-30" / "projecao_base.csv").exists()
+
+
+def test_rodar_erros(mercado_falso: Path, caminho_perfil: Path) -> None:
+    for args in (["--cenario", "xx"], ["--formato-csv", "xx"], ["--perfil", "xx"]):
+        assert CliRunner().invoke(app, ["rodar", "WEGE3", *args]).exit_code == 1
+    resultado = CliRunner().invoke(app, ["rodar", "WEGE3", "--saida", str(mercado_falso)])
+    assert resultado.exit_code == 1
+    assert "valuation perfil" in " ".join(resultado.output.split())

@@ -18,6 +18,7 @@ Itens `[DECIDIDO]` não mudam por ADR sem o aval do usuário (regra 7 do `CLAUDE
 | [0005](0005-padronizacao-contabil.md) | Reapresentações por família e período, dívida × arrendamento separados, D&A pela DFC, métricas históricas, periodicidade `S` | 7.1, 7.3, 7.6 | aceito |
 | [0006](0006-premissas-e-projecao.md) | `sugerido` permanece no YAML (valor em comentário), margem ajustada com reversão de metade, ΔNWC incremental, deltas de ±1 desvio-padrão, `arrendamento_sobre_receita`, anos-ponte e fração do ano | 9.1, 9.2, 9.3 | aceito |
 | [0007](0007-custo-de-capital.md) | Kd histórico (despesas financeiras / dívida bruta média, 3 anos) limitado a Rf + faixa, benefício fiscal pela alíquota nominal, IPCA de longo prazo do Focus, precedência do beta do YAML, pesos com a dívida bruta do último balanço, comando `wacc` | 10.1, 10.2, 10.3, 14 | aceito |
+| [0008](0008-dcf-ponte-e-cenarios.md) | Ke e WACC implícitos no preço, teto do g de 5%, prazos com meio período e VT no τ do último ano, RONIC, saldos e ações da ponte, cenário único, eixos da sensibilidade, `rodar` antecipado | 8.4, 11.1, 11.2, 12, 14, 19 (#3) | aceito |
 
 ## Quando escrever um ADR
 

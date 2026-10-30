@@ -111,9 +111,7 @@ def fracao_restante(ano: int, data_base: dt.date) -> float:
 def g_terminal(terminal: TerminalEmpresa, config: ConfigTerminal) -> Sugestao:
     """Crescimento perpétuo nominal: o do YAML da empresa ou o teto do settings."""
     if terminal.g_nominal is None:
-        return Sugestao(
-            config.g_nominal_max, "g terminal = settings.terminal.g_nominal_max (PLACEHOLDER)"
-        )
+        return Sugestao(config.g_nominal_max, "g terminal = settings.terminal.g_nominal_max")
     if terminal.g_nominal > config.g_nominal_max:
         raise ErroProjecao(
             f"terminal.g_nominal ({pct(terminal.g_nominal, 2)}) acima do teto "

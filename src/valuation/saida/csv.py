@@ -21,3 +21,15 @@ def gravar_csv(
     caminho.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(caminho, sep=cfg.separador, decimal=cfg.decimal, encoding=cfg.encoding, index=False)
     return caminho
+
+
+def gravar_matriz(
+    matriz: pd.DataFrame, caminho: Path, config: ConfigCsv, formato: FormatoCsv = "br"
+) -> Path:
+    """Matriz com índice e colunas numéricos: a 1ª coluna é o índice (`linha\\coluna` no
+    cabeçalho) e os rótulos das colunas usam o separador decimal do formato."""
+    cfg = config if formato == "br" else INTERNACIONAL
+    df = matriz.rename(columns=lambda x: f"{x:.4f}".replace(".", cfg.decimal))
+    df.columns.name = None
+    df = df.rename_axis(f"{matriz.index.name}\\{matriz.columns.name}").reset_index()
+    return gravar_csv(df, caminho, config, formato)

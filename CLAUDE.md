@@ -777,7 +777,7 @@ Schema pydantic, `sugestor.py`, `projetor.py`, ano parcial.
 Beta, CAPM (`brl_direto` e `usd_crp`), Kd, WACC.
 *Pronto:* testes unitários; relatório `wacc.csv` com avisos de qualidade do beta.
 
-**Fase 7 — DCF, ponte, sensibilidade e cenários**
+**Fase 7 — DCF, ponte, sensibilidade e cenários** ✅ concluída
 `dcf.py`, `ponte.py`, `sensibilidade.py`, `cenarios.py`, ponderação por perfil.
 *Pronto:* valor por ação por cenário e ponderado para os 3 pilotos; checagens de VT/EV e g impressas; sensibilidade CSV.
 
@@ -816,7 +816,7 @@ Modo em lote/screening, SOTP/NAV para holdings, Monte Carlo, deck de commodities
 
 1. ERP e fonte preferida do prêmio de risco (Fase 6).
 2. Taxa livre de risco: Tesouro Prefixado 10 anos automático ou valor manual (Fase 3/6).
-3. Teto do crescimento perpétuo em termos nominais (Fase 7).
+3. ~~Teto do crescimento perpétuo em termos nominais (Fase 7).~~ Respondida: 5,0% (ADR 0008).
 4. Lista final de empresas do universo (Ibovespa atual) e pares por setor (Fase 8).
 5. Aceitar os valores iniciais do mapeamento perfil → parâmetros (seção 8.4) ou ajustá-los (Fase 4).
 6. Conferência dos números dos pilotos contra os releases das empresas (fim da Fase 2).
