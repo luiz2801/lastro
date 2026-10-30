@@ -2,6 +2,20 @@
 
 ## [Não lançado]
 
+### Fase 10 — Financeiras: DDM, Ke, cenários e sensibilidade
+- `modelos/ddm.py`: DDM em dois estágios (dividendos descontados no fim de cada ano, ano corrente
+  parcial, valor terminal pelo P/VP justificado) e checagem por lucro residual, que coincide com
+  o DDM por construção.
+- `custo_capital/wacc.py`: Ke das financeiras (`CustoCapitalFinanceira`, `tabela_financeira`),
+  sem Kd nem WACC; beta por comparáveis sem Hamada.
+- `analise/cenarios.py`: resultado genérico (FCFF ou DDM) e `analisar_ddm` com o Ke implícito no
+  preço.
+- `analise/sensibilidade.py`: matrizes Ke × g e ROE de longo prazo × Ke.
+- `settings.yaml`: `sensibilidade.roe_passo` e `roe_faixa`.
+- CLI: `wacc` e `rodar` de financeiras (`resumo.csv` com P/VP justificado e lucro residual,
+  `sensibilidade_ke_g.csv`, `sensibilidade_roe_ke.csv`).
+- ADR 0013; `guia.md` 1.14.
+
 ### Fase 10 — Financeiras: premissas e projeção do DDM
 - `projecao/premissas.py`: `projecao` e `cenarios` com esquema conforme o `tipo_modelo`
   (financeira: ROE em trajetória ou lista, `payout_inicio`, `terminal.g_nominal`, `roe_pp`).

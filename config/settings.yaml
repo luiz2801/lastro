@@ -39,7 +39,8 @@ dcf:
   alerta_tv_sobre_ev: 0.75
 
 # Eixos das tabelas de sensibilidade: centro (valor do cenário base) +- faixa, de passo em passo.
-# Margem e crescimento são deltas somados a todos os anos explícitos.
+# Margem e crescimento são deltas somados a todos os anos explícitos. Financeiras (DDM): o eixo do
+# Ke usa wacc_passo/wacc_faixa; o do ROE de longo prazo, roe_passo/roe_faixa.
 sensibilidade:
   wacc_passo: 0.005
   wacc_faixa: 0.02
@@ -49,6 +50,8 @@ sensibilidade:
   margem_faixa: 0.03
   crescimento_passo: 0.01
   crescimento_faixa: 0.03
+  roe_passo: 0.01
+  roe_faixa: 0.03
 
 # Múltiplos e comparáveis (seção 11.4 e ADR 0009). Múltiplos negativos ou indefinidos são
 # descartados; os demais são limitados aos percentis `winsorizar` dos pares antes da mediana,

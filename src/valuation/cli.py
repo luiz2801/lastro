@@ -49,7 +49,7 @@ from valuation.data import macro as mac
 from valuation.data import precos as prc
 from valuation.data.http import ErroDownload, criar_sessao
 from valuation.data.validacao import ErroDadosExternos, Leitura, Validado
-from valuation.modelos import ErroModelo, dcf
+from valuation.modelos import ErroModelo, dcf, ddm
 from valuation.modelos import multiplos as mt
 from valuation.modelos import ponte as pt
 from valuation.perfil import ErroPerfil, NomePerfil
@@ -773,7 +773,7 @@ def _sugerir(
     setor = _setor(p.premissas.pares.setor)
     sugestoes = sg.sugerir(
         historico,
-        g_terminal=pj.g_terminal(p.premissas.projecao.terminal, settings.terminal),
+        g_terminal=pj.g_terminal(p.premissas.projecao_dcf.terminal, settings.terminal),
         aliquota_limite=_limite_aliquota(p, settings),
         commodity=setor.commodity if setor else False,
         setor=p.premissas.pares.setor,
@@ -1315,20 +1315,9 @@ def _custo_capital(
     cfg = settings.custo_capital
     aliquota = settings.impostos.aliquota_nominal
     moeda = cast(capm.Moeda, p.moeda)
-    avisos: list[str] = []
-
-    metodo, aviso = capm.metodo_efetivo(cfg.metodo, moeda)
-    if aviso:
-        avisos.append(aviso)
-    inflacao_brl = (
-        m.macro.ipca_esperado[max(m.macro.ipca_esperado)] if m.macro.ipca_esperado else None
-    )
-
     data_bal = _data_balanco(p.contas, base)
+    avisos = _aviso_defasagem(data_bal, base)
     ltm = nf.metricas_ltm(p.contas, aliquota_nominal=aliquota, dt_fim=data_bal, ajustes=p.ajustes)
-    defasagem = (base - data_bal.date()).days
-    if defasagem > DEFASAGEM_AVISO_DIAS:
-        avisos.append(f"Balanço de {data_bal.date()} ({defasagem} dias antes da data-base).")
     equity = m.cap.valor if moeda == "BRL" else m.cap.valor / m.macro.cambio.valor
     pares = comps.pares if comps else ()
     alvo_dc = (
@@ -1345,17 +1334,7 @@ def _custo_capital(
 
     beta_bruto = _beta(p, m, settings, base, aliquota, est, pares)
     beta = wc.beta_na_estrutura(beta_bruto, est, aliquota)
-    ke = capm.custo_capital_proprio(
-        metodo=metodo,
-        moeda=moeda,
-        beta=beta.beta,
-        erp=cfg.erp,
-        rf_brl=m.macro.rf_brl.valor,
-        rf_usd=cfg.rf_usd,
-        crp=cfg.crp,
-        inflacao_usd=cfg.inflacao_usd_lp,
-        inflacao_brl=inflacao_brl,
-    )
+    ke = _ke(moeda, beta.beta, m, settings, avisos)
 
     kd_cfg = p.premissas.custo_capital.kd
     if kd_cfg.metodo == "manual" and kd_cfg.valor is not None:
@@ -1387,9 +1366,65 @@ def _custo_capital(
         data_balanco=data_bal.date(),
         avisos=tuple(avisos),
     )
-    g = pj.g_terminal(p.premissas.projecao.terminal, settings.terminal)
+    g = pj.g_terminal(p.premissas.projecao_dcf.terminal, settings.terminal)
     wc.validar_g(cc.wacc, g.valor)
     return cc
+
+
+def _aviso_defasagem(data_bal: pd.Timestamp, base: dt.date) -> list[str]:
+    defasagem = (base - data_bal.date()).days
+    if defasagem > DEFASAGEM_AVISO_DIAS:
+        return [f"Balanço de {data_bal.date()} ({defasagem} dias antes da data-base)."]
+    return []
+
+
+def _ke(
+    moeda: capm.Moeda, beta: float, m: _Mercado, settings: Settings, avisos: list[str]
+) -> capm.CustoCapitalProprio:
+    """Ke pelo método do settings (empresa em USD usa `usd_crp`; o aviso vai para `avisos`)."""
+    cfg = settings.custo_capital
+    metodo, aviso = capm.metodo_efetivo(cfg.metodo, moeda)
+    if aviso:
+        avisos.append(aviso)
+    inflacao_brl = (
+        m.macro.ipca_esperado[max(m.macro.ipca_esperado)] if m.macro.ipca_esperado else None
+    )
+    return capm.custo_capital_proprio(
+        metodo=metodo,
+        moeda=moeda,
+        beta=beta,
+        erp=cfg.erp,
+        rf_brl=m.macro.rf_brl.valor,
+        rf_usd=cfg.rf_usd,
+        crp=cfg.crp,
+        inflacao_usd=cfg.inflacao_usd_lp,
+        inflacao_brl=inflacao_brl,
+    )
+
+
+def _custo_capital_financeira(
+    p: _Padronizada,
+    m: _Mercado,
+    settings: Settings,
+    base: dt.date,
+    comps: _Comparaveis | None = None,
+) -> wc.CustoCapitalFinanceira:
+    """Beta e Ke de uma financeira (sem Kd, estrutura nem WACC; seção 10.4).
+
+    Beta por comparáveis = mediana dos betas dos pares, sem Hamada (dívida de banco é operação).
+    """
+    moeda = cast(capm.Moeda, p.moeda)
+    data_bal = _data_balanco(p.contas, base)
+    avisos = _aviso_defasagem(data_bal, base)
+    sem_divida = wc.estrutura(metodo="mercado_atual", divida=0.0, equity=m.cap.valor)
+    aliquota = settings.impostos.aliquota_nominal
+    beta = _beta(p, m, settings, base, aliquota, sem_divida, comps.pares if comps else ())
+    ke = _ke(moeda, beta.beta, m, settings, avisos)
+    g = pj.g_terminal(p.premissas.projecao_ddm.terminal, settings.terminal)
+    wc.validar_g(ke.ke, g.valor, "Ke")
+    return wc.montar_financeira(
+        data_base=base, beta=beta, ke=ke, data_balanco=data_bal.date(), avisos=tuple(avisos)
+    )
 
 
 def _formatar_componente(componente: str, valor: float) -> str:
@@ -1430,7 +1465,12 @@ def wacc(
         p = _padronizar(ticker, settings)
         m = _mercado(ticker, settings, base, agora, forcar)
         comps = _coletar_pares(p, m, settings, base) if _precisa_pares(p, settings) else None
-        cc = _custo_capital(p, m, settings, base, comps)
+        if p.plano.tipo == "financeira":
+            cc_fin = _custo_capital_financeira(p, m, settings, base, comps)
+            tab, moeda_ke, avisos_cc = wc.tabela_financeira(cc_fin), cc_fin.ke.moeda, cc_fin.avisos
+        else:
+            cc = _custo_capital(p, m, settings, base, comps)
+            tab, moeda_ke, avisos_cc = wc.tabela(cc), cc.ke.moeda, cc.avisos
     except ValueError as e:
         raise _erro(f"--data-base inválida: {e}") from e
     except (
@@ -1444,8 +1484,7 @@ def wacc(
     ) as e:
         raise _erro(str(e)) from e
 
-    tab = wc.tabela(cc)
-    tabela = Table(title=f"Custo de capital — {p.premissas.ticker} em {base} ({cc.ke.moeda})")
+    tabela = Table(title=f"Custo de capital — {p.premissas.ticker} em {base} ({moeda_ke})")
     for coluna in ("Componente", "Valor", "Detalhe"):
         tabela.add_column(coluna)
     for componente, valor, detalhe in zip(
@@ -1457,7 +1496,7 @@ def wacc(
     raiz = Path(saida) if saida else DIR_SAIDA
     caminho = raiz / p.premissas.ticker / base.isoformat() / "wacc.csv"
     gravar_csv(tab, caminho, settings.csv, cast(FormatoCsv, formato_csv))
-    for aviso in [*cc.avisos, *(comps.avisos if comps else ()), *m.avisos]:
+    for aviso in [*avisos_cc, *(comps.avisos if comps else ()), *m.avisos]:
         console.print(f"[yellow]Aviso:[/] {aviso}")
     console.print(f"Gravado em {caminho}")
 
@@ -1518,7 +1557,7 @@ def _resumo(
     efetivo: reg.PerfilEfetivo,
     moeda: str,
     cc: wc.CustoCapital,
-    r: cen.ResultadoCenarios,
+    r: cen.ResultadoCenarios[dcf.Avaliacao],
     referencia: pj.NomeCenario,
     multiplos: mt.ResultadoMultiplos | None,
     g_saida: float | None,
@@ -1569,7 +1608,10 @@ def _resumo(
 
 
 def _mostrar_valuation(
-    r: cen.ResultadoCenarios, cc: wc.CustoCapital, settings: Settings, titulo: str
+    r: cen.ResultadoCenarios[dcf.Avaliacao],
+    cc: wc.CustoCapital,
+    settings: Settings,
+    titulo: str,
 ) -> None:
     tabela = Table(title=titulo)
     colunas = ["Cenário", "Peso", "VP fluxos", "VP terminal", "EV", "VT/EV"]
@@ -1776,6 +1818,11 @@ def rodar(
         efetivo = reg.resolver_perfil(CAMINHO_PERFIL, hoje, override)
         parametros = parametros_do_perfil(efetivo.perfil, settings.perfil)
         p = _padronizar(ticker, settings)
+        if p.plano.tipo == "financeira":
+            raiz = (Path(saida) if saida else DIR_SAIDA) / p.premissas.ticker / base.isoformat()
+            execucao = _Execucao(base, hoje, agora, override, efetivo, cenarios, referencia, forcar)
+            _rodar_financeira(p, settings, execucao, raiz, cast(FormatoCsv, formato_csv))
+            return
         historico, _, sugestoes = _sugerir(p, settings, base)
         horizonte, origem = _horizonte(p.premissas, settings, hoje, override)
         resolvidas = _resolver(p, settings, sugestoes, base, horizonte)
@@ -1915,6 +1962,230 @@ def rodar(
     console.print(cen.mensagem(r, normalizado))
     console.print("Estudo pessoal; não é recomendação de investimento.")
     console.print(f"Gravado em {raiz}")
+
+
+@dataclass(frozen=True)
+class _Execucao:
+    """Parâmetros de uma execução do `rodar` (datas, perfil e cenários)."""
+
+    base: dt.date
+    hoje: dt.date
+    agora: dt.datetime
+    override: NomePerfil | None
+    efetivo: reg.PerfilEfetivo
+    cenarios: tuple[pj.NomeCenario, ...]
+    referencia: pj.NomeCenario
+    forcar: bool
+
+
+def _rodar_financeira(
+    p: _Padronizada, settings: Settings, e: _Execucao, raiz: Path, fmt: FormatoCsv
+) -> None:
+    """`rodar` de uma financeira: DDM por cenário, Ke implícito e sensibilidades (seção 11.3)."""
+    ticker = p.premissas.ticker
+    try:
+        parametros = parametros_do_perfil(e.efetivo.perfil, settings.perfil)
+        _, sugestoes = _sugerir_financeira(p, settings, e.base)
+        horizonte, origem = _horizonte(p.premissas, settings, e.hoje, e.override)
+        anos = pf.anos_projetados(e.base, horizonte)
+        resolvidas = pf.resolver(p.premissas.projecao_ddm, sugestoes, anos=anos)
+        deltas = pf.resolver_cenarios(p.premissas.cenarios_ddm, sugestoes)
+        m = _mercado(ticker, settings, e.base, e.agora, e.forcar)
+        comps = _coletar_pares(p, m, settings, e.base) if _precisa_pares(p, settings) else None
+        cc = _custo_capital_financeira(p, m, settings, e.base, comps)
+        pl, data_bal = _pl_inicial(p, e.base)
+        dados = ddm.DadosDDM(
+            pl_inicial=pl,
+            acoes=float(sum(c.acoes for c in m.cap.classes)),
+            data_balanco=data_bal,
+            data_base=e.base,
+            alerta_vt_sobre_valor=settings.dcf.alerta_tv_sobre_ev,
+        )
+        preco = (m.precos.get(ticker) or next(iter(m.precos.values()))).valor
+        r = cen.analisar_ddm(
+            resolvidas,
+            deltas,
+            dados,
+            ke=cc.ke.ke,
+            perfil=parametros,
+            preco=preco,
+            selic=m.macro.selic.valor,
+            cenarios=e.cenarios,
+        )
+        ref = r.avaliacoes[e.referencia].premissas
+        s = settings.sensibilidade
+        ke_g = sens.ke_x_g(
+            ref,
+            dados,
+            ke=cc.ke.ke,
+            passo_ke=s.wacc_passo,
+            faixa_ke=s.wacc_faixa,
+            passo_g=s.g_passo,
+            faixa_g=s.g_faixa,
+        )
+        roe_ke = sens.roe_x_ke(
+            ref,
+            dados,
+            ke=cc.ke.ke,
+            passo_roe=s.roe_passo,
+            faixa_roe=s.roe_faixa,
+            passo_ke=s.wacc_passo,
+            faixa_ke=s.wacc_faixa,
+        )
+    except (
+        ErroConfiguracao,
+        ErroDownload,
+        cad.ErroCadastro,
+        ErroDadosExternos,
+        ErroContabil,
+        ErroPerfil,
+        ErroProjecao,
+        ErroCustoCapital,
+        ErroModelo,
+    ) as erro:
+        raise _erro(str(erro)) from erro
+
+    _mostrar_valuation_ddm(
+        r,
+        cc,
+        settings,
+        e.referencia,
+        f"DDM — {ticker} em {e.base} (R$ milhões; PL da controladora em {data_bal}; "
+        f"{horizonte} anos pelo {origem})",
+    )
+    av_ref = r.avaliacoes[e.referencia]
+    _mostrar_projecao_financeira(
+        av_ref.projecao, f"Projeção {e.referencia} — {ticker} (R$ milhões)"
+    )
+    tabela = Table(title=f"Sensibilidade Ke x g — valor por ação ({e.referencia})")
+    tabela.add_column("Ke \\ g")
+    for g in ke_g.columns:
+        tabela.add_column(_taxa(cast(float, g)), justify="right")
+    for k, linha in ke_g.iterrows():
+        tabela.add_row(_taxa(cast(float, k)), *(_reais(v) for v in linha))
+    console.print(tabela)
+
+    gravar_csv(wc.tabela_financeira(cc), raiz / "wacc.csv", settings.csv, fmt)
+    for c, av in r.avaliacoes.items():
+        gravar_csv(ddm.tabela(av), raiz / f"projecao_{c}.csv", settings.csv, fmt)
+    gravar_matriz(ke_g, raiz / "sensibilidade_ke_g.csv", settings.csv, fmt)
+    gravar_matriz(roe_ke, raiz / "sensibilidade_roe_ke.csv", settings.csv, fmt)
+    avisos = [
+        *r.avisos,
+        *cc.avisos,
+        *(comps.avisos if comps else ()),
+        *m.avisos,
+        *sugestoes.avisos,
+    ]
+    resumo = _resumo_financeira(ticker, e, cc, r, avisos)
+    gravar_csv(resumo, raiz / "resumo.csv", settings.csv, fmt)
+    for aviso in avisos:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
+    console.print(cen.mensagem(r, ticker))
+    console.print("Estudo pessoal; não é recomendação de investimento.")
+    console.print(f"Gravado em {raiz}")
+
+
+def _mostrar_valuation_ddm(
+    r: cen.ResultadoCenarios[ddm.AvaliacaoDDM],
+    cc: wc.CustoCapitalFinanceira,
+    settings: Settings,
+    referencia: pj.NomeCenario,
+    titulo: str,
+) -> None:
+    tabela = Table(title=titulo)
+    colunas = (
+        "Cenário",
+        "Peso",
+        "VP dividendos",
+        "VP terminal",
+        "Valor (PL)",
+        "VT/valor",
+        "P/VP just.",
+        "Lucro residual",
+        "Valor por ação",
+    )
+    for coluna in colunas:
+        tabela.add_column(coluna, justify="left" if coluna == "Cenário" else "right")
+    for c, av in r.avaliacoes.items():
+        d = av.ddm
+        tabela.add_row(
+            c,
+            f"{r.pesos[c]:.0%}",
+            _formatar(d.vp_dividendos, "mi"),
+            _formatar(d.vp_terminal, "mi"),
+            _formatar(d.valor, "mi"),
+            _formatar(d.vt_sobre_valor, "%"),
+            _formatar(d.pvp_justificado, "x"),
+            _formatar(d.valor_lucro_residual, "mi"),
+            _reais(av.valor_por_acao),
+        )
+    console.print(tabela)
+    d = r.avaliacoes[referencia].ddm
+    console.print(
+        f"Checagens ({referencia}): Ke {_taxa(cc.ke.ke)} > g {_taxa(d.g)} (teto "
+        f"{_taxa(settings.terminal.g_nominal_max)}); ROE de longo prazo "
+        f"{_taxa(d.roe_longo_prazo)}; lucro residual / DDM - 1 = "
+        f"{sg.pct(round(d.divergencia, 8), 4)}; alerta de VT/valor acima de "
+        f"{settings.dcf.alerta_tv_sobre_ev:.0%}."
+    )
+    p = r.perfil
+    console.print(
+        f"Valor ponderado ({p.perfil}): [bold]{_reais(r.valor_ponderado)}[/]; margem de segurança "
+        f"{p.margem_seguranca:.0%} ⇒ preço máximo de compra [bold]{_reais(r.preco_maximo_compra)}"
+        f"[/]; preço {_reais(r.preco)} (upside {_taxa(r.upside)})."
+    )
+    console.print(
+        f"Retorno implícito no preço: Ke {_taxa(r.ke_implicito)} contra hurdle "
+        f"{_taxa(r.hurdle)} (Selic + {sg.pp(p.hurdle_spread_selic)}) e Ke de {_taxa(cc.ke.ke)}."
+    )
+
+
+def _resumo_financeira(
+    ticker: str,
+    e: _Execucao,
+    cc: wc.CustoCapitalFinanceira,
+    r: cen.ResultadoCenarios[ddm.AvaliacaoDDM],
+    avisos: list[str],
+) -> pd.DataFrame:
+    """Linha única de `resumo.csv` de uma financeira (DDM)."""
+    av = r.avaliacoes[e.referencia]
+    d = av.ddm
+    linha: dict[str, object] = {
+        "ticker": ticker,
+        "data_base": e.base.isoformat(),
+        "modelo": "ddm",
+        "perfil": e.efetivo.perfil,
+        "origem_perfil": e.efetivo.origem,
+        "moeda_reporte": cc.ke.moeda,
+        "preco": r.preco,
+        **{
+            f"valor_{c}": r.avaliacoes[c].valor_por_acao if c in r.avaliacoes else None
+            for c in pj.CENARIOS
+        },
+        "cenarios": ",".join(r.pesos),
+        "valor_ponderado": r.valor_ponderado,
+        "margem_seguranca": r.perfil.margem_seguranca,
+        "preco_maximo_compra": r.preco_maximo_compra,
+        "upside": r.upside,
+        "ke_implicito": r.ke_implicito,
+        "hurdle": r.hurdle,
+        "ke": cc.ke.ke,
+        "g": d.g,
+        "roe_longo_prazo": d.roe_longo_prazo,
+        "pvp_justificado": d.pvp_justificado,
+        "pvp_implicito": d.pvp_implicito,
+        "vt_sobre_valor": d.vt_sobre_valor,
+        "valor_lucro_residual": d.valor_lucro_residual / av.acoes,
+        "divergencia_lucro_residual": d.divergencia,
+        "pl_inicial": d.pl_inicial,
+        "data_balanco": cc.data_balanco.isoformat(),
+        "avisos": " | ".join(avisos),
+    }
+    df = pd.DataFrame([linha])
+    numericas = [c for c, v in linha.items() if v is None or isinstance(v, float | int)]
+    df[numericas] = df[numericas].astype("float64")
+    return df
 
 
 if __name__ == "__main__":  # pragma: no cover

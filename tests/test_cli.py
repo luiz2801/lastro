@@ -400,6 +400,12 @@ def mercado_falso(weg_sintetica: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         dfp_completa(2025, cd_cvm=5410, DRE={"3.06.02": -12}),
     )
     dados.to_parquet(pasta / "demonstracoes.parquet", index=False)
+    _instalar_mercado_falso(monkeypatch)
+    return weg_sintetica
+
+
+def _instalar_mercado_falso(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`_mercado` sem rede: 90 ações a R$ 10, Selic 15%, Rf 13%, dólar 5 e beta 1,2."""
 
     def mercado(
         ticker: str, settings: Settings, base: dt.date, agora: dt.datetime, forcar: bool
@@ -419,7 +425,57 @@ def mercado_falso(weg_sintetica: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         return cli._Mercado(empresa, precos, manual("^BVSP", 1.0), macro, cap, _PrecosFalsos())  # type: ignore[arg-type]
 
     monkeypatch.setattr(cli, "_mercado", mercado)
-    return weg_sintetica
+
+
+@pytest.fixture
+def mercado_banco(banco_sintetico: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Banco sintético (PL da controladora 100, ROE 24,4%) com o mercado falso."""
+    _instalar_mercado_falso(monkeypatch)
+    return banco_sintetico
+
+
+def test_wacc_financeira(mercado_banco: Path) -> None:
+    resultado = CliRunner().invoke(app, ["wacc", "WEGE3", "--saida", str(mercado_banco)])
+    assert resultado.exit_code == 0, resultado.output
+    tab = ler_csv_br(mercado_banco / "WEGE3" / "2026-10-30" / "wacc.csv").set_index("componente")
+    assert tab.loc["ke", "valor"] == pytest.approx(0.13 + (0.67 * 1.2 + 0.33) * 0.05)
+    assert "wacc" not in tab.index and "kd" not in tab.index
+
+
+def test_rodar_financeira(mercado_banco: Path, caminho_perfil: Path) -> None:
+    saida = mercado_banco / "saida"
+    resultado = CliRunner().invoke(
+        app, ["rodar", "WEGE3", "--perfil", "moderado", "--saida", str(saida)]
+    )
+    assert resultado.exit_code == 0, resultado.output
+    pasta = saida / "WEGE3" / "2026-10-30"
+    assert sorted(x.name for x in pasta.iterdir()) == [
+        "projecao_base.csv",
+        "projecao_otimista.csv",
+        "projecao_pessimista.csv",
+        "resumo.csv",
+        "sensibilidade_ke_g.csv",
+        "sensibilidade_roe_ke.csv",
+        "wacc.csv",
+    ]
+    r = ler_csv_br(pasta / "resumo.csv").iloc[0]
+    assert r["modelo"] == "ddm"
+    assert r["roe_longo_prazo"] == pytest.approx(22 / 90)
+    assert r["pl_inicial"] == 100
+    assert r["divergencia_lucro_residual"] == pytest.approx(0, abs=1e-9)
+    assert r["valor_lucro_residual"] == pytest.approx(r["valor_base"])
+    assert r["valor_ponderado"] == pytest.approx(
+        0.25 * r["valor_pessimista"] + 0.5 * r["valor_base"] + 0.25 * r["valor_otimista"]
+    )
+    assert r["pvp_justificado"] == pytest.approx((22 / 90 - 0.05) / (r["ke"] - 0.05))
+    projecao = ler_csv_br(pasta / "projecao_base.csv")
+    assert projecao["ano"].iloc[0] == 2026
+    assert projecao["pl_inicial"].iloc[0] == 100
+    sens = ler_csv_br(pasta / "sensibilidade_ke_g.csv").set_index("ke\\g")
+    assert sens.loc[sens.index[4], "0,0500"] == pytest.approx(r["valor_base"])
+    texto = " ".join(resultado.output.split())
+    assert "DDM — WEGE3" in texto
+    assert "preço máximo de compra para o perfil moderado" in texto
 
 
 def test_wacc(mercado_falso: Path) -> None:

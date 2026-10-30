@@ -1,8 +1,11 @@
-"""Estrutura de capital e WACC (seção 10.3 do guia).
+"""Estrutura de capital e WACC (seção 10.3 do guia); Ke das financeiras (seção 10.4).
 
 WACC = Ke x E/(D+E) + Kd x (1 - t) x D/(D+E): equity a valor de mercado, dívida bruta contábil
 (proxy do valor de mercado), na moeda de reporte. Com estrutura-alvo diferente da atual, o beta
 da regressão (que reflete a alavancagem atual) é desalavancado e realavancado no alvo (Hamada).
+
+Financeiras só têm Ke (`CustoCapitalFinanceira`): depósitos e captações são operação, não
+financiamento, e não entram num WACC nem na alavancagem do beta.
 """
 
 from __future__ import annotations
@@ -133,15 +136,35 @@ def montar(
     )
 
 
-def tabela(cc: CustoCapital) -> pd.DataFrame:
-    """Componentes do custo de capital para `wacc.csv`: `componente, valor, detalhe`.
+@dataclass(frozen=True)
+class CustoCapitalFinanceira:
+    """Custo de capital de uma financeira: só o Ke (seção 10.4 do guia)."""
 
-    `valor` é sempre numérico (vazio quando não se aplica); textos vão em `detalhe`.
-    """
-    b, ke, kd, est = cc.beta, cc.ke, cc.kd, cc.estrutura
+    data_base: dt.date
+    beta: bt.ResultadoBeta
+    ke: CustoCapitalProprio
+    data_balanco: dt.date
+    avisos: tuple[str, ...]
+
+
+def montar_financeira(
+    *,
+    data_base: dt.date,
+    beta: bt.ResultadoBeta,
+    ke: CustoCapitalProprio,
+    data_balanco: dt.date,
+    avisos: tuple[str, ...] = (),
+) -> CustoCapitalFinanceira:
+    return CustoCapitalFinanceira(data_base, beta, ke, data_balanco, avisos=(*beta.avisos, *avisos))
+
+
+Linha = tuple[str, float | None, str]
+
+
+def _linhas_ke(data_base: dt.date, b: bt.ResultadoBeta, ke: CustoCapitalProprio) -> list[Linha]:
     regressao = b.metodo == "regressao"
-    linhas: list[tuple[str, float | None, str]] = [
-        ("data_base", None, cc.data_base.isoformat()),
+    return [
+        ("data_base", None, data_base.isoformat()),
         ("moeda", None, f"{ke.moeda} (moeda de reporte; taxas e valores nela)"),
         ("metodo_ke", None, ke.metodo),
         ("beta_metodo", None, b.metodo + (f" ({b.ticker})" if b.ticker else "")),
@@ -150,8 +173,11 @@ def tabela(cc: CustoCapital) -> pd.DataFrame:
         ("beta_r2", b.r2, ""),
         ("beta_n_obs", None if b.n_obs is None else float(b.n_obs), ""),
         ("beta_janela", None, f"{b.inicio} a {b.fim}" if b.inicio else ""),
-        ("beta_regressao", cc.beta_regressao, "Blume aplicado, se configurado"),
-        ("beta", b.beta, "usado no Ke (na estrutura-alvo)"),
+    ]
+
+
+def _linhas_capm(ke: CustoCapitalProprio) -> list[Linha]:
+    return [
         ("rf", ke.rf, "BRL (NTN-F longa)" if ke.metodo == "brl_direto" else "USD (manual)"),
         ("erp", ke.erp, ""),
         ("crp", ke.crp if ke.metodo == "usd_crp" else None, ""),
@@ -159,6 +185,27 @@ def tabela(cc: CustoCapital) -> pd.DataFrame:
         ("inflacao_brl", ke.inflacao_brl, "IPCA de longo prazo (Focus)"),
         ("inflacao_usd", ke.inflacao_usd, ""),
         ("ke", ke.ke, ""),
+    ]
+
+
+def _quadro(linhas: list[Linha], avisos: tuple[str, ...]) -> pd.DataFrame:
+    linhas = [*linhas, *(("aviso", None, a) for a in avisos)]
+    df = pd.DataFrame(linhas, columns=["componente", "valor", "detalhe"])
+    df["valor"] = df["valor"].astype("float64")
+    return df
+
+
+def tabela(cc: CustoCapital) -> pd.DataFrame:
+    """Componentes do custo de capital para `wacc.csv`: `componente, valor, detalhe`.
+
+    `valor` é sempre numérico (vazio quando não se aplica); textos vão em `detalhe`.
+    """
+    b, ke, kd, est = cc.beta, cc.ke, cc.kd, cc.estrutura
+    linhas: list[Linha] = [
+        *_linhas_ke(cc.data_base, b, ke),
+        ("beta_regressao", cc.beta_regressao, "Blume aplicado, se configurado"),
+        ("beta", b.beta, "usado no Ke (na estrutura-alvo)"),
+        *_linhas_capm(ke),
         ("kd_metodo", None, kd.metodo),
         ("kd_bruto", kd.kd_bruto, f"mediana {kd.anos[0]}-{kd.anos[-1]}" if kd.anos else ""),
         ("kd_piso", kd.piso, ""),
@@ -173,7 +220,15 @@ def tabela(cc: CustoCapital) -> pd.DataFrame:
         ("peso_equity", est.peso_equity, "E/(D+E)"),
         ("wacc", cc.wacc, ""),
     ]
-    linhas += [("aviso", None, a) for a in cc.avisos]
-    df = pd.DataFrame(linhas, columns=["componente", "valor", "detalhe"])
-    df["valor"] = df["valor"].astype("float64")
-    return df
+    return _quadro(linhas, cc.avisos)
+
+
+def tabela_financeira(cc: CustoCapitalFinanceira) -> pd.DataFrame:
+    """Como `tabela`, só até o Ke (financeiras): `componente, valor, detalhe`."""
+    linhas: list[Linha] = [
+        *_linhas_ke(cc.data_base, cc.beta, cc.ke),
+        ("beta", cc.beta.beta, "usado no Ke"),
+        *_linhas_capm(cc.ke),
+        ("data_balanco", None, f"{cc.data_balanco} (PL inicial do DDM)"),
+    ]
+    return _quadro(linhas, cc.avisos)

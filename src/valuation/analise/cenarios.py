@@ -12,18 +12,23 @@ então ponderar os valores equivale a descontar os fluxos ponderados):
 - **Ke implícito**: retorno do acionista que, posto no lugar do Ke dentro do WACC (Kd e pesos
   fixos), iguala o valor ponderado ao preço. É o que se compara com o hurdle (Selic + spread).
 - **WACC implícito**: taxa de desconto do FCFF que iguala o valor ponderado ao preço.
+
+Financeiras (DDM, `analisar_ddm`): o Ke implícito é a taxa que, descontando os dividendos e o
+valor terminal, iguala o valor ponderado ao preço; não há WACC.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from typing import Generic, Protocol, TypeVar
 
 from scipy.optimize import brentq
 
 from valuation.custo_capital import wacc as wc
-from valuation.modelos import ErroModelo, dcf
+from valuation.modelos import ErroModelo, dcf, ddm
 from valuation.perfil.parametros import ParametrosPerfil
+from valuation.projecao import financeira as pf
 from valuation.projecao import projetor as pj
 
 # Folga acima do g terminal no limite inferior da busca (a perpetuidade explode em WACC = g).
@@ -77,16 +82,29 @@ def taxa_implicita(
     return float(brentq(lambda x: valor_em(x) - alvo, minimo, maximo, xtol=1e-7))
 
 
+class Avaliada(Protocol):
+    @property
+    def valor_por_acao(self) -> float: ...
+
+    @property
+    def avisos(self) -> tuple[str, ...]: ...
+
+
+A = TypeVar("A", bound=Avaliada)
+
+
 @dataclass(frozen=True)
-class ResultadoCenarios:
-    avaliacoes: dict[pj.NomeCenario, dcf.Avaliacao]
+class ResultadoCenarios(Generic[A]):
+    """Cenários avaliados (`dcf.Avaliacao` ou `ddm.AvaliacaoDDM`) e a leitura pelo perfil."""
+
+    avaliacoes: dict[pj.NomeCenario, A]
     pesos: dict[pj.NomeCenario, float]
     perfil: ParametrosPerfil
     preco: float  # preço de mercado (BRL) da classe avaliada
     hurdle: float
     valor_ponderado: float  # BRL por ação
     ke_implicito: float | None
-    wacc_implicito: float | None
+    wacc_implicito: float | None  # None nas financeiras (sem WACC)
 
     @property
     def preco_maximo_compra(self) -> float:
@@ -119,7 +137,7 @@ def analisar(
     preco: float,
     selic: float,
     cenarios: tuple[pj.NomeCenario, ...] = pj.CENARIOS,
-) -> ResultadoCenarios:
+) -> ResultadoCenarios[dcf.Avaliacao]:
     """Avalia os cenários, pondera pelo perfil e acha o Ke e o WACC implícitos no preço."""
     if preco <= 0:
         raise ErroModelo(f"Preço de mercado inválido: {preco}.")
@@ -154,7 +172,51 @@ def analisar(
     )
 
 
-def mensagem(r: ResultadoCenarios, ticker: str) -> str:
+def avaliar_cenarios_ddm(
+    base: pf.PremissasFinanceiras,
+    deltas: Mapping[pj.NomeCenario, float],
+    dados: ddm.DadosDDM,
+    *,
+    ke: float,
+    cenarios: tuple[pj.NomeCenario, ...] = pj.CENARIOS,
+) -> dict[pj.NomeCenario, ddm.AvaliacaoDDM]:
+    return {c: ddm.avaliar(pf.aplicar_cenario(base, deltas[c], c), dados, ke=ke) for c in cenarios}
+
+
+def analisar_ddm(
+    base: pf.PremissasFinanceiras,
+    deltas: Mapping[pj.NomeCenario, float],
+    dados: ddm.DadosDDM,
+    *,
+    ke: float,
+    perfil: ParametrosPerfil,
+    preco: float,
+    selic: float,
+    cenarios: tuple[pj.NomeCenario, ...] = pj.CENARIOS,
+) -> ResultadoCenarios[ddm.AvaliacaoDDM]:
+    """Cenários do DDM ponderados pelo perfil e o Ke implícito no preço (sem WACC)."""
+    if preco <= 0:
+        raise ErroModelo(f"Preço de mercado inválido: {preco}.")
+    avaliacoes = avaliar_cenarios_ddm(base, deltas, dados, ke=ke, cenarios=cenarios)
+    p = pesos(perfil, cenarios)
+
+    def ponderado_com_ke(taxa: float) -> float:
+        por_cenario = avaliar_cenarios_ddm(base, deltas, dados, ke=taxa, cenarios=cenarios)
+        return ponderar({c: av.valor_por_acao for c, av in por_cenario.items()}, p)
+
+    return ResultadoCenarios(
+        avaliacoes=avaliacoes,
+        pesos=p,
+        perfil=perfil,
+        preco=preco,
+        hurdle=perfil.hurdle(selic),
+        valor_ponderado=ponderar({c: av.valor_por_acao for c, av in avaliacoes.items()}, p),
+        ke_implicito=taxa_implicita(ponderado_com_ke, preco, minimo=base.g_terminal + FOLGA_G),
+        wacc_implicito=None,
+    )
+
+
+def mensagem(r: ResultadoCenarios[A], ticker: str) -> str:
     """Comparação neutra com o preço máximo do perfil (sem recomendação de compra ou venda)."""
     posicao = "abaixo" if r.preco <= r.preco_maximo_compra else "acima"
 

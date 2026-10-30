@@ -119,6 +119,8 @@ class ConfigSensibilidade(_Modelo):
     margem_faixa: float = Field(gt=0)
     crescimento_passo: float = Field(gt=0)
     crescimento_faixa: float = Field(gt=0)
+    roe_passo: float = Field(gt=0)
+    roe_faixa: float = Field(gt=0)
 
 
 class Winsorizacao(_Modelo):
