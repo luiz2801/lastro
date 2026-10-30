@@ -213,7 +213,7 @@ flowchart TD
   - `historico.csv`, `qa.json`, `valores_reais.csv` (fluxos e valor terminal deflacionados pelo IPCA do Focus) e `premissas_usadas.yaml`.
   - `meta.json`: versão e commit do código, perfil, moeda, fontes (URL, data e sha256 da CVM), hash das contas padronizadas, avisos e o glossário das métricas (`glossario`); gravado por último.
   - Gráficos PNG (omitidos com `--sem-graficos`): `football_field`, `ponte_ev_equity` (só DCF), `sensibilidade_heatmap*`, `historico_vs_projecao` e `composicao_valor`.
-- **Terminal:** Apresentação formatada das recomendações e métricas de valuation com destaques visuais. `--explicar` (em `wacc`, `comparar` e `rodar`) acrescenta a legenda dos termos mostrados; `valuation glossario [TERMO]` explica qualquer métrica.
+- **Terminal:** Apresentação formatada das recomendações e métricas de valuation com destaques visuais. `--explicar` (em `wacc`, `comparar` e `rodar`) acrescenta a legenda dos termos mostrados; `valuation glossario [TERMO]` explica qualquer métrica. `valuation erp` (fora do `rodar`) mede o universo, calcula o ERP implícito do Ibovespa e grava `data/processed/erp_implicito.json`, lido pelo Ke quando `custo_capital.erp.fonte = implicito_ibovespa`.
 
 ---
 

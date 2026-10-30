@@ -557,6 +557,8 @@ Ke_BRL = Rf_BRL + β × ERP
 
 `Rf_BRL` = rendimento nominal longo do Tesouro Prefixado, **que já embute o risco soberano do Brasil**. **Não somar risco-país por cima** (dupla contagem). `ERP` é parâmetro manual (documentar a fonte usada pelo usuário).
 
+> **ADR 0018:** `custo_capital.erp.fonte` pode ser `implicito_ibovespa` (comando `valuation erp`); em 30/10/2026 o implícito deu −4,2% e o padrão segue `manual`.
+
 **B) `usd_crp` (obrigatório para quem reporta em USD, ex.: Vale)**
 
 ```

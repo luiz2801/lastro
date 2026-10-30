@@ -59,3 +59,26 @@ def test_custo_capital_invalido(
     caminho.write_text(yaml.safe_dump(original), encoding="utf-8")
     with pytest.raises(ErroConfiguracao, match=mensagem):
         carregar_settings(caminho)
+
+
+def test_erp_numero_solto_vira_manual(tmp_path: Path) -> None:
+    original = carregar_settings().model_dump(mode="json")
+    original["custo_capital"]["erp"] = 0.06
+    caminho = tmp_path / "settings.yaml"
+    caminho.write_text(yaml.safe_dump(original), encoding="utf-8")
+    erp = carregar_settings(caminho).custo_capital.erp
+    assert (erp.fonte, erp.valor) == ("manual", 0.06)
+
+
+def test_erp_do_repositorio_tem_cinco_anos_e_faixa_de_1pp() -> None:
+    erp = carregar_settings().custo_capital.erp
+    assert (erp.anos_explicitos, erp.faixa_g, erp.valor) == (5, 0.01, 0.05)
+
+
+def test_erp_campo_desconhecido_falha(tmp_path: Path) -> None:
+    original = carregar_settings().model_dump(mode="json")
+    original["custo_capital"]["erp"]["extra"] = 1
+    caminho = tmp_path / "settings.yaml"
+    caminho.write_text(yaml.safe_dump(original), encoding="utf-8")
+    with pytest.raises(ErroConfiguracao, match="extra"):
+        carregar_settings(caminho)

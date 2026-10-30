@@ -10,9 +10,16 @@
 - `meta.json` ganha a chave `glossario` (dicionário de dados). Código em `saida/glossario.py`.
 - Fica de fora: legendas nos PNG e GUI.
 
-### ERP implícito do Ibovespa: ADR 0018 proposto
-- Regra de crescimento esperado (histórico no curto prazo, teto PIB + IPCA do Focus no longo,
-  faixa ±1 p.p.) escrita como ADR **proposto**; nenhum código até o usuário aprovar.
+### ERP implícito do Ibovespa (ADR 0018, Etapa 6 do backlog)
+- `valuation erp`: dividendos e market cap agregados do universo, crescimento nominal do Focus
+  (PIB real + IPCA) nos 5 primeiros anos e CAGR histórico (teto 5%) na perpetuidade, sem
+  convergência; resolve o `ke` do mercado e `ERP = ke − Rf`, com faixa de ±1 p.p. no g perpétuo.
+  Grava `data/processed/erp_implicito.json`; recusa (sai com 1, sem gravar) ERP fora de [0%, 15%].
+- `custo_capital.erp` virou `{fonte: manual | implicito_ibovespa, valor, anos_explicitos, faixa_g,
+  validade_dias}` (número solto continua valendo como `manual`); `_erp_efetivo` lê o JSON no `Ke`.
+- `Macro.pib_esperado` (Focus `PIB Total`, validado na API real); `_macro` extraído de `_mercado`.
+- **Resultado em 30/10/2026: ERP implícito de −4,2%** (ke do mercado 10,8% contra NTN-F de 15,0%),
+  então o `settings.yaml` segue `manual` (5,0%). Detalhes no ADR 0018 e em `docs/fontes.md`.
 
 ### Kd manual da PETR4
 - `config/empresas/PETR4.yaml`: `custo_capital.kd` manual de 15,60% (Rf 15,00% + spread de 0,60%

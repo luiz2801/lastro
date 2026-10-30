@@ -35,26 +35,22 @@ Depois, nesta ordem:
 2. ✅ **Kd da PETR4** (ADR 0017, Rf + 0,60% = 15,60%): fixar `custo_capital.kd: {metodo: manual, valor: ...}` no YAML dela. O piso
    do Kd na Rf muda o valor em até 18% (Kd histórico cru de 7,8% contra 14,87%): o Kd histórico
    mistura juros em dólar com variação cambial. Precisa de um valor escolhido pelo usuário.
-3. **ERP implícito do Ibovespa em BRL** (opção D da decisão sobre o ERP): ver abaixo.
+3. ✅ **ERP implícito do Ibovespa em BRL** (ADR 0018, implementado; resultado de 30/10/2026: −4,2%, então o padrão segue `manual`): ver abaixo.
 4. Demais itens desta página (outras empresas, preço teto, explicação de métricas, GUI, recomendação).
 
 ## ERP implícito do Ibovespa em BRL
 
-Opção D da decisão sobre o ERP; hoje o `custo_capital.erp` é a premissa de 5,0% do usuário.
+✅ Implementado (ADR 0018): `valuation erp`, `custo_capital/erp_implicito.py`, `custo_capital.erp.fonte`.
+Resultado de 30/10/2026: **ERP implícito de −4,2%**, que o comando recusa; o padrão segue `manual`
+(5,0%). Para o implícito virar utilizável, o que mudaria o resultado (cada um exige ADR novo):
 
-- Módulo puro `custo_capital/erp_implicito.py` (fluxos, valor do índice, Rf e g por parâmetro; sem
-  rede nem `date.today()`), no estilo de `cenarios.taxa_implicita` (`brentq`): resolve
-  `P0 = Σ FC_t / (1 + ke)^t` e `ERP = ke − Rf`.
-- Dados já disponíveis: `config/universo_ibovespa.csv`, `metricas_ltm` (lucro, dividendos) e
-  market cap (com a escala de ações corrigida). Fluxo agregado = dividendos (e recompras, se
-  houver).
-- Ponto frágil: o crescimento esperado do índice, sem consenso de analistas (decisão 12). Usar o
-  Focus (PIB + inflação) como teto de longo prazo e o histórico no curto prazo; sair com **faixa e
-  aviso**, não número único.
-- Exige ADR, campo novo (`custo_capital.erp.fonte: manual | implicito_ibovespa`) em `config.py` e
-  `settings.yaml`, testes à mão, `guia.md` e `CHANGELOG.md`.
-- Não aplicar ERP por setor, não calibrar no preço da empresa avaliada, não somar `crp` em BRL.
-- O yield spread (earnings yield − NTN-F) fica como termômetro de contexto no `mercado` (hoje:
+- Fluxo por **lucro** (ou FCFE) em vez de dividendos, para não deprimir o `ke` com o payout: o
+  earnings yield (9,4%) ainda deixa o yield spread negativo contra a NTN-F de 15%.
+- Incluir **recompras** (conta da DFC sem mapeamento hoje).
+- Rf **real** (NTN-B) com fluxos reais, em vez da NTN-F nominal.
+- Esperar uma Selic menor: com a NTN-F em 15%, qualquer método por fluxo do índice tende a ficar
+  perto de zero.
+- O yield spread (earnings yield − NTN-F) segue como termômetro de contexto no `mercado` (hoje:
   −5,5 p.p., em `docs/fontes.md`), nunca como insumo do Ke.
 
 ## Rodar o valuation em outras empresas
@@ -317,12 +313,12 @@ Agrupa dois itens relacionados; exige decisão de negócio antes de codar.
 
 *Entrega:* sinal de decisão acionável sem requerer nenhuma nova fonte de dados.
 
-### Etapa 6 — ERP implícito do Ibovespa em BRL
+### Etapa 6 — ✅ ERP implícito do Ibovespa em BRL (feito: ADR 0018, módulo, `valuation erp`, campo `erp.fonte`; o ERP deu −4,2%, ver fontes.md)
 
 Melhora a robustez da premissa de ERP sem depender de fontes pagas; mais elaborado que os itens
 anteriores, por isso fica aqui.
 
-1. ADR descrevendo a escolha de crescimento esperado (Focus PIB + inflação como teto): **escrito como proposto (ADR 0018), aguarda aprovação do usuário antes de codar**.
+1. ADR 0018 (aceito): Focus no curto prazo, CAGR histórico na perpetuidade, sem convergência.
 2. Módulo puro `custo_capital/erp_implicito.py` (ver detalhes na seção "ERP implícito" deste
    backlog).
 3. Campo `custo_capital.erp.fonte: manual | implicito_ibovespa` em `config.py` e `settings.yaml`.

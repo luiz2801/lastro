@@ -18,7 +18,7 @@ import datetime as dt
 import json
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeVar
 from urllib.parse import quote
@@ -209,6 +209,7 @@ class Macro:
     rf_brl: Validado
     ipca_esperado: dict[int, float]
     data_focus: dt.date | None
+    pib_esperado: dict[int, float] = field(default_factory=dict)  # PIB real, Focus
 
     @property
     def avisos(self) -> list[str]:
@@ -309,6 +310,19 @@ def carregar_macro(
         ),
     )
     data_focus, ipca_esperado = focus if focus else (None, {})
+    focus_pib = _tentar(
+        "Focus PIB",
+        lambda: focus_anual(
+            "PIB Total",
+            data_base,
+            dir_raw=dir_raw,
+            ttl=ttl,
+            sessao=sessao,
+            agora=agora,
+            forcar=forcar,
+        ),
+    )
+    pib_esperado = focus_pib[1] if focus_pib else {}
 
     if rf_override is not None:
         rf = manual("Rf BRL", rf_override)
@@ -333,4 +347,4 @@ def carregar_macro(
             )
         rf = cruzar("Rf BRL", principal, alternativa, tolerancia=tolerancias.rf_abs)
 
-    return Macro(data_base, selic, ipca_12m, cambio, rf, ipca_esperado, data_focus)
+    return Macro(data_base, selic, ipca_12m, cambio, rf, ipca_esperado, data_focus, pib_esperado)

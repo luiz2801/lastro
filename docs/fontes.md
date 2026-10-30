@@ -182,7 +182,13 @@ já anotada no cadastro manual). Copiada para `acoes_por_unit` (ADR 0015).
   92,3% do peso (sem holdings), lucro LTM da controladora ÷ market cap: earnings yield de 9,4%
   (P/L 10,7x) contra NTN-F de 14,87%, ou seja, yield spread de −5,5 p.p. (−2 a −7 p.p. nos demais
   recortes). Não é ERP utilizável: ignora o crescimento do lucro e usa lucro de ciclo alto
-  (PETR4). Ver o ERP implícito do índice no `docs/backlog.md`.
+  (PETR4). O ERP implícito do índice está abaixo.
+- **ERP implícito (ADR 0018, `valuation erp`, 30/10/2026)**: Focus `PIB Total` validado na API real
+  (`Indicador eq 'PIB Total'`, mediana em %, 2026–2030: 1,80 / 1,31 / 1,81 / 2,00 / 2,00, pesquisa de
+  23/10/2026). 70 de 74 companhias, valor R$ 4.033 bi, dividendos LTM R$ 215 bi (yield 5,3%),
+  crescimento nominal do Focus 7,1% a 5,6%, g perpétuo 5,0% (teto; o CAGR de 5 anos é 23%, base
+  de 2020), ke do mercado 10,8% contra NTN-F de 15,0%: **ERP implícito de −4,2%**, recusado pelo
+  comando. O `custo_capital.erp` segue `manual` em 5,0%.
 
 ### Kd da PETR4 (custo marginal da dívida)
 

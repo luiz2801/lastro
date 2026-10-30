@@ -32,6 +32,7 @@ make lint tipos testes                       # ruff, mypy strict e pytest (sem r
 make cobertura                               # testes com cobertura por linha
 
 uv run valuation versao
+uv run valuation erp                         # ERP implícito do Ibovespa (grava e informa)
 uv run valuation glossario wacc             # explica uma métrica (sem argumento, lista todas)
 uv run valuation glossario wacc             # explica uma métrica (sem argumento, lista todas)
 uv run valuation cadastro buscar petrobras   # ticker, razão social ou CNPJ

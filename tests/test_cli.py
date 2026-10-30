@@ -13,7 +13,7 @@ from conftest import DIR_FIXTURES_CVM, SessaoFalsa
 from sintetico import dfp_banco, dfp_completa, juntar
 from valuation import __version__, cli
 from valuation.cli import app
-from valuation.config import Settings, carregar_settings
+from valuation.config import ConfigErp, Settings, carregar_settings
 from valuation.data import cadastro as cad
 from valuation.data import macro as mac
 from valuation.data import precos as prc
@@ -38,8 +38,16 @@ def ambiente_offline(
     zip_cvm: Callable[[str], Path],
 ) -> Path:
     """CLI apontando para diretórios temporários e um servidor CVM em memória."""
-    settings = carregar_settings().model_copy(
-        update={"data_base": dt.date(2026, 10, 30), "historico_anos": 1}
+    base = carregar_settings()
+    settings = base.model_copy(
+        update={
+            "data_base": dt.date(2026, 10, 30),
+            "historico_anos": 1,
+            # os testes de CLI usam o ERP manual; o implícito tem testes próprios
+            "custo_capital": base.custo_capital.model_copy(
+                update={"erp": ConfigErp(fonte="manual", valor=0.05)}
+            ),
+        }
     )
 
     def carregar() -> Settings:
@@ -520,7 +528,7 @@ def test_wacc(mercado_falso: Path) -> None:
 
 def test_wacc_menor_que_g_falha(mercado_falso: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     settings = cli.carregar_settings()
-    cfg = settings.custo_capital.model_copy(update={"erp": -0.2})
+    cfg = settings.custo_capital.model_copy(update={"erp": ConfigErp(valor=-0.2)})
     monkeypatch.setattr(
         cli, "carregar_settings", lambda: settings.model_copy(update={"custo_capital": cfg})
     )
@@ -895,3 +903,154 @@ def test_explicar_no_wacc_e_no_rodar_financeira(
     r = CliRunner().invoke(app, [*argumentos, "--saida", str(mercado_banco / "saida")])
     assert r.exit_code == 0, r.output
     assert "Legenda" in r.output
+
+
+def _gravar_erp(processed: Path, data: str = "2026-10-30") -> None:
+    processed.mkdir(parents=True, exist_ok=True)
+    (processed / "erp_implicito.json").write_text(
+        json.dumps(
+            {
+                "data_base": data,
+                "erp": 0.03,
+                "erp_min": 0.02,
+                "erp_max": 0.04,
+                "avisos": ["recompras ignoradas"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _com_erp_implicito(settings: Settings, **extra: object) -> Settings:
+    erp = ConfigErp(fonte="implicito_ibovespa", **extra)  # type: ignore[arg-type]
+    cfg = settings.custo_capital.model_copy(update={"erp": erp})
+    return settings.model_copy(update={"custo_capital": cfg})
+
+
+def test_wacc_usa_o_erp_implicito_gravado(
+    mercado_falso: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _gravar_erp(mercado_falso / "processed")
+    settings = _com_erp_implicito(cli.carregar_settings())
+    monkeypatch.setattr(cli, "carregar_settings", lambda: settings)
+    saida = mercado_falso / "saida"
+    r = CliRunner().invoke(app, ["wacc", "WEGE3", "--saida", str(saida)])
+    assert r.exit_code == 0, r.output
+    tab = ler_csv_br(saida / "WEGE3" / "2026-10-30" / "wacc.csv").set_index("componente")
+    assert tab.loc["erp", "valor"] == pytest.approx(0.03)
+    assert tab.loc["ke", "valor"] == pytest.approx(0.13 + (0.67 * 1.2 + 0.33) * 0.03)
+    texto = " ".join(r.output.split())
+    assert "ERP implícito do Ibovespa de 3,00% (faixa 2,00% a 4,00%" in texto
+    assert "recompras ignoradas" in texto
+
+
+def test_wacc_erp_implicito_ausente_ou_vencido_falha(
+    mercado_falso: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _com_erp_implicito(cli.carregar_settings(), validade_dias=30)
+    monkeypatch.setattr(cli, "carregar_settings", lambda: settings)
+    r = CliRunner().invoke(app, ["wacc", "WEGE3", "--saida", str(mercado_falso)])
+    assert r.exit_code == 1
+    assert "valuation erp" in " ".join(r.output.split())
+    _gravar_erp(mercado_falso / "processed", data="2026-08-01")
+    r = CliRunner().invoke(app, ["wacc", "WEGE3", "--saida", str(mercado_falso)])
+    assert r.exit_code == 1
+    assert "validade de 30" in " ".join(r.output.split())
+
+
+def test_comando_erp_calcula_e_grava(mercado_falso: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    base = dt.date(2026, 10, 30)
+    focus_pib = {a: 0.02 for a in range(2026, 2031)}
+    focus_ipca = {a: 0.04 for a in range(2026, 2031)}
+
+    def macro_falso(*args: object, **kw: object) -> mac.Macro:
+        return mac.Macro(
+            base,
+            selic=manual("Selic", 0.15),
+            ipca_12m=manual("IPCA", 0.05),
+            cambio=manual("Dólar", 5.0),
+            rf_brl=manual("Rf", 0.08),
+            ipca_esperado=focus_ipca,
+            data_focus=base,
+            pib_esperado=focus_pib,
+        )
+
+    def medir(*args: object, **kw: object) -> tuple[list[cli._MedidaErp], list[str], int]:
+        a = cli._MedidaErp("AAAA3", 600.0, 36.0, {2020: 20.0, 2025: 30.0})
+        b = cli._MedidaErp("BBBB3", 400.0, 24.0, {2020: 20.0, 2025: 30.0})
+        return [a, b], ["CCCC3 fora do ERP implícito: sem dados"], 3
+
+    monkeypatch.setattr(cli, "_macro", macro_falso)
+    monkeypatch.setattr(cli, "_medir_para_erp", medir)
+    (mercado_falso / "universo.csv").write_text("ticker\nAAAA3\nBBBB3\nCCCC3\n", encoding="utf-8")
+    r = CliRunner().invoke(app, ["erp"])
+    assert r.exit_code == 0, r.output
+    gravado = json.loads((mercado_falso / "processed" / "erp_implicito.json").read_text("utf-8"))
+    g = (60 / 40) ** (1 / 5) - 1  # CAGR dos dividendos agregados, 5 anos
+    assert gravado["g_perpetuo"] == pytest.approx(min(g, 0.05))
+    assert gravado["crescimentos"][0] == pytest.approx(1.02 * 1.04 - 1)
+    assert gravado["erp"] == pytest.approx(gravado["ke"] - 0.08)
+    assert gravado["erp_min"] < gravado["erp"] < gravado["erp_max"]
+    assert gravado["fluxo_base"] == 60.0 and gravado["valor_indice"] == 1000.0
+    texto = " ".join(r.output.split())
+    assert "2 de 3" in texto
+    assert "CCCC3 fora do ERP implícito" in texto
+    # o arquivo gravado é o que o Ke lê
+    avisos: list[str] = []
+    settings = _com_erp_implicito(cli.carregar_settings())
+    assert cli._erp_efetivo(settings, base, avisos) == pytest.approx(gravado["erp"])
+    assert avisos
+
+
+def test_comando_erp_sem_focus_do_pib_falha(
+    mercado_falso: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = dt.date(2026, 10, 30)
+    monkeypatch.setattr(
+        cli,
+        "_macro",
+        lambda *a, **k: mac.Macro(
+            base,
+            selic=manual("Selic", 0.15),
+            ipca_12m=manual("IPCA", 0.05),
+            cambio=manual("Dólar", 5.0),
+            rf_brl=manual("Rf", 0.08),
+            ipca_esperado={2026: 0.04},
+            data_focus=base,
+        ),
+    )
+    r = CliRunner().invoke(app, ["erp"])
+    assert r.exit_code == 1
+    assert "Focus de PIB" in " ".join(r.output.split())
+
+
+def test_comando_erp_negativo_mostra_os_numeros_e_nao_grava(
+    mercado_falso: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = dt.date(2026, 10, 30)
+    monkeypatch.setattr(
+        cli,
+        "_macro",
+        lambda *a, **k: mac.Macro(
+            base,
+            selic=manual("Selic", 0.15),
+            ipca_12m=manual("IPCA", 0.05),
+            cambio=manual("Dólar", 5.0),
+            rf_brl=manual("Rf", 0.30),  # Rf acima do ke do mercado: ERP negativo
+            ipca_esperado={a: 0.04 for a in range(2026, 2031)},
+            data_focus=base,
+            pib_esperado={a: 0.02 for a in range(2026, 2031)},
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "_medir_para_erp",
+        lambda *a, **k: ([cli._MedidaErp("AAAA3", 1000.0, 60.0, {2020: 40.0, 2025: 50.0})], [], 1),
+    )
+    (mercado_falso / "universo.csv").write_text("ticker\nAAAA3\n", encoding="utf-8")
+    r = CliRunner().invoke(app, ["erp"])
+    assert r.exit_code == 1
+    texto = " ".join(r.output.split())
+    assert "ERP central" in texto  # a tabela sai antes do erro
+    assert "fora de [0%, 15%]" in texto
+    assert not (mercado_falso / "processed" / "erp_implicito.json").exists()

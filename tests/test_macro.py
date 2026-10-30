@@ -144,6 +144,7 @@ def test_macro_completo_valida_cada_dado(tmp_path: Path) -> None:
     # (1+7,72%)*(1+3,5%)-1 = 11,49% contra 14,87%: 3,4 p.p. > 2,5 p.p.
     assert m.rf_brl.status == "divergente"
     assert m.ipca_esperado == {2029: 0.035, 2030: 0.035}
+    assert m.pib_esperado == {2029: 0.035, 2030: 0.035}  # a rota falsa serve o mesmo JSON
     assert any("Rf BRL" in a for a in m.avisos)
 
 
@@ -178,3 +179,25 @@ def test_rede_fora_do_ar_propaga_para_tesouro(tmp_path: Path) -> None:
 
     with pytest.raises(ErroDadosExternos):
         carregar(Quebrada(), tmp_path)  # type: ignore[arg-type]
+
+
+def test_focus_do_pib_consulta_o_indicador_pib_total(tmp_path: Path) -> None:
+    sessao = SessaoPorPrefixo(rotas_ok())
+    carregar(sessao, tmp_path)
+    assert any("PIB%20Total" in c for c in sessao.chamadas)
+
+
+def test_focus_do_pib_indisponivel_nao_derruba_o_macro(tmp_path: Path) -> None:
+    rotas = rotas_ok()
+    sessao = SessaoPorPrefixo(rotas)
+    original = sessao.get
+
+    def get(url: str, **kw: object) -> object:
+        if "PIB" in url:
+            raise OSError("fora do ar")
+        return original(url, **kw)  # type: ignore[arg-type]
+
+    sessao.get = get  # type: ignore[method-assign]
+    m = carregar(sessao, tmp_path)
+    assert m.pib_esperado == {}
+    assert m.ipca_esperado

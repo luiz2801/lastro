@@ -87,10 +87,27 @@ class LimitesKd(_Modelo):
         return self
 
 
+class ConfigErp(_Modelo):
+    """Prêmio de risco: manual ou calibrado no Ibovespa (ADR 0018); número solto vira manual."""
+
+    fonte: Literal["manual", "implicito_ibovespa"] = "manual"
+    valor: float = 0.05  # usado com fonte = manual
+    anos_explicitos: int = Field(default=5, ge=1)  # anos de crescimento pelo Focus
+    faixa_g: float = Field(default=0.01, ge=0)  # +- sobre o g perpétuo para a faixa do ERP
+    validade_dias: int = Field(default=30, ge=1)  # idade máxima do `valuation erp` gravado
+
+    @model_validator(mode="before")
+    @classmethod
+    def _numero_solto(cls, dados: Any) -> Any:
+        if isinstance(dados, int | float) and not isinstance(dados, bool):
+            return {"fonte": "manual", "valor": float(dados)}
+        return dados
+
+
 class ConfigCustoCapital(_Modelo):
     metodo: Literal["brl_direto", "usd_crp"]
     rf_brl: RfBrl
-    erp: float
+    erp: ConfigErp
     crp: float
     rf_usd: float
     inflacao_usd_lp: float

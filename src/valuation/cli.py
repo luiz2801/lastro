@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 import platform
 import shlex
@@ -42,13 +43,14 @@ from valuation.contabil import qa as qa_mod
 from valuation.contabil.moeda import detectar_moeda
 from valuation.custo_capital import ErroCustoCapital, capm
 from valuation.custo_capital import beta as bt
+from valuation.custo_capital import erp_implicito as erp_mod
 from valuation.custo_capital import kd as kd_mod
 from valuation.custo_capital import wacc as wc
 from valuation.data import cadastro as cad
 from valuation.data import cvm
 from valuation.data import macro as mac
 from valuation.data import precos as prc
-from valuation.data.http import ErroDownload, criar_sessao
+from valuation.data.http import ErroDownload, SessaoHttp, criar_sessao
 from valuation.data.validacao import ErroDadosExternos, Leitura, Validado
 from valuation.modelos import ErroModelo, dcf, ddm
 from valuation.modelos import multiplos as mt
@@ -307,6 +309,36 @@ class _Mercado:
         return [*self.cap.avisos, *self.macro.avisos, *(a for v in validados if (a := v.aviso))]
 
 
+def _macro(
+    settings: Settings,
+    base: dt.date,
+    agora: dt.datetime,
+    forcar: bool,
+    yf: prc.PrecosProvider,
+    sessao: SessaoHttp,
+) -> mac.Macro:
+    """Macro na data-base; o dólar do yfinance é a segunda fonte do câmbio."""
+    tol = settings.validacao_cruzada
+    cambio_yf: Leitura | None = None
+    try:
+        d, v = prc.fechamento_ate(yf.historico("BRL=X", base - dt.timedelta(days=15), base), base)
+        cambio_yf = Leitura(v, "yfinance BRL=X", d)
+    except ErroDadosExternos as e:
+        console.print(f"[yellow]Aviso:[/] dólar sem segunda fonte: {e}")
+
+    return mac.carregar_macro(
+        base,
+        tolerancias=tol,
+        rf_override=settings.custo_capital.rf_brl.override,
+        cambio_alternativo=cambio_yf,
+        dir_raw=DIR_RAW,
+        ttl=dt.timedelta(hours=settings.cache_ttl_horas.macro),
+        sessao=sessao,
+        agora=agora,
+        forcar=forcar,
+    )
+
+
 def _mercado(
     ticker: str, settings: Settings, base: dt.date, agora: dt.datetime, forcar: bool
 ) -> _Mercado:
@@ -325,24 +357,7 @@ def _mercado(
     precos, cap = _cotacoes(empresa, settings, base, yf, brapi)
     ibov = prc.preco_validado("^BVSP", base, yf, brapi, tolerancia_rel=tol.preco_rel)
 
-    cambio_yf: Leitura | None = None
-    try:
-        d, v = prc.fechamento_ate(yf.historico("BRL=X", base - dt.timedelta(days=15), base), base)
-        cambio_yf = Leitura(v, "yfinance BRL=X", d)
-    except ErroDadosExternos as e:
-        console.print(f"[yellow]Aviso:[/] dólar sem segunda fonte: {e}")
-
-    macro = mac.carregar_macro(
-        base,
-        tolerancias=tol,
-        rf_override=settings.custo_capital.rf_brl.override,
-        cambio_alternativo=cambio_yf,
-        dir_raw=DIR_RAW,
-        ttl=dt.timedelta(hours=settings.cache_ttl_horas.macro),
-        sessao=sessao,
-        agora=agora,
-        forcar=forcar,
-    )
+    macro = _macro(settings, base, agora, forcar, yf, sessao)
     return _Mercado(empresa, precos, ibov, macro, cap, yf)
 
 
@@ -1450,6 +1465,212 @@ def _aviso_defasagem(data_bal: pd.Timestamp, base: dt.date) -> list[str]:
     return []
 
 
+def _caminho_erp() -> Path:
+    return DIR_PROCESSED / "erp_implicito.json"
+
+
+def _erp_efetivo(settings: Settings, base: dt.date, avisos: list[str]) -> float:
+    """ERP do Ke: o valor manual ou o central gravado por `valuation erp` (ADR 0018)."""
+    cfg = settings.custo_capital.erp
+    if cfg.fonte == "manual":
+        return cfg.valor
+    caminho = _caminho_erp()
+    try:
+        gravado = json.loads(caminho.read_text("utf-8"))
+        data = dt.date.fromisoformat(gravado["data_base"])
+        central, minimo, maximo = (float(gravado[k]) for k in ("erp", "erp_min", "erp_max"))
+    except (OSError, ValueError, KeyError) as e:
+        raise ErroCustoCapital(
+            f"ERP implícito indisponível ({caminho}): rode `valuation erp` "
+            "ou use custo_capital.erp.fonte = manual."
+        ) from e
+    idade = abs((base - data).days)
+    if idade > cfg.validade_dias:
+        raise ErroCustoCapital(
+            f"ERP implícito calculado em {data} ({idade} dias da data-base; validade de "
+            f"{cfg.validade_dias}): rode `valuation erp` de novo."
+        )
+    avisos.append(
+        f"ERP implícito do Ibovespa de {_taxa(central)} (faixa {_taxa(minimo)} a {_taxa(maximo)}; "
+        f"calculado em {data})."
+    )
+    avisos.extend(str(a) for a in gravado.get("avisos", ()))
+    return central
+
+
+@dataclass(frozen=True)
+class _MedidaErp:
+    ticker: str
+    market_cap: float
+    dividendos: float
+    historico: dict[int, float]
+
+
+def _medir_para_erp(
+    tickers: list[str],
+    cadastro: pd.DataFrame,
+    settings: Settings,
+    base: dt.date,
+    yf: prc.PrecosProvider,
+    brapi: prc.PrecosProvider,
+) -> tuple[list[_MedidaErp], list[str], int]:
+    """Market cap, dividendos LTM e dividendos anuais de cada companhia do universo.
+
+    Devolve (medidas, avisos, nº de companhias distintas). Duas classes da mesma companhia contam
+    uma vez; companhia sem dados sai e vira aviso. Só BRL (a CVM traz BRL; ADR 0002).
+    """
+    medidas: list[_MedidaErp] = []
+    avisos: list[str] = []
+    vistos: set[str] = set()
+    for t in tickers:
+        try:
+            empresa = cad.empresa_por_ticker(cadastro, t)
+            if empresa.cnpj in vistos:
+                continue
+            vistos.add(empresa.cnpj)
+            p = _padronizar(t, settings, cadastro)
+            if p.moeda != "BRL":
+                raise ErroContabil(f"reporta em {p.moeda}")
+            cap = _cotacoes(empresa, settings, base, yf, brapi)[1]
+            f = _fundamentos(p, cap, settings, base, 1.0)
+            anual, _ = _metricas_com_ltm(p, settings)
+        except (
+            ErroConfiguracao,
+            ErroDownload,
+            cad.ErroCadastro,
+            ErroDadosExternos,
+            ErroContabil,
+            ErroModelo,
+        ) as e:
+            avisos.append(f"{t} fora do ERP implícito: {e}")
+            continue
+        serie = anual["dividendos_pagos"].dropna()
+        historico = {_ano(i): float(v) for i, v in serie.items()}
+        dividendos = 0.0 if pd.isna(f.dividendos) else float(f.dividendos)
+        medidas.append(_MedidaErp(p.premissas.ticker, cap.valor, dividendos, historico))
+    return medidas, avisos, len(vistos)
+
+
+@app.command()
+def erp(
+    data_base: str | None = typer.Option(
+        None, "--data-base", help="AAAA-MM-DD (padrão: settings)."
+    ),
+    forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+) -> None:
+    """ERP implícito do Ibovespa em BRL (ADR 0018); grava data/processed/erp_implicito.json."""
+    agora = dt.datetime.now(dt.UTC)
+    try:
+        settings = carregar_settings()
+        base = (
+            dt.date.fromisoformat(data_base)
+            if data_base
+            else settings.resolver_data_base(agora.date())
+        )
+        cfg = settings.custo_capital.erp
+        sessao = criar_sessao()
+        yf = prc.YFinanceProvider(
+            DIR_RAW / "precos",
+            dt.timedelta(hours=settings.cache_ttl_horas.precos),
+            agora,
+            forcar=forcar,
+        )
+        macro = _macro(settings, base, agora, forcar, yf, sessao)
+        if not macro.pib_esperado or not macro.ipca_esperado:
+            raise ErroDadosExternos(
+                "Focus de PIB ou de IPCA indisponível: o ERP implícito precisa dos dois."
+            )
+        cadastro = _carregar_cadastro(settings, base, forcar)
+        tickers = _tickers_do_universo(CAMINHO_UNIVERSO)
+        brapi = prc.BrapiProvider(sessao)
+        medidas, avisos, total = _medir_para_erp(tickers, cadastro, settings, base, yf, brapi)
+        if not medidas:
+            raise ErroDadosExternos("Nenhuma companhia do universo pôde ser medida.")
+        series = [x.historico for x in medidas]
+        ano_final = erp_mod.ultimo_ano_comum(series)
+        cagr, n_cagr = erp_mod.cagr_agregado(series, ano_final, cfg.anos_explicitos)
+        g_perp = min(max(cagr, 0.0), settings.terminal.g_nominal_max)
+        resultado = erp_mod.faixa(
+            sum(x.market_cap for x in medidas),
+            sum(x.dividendos for x in medidas),
+            ano_inicial=base.year,
+            anos=cfg.anos_explicitos,
+            pib_real=macro.pib_esperado,
+            ipca=macro.ipca_esperado,
+            g_perpetuo=g_perp,
+            faixa_g=cfg.faixa_g,
+            rf=macro.rf_brl.valor,
+            cobertura=len(medidas) / total,
+        )
+    except ValueError as e:
+        raise _erro(f"--data-base inválida: {e}") from e
+    except (
+        ErroConfiguracao,
+        ErroDownload,
+        cad.ErroCadastro,
+        ErroDadosExternos,
+        ErroContabil,
+        ErroCustoCapital,
+    ) as e:
+        raise _erro(str(e)) from e
+
+    c = resultado.central
+    todos_avisos = [
+        *avisos,
+        *resultado.avisos,
+        *macro.avisos,
+        f"g perpétuo = CAGR {ano_final - cfg.anos_explicitos}-{ano_final} dos dividendos "
+        f"agregados de {n_cagr} companhias ({_taxa(cagr)})"
+        + (f", limitado a {_taxa(g_perp)}." if g_perp != cagr else "."),
+    ]
+    tabela = Table(title=f"ERP implícito do Ibovespa em {base} (BRL nominal)")
+    tabela.add_column("Item")
+    tabela.add_column("Valor", justify="right")
+    linhas = [
+        ("Companhias medidas", f"{len(medidas)} de {total}"),
+        ("Valor de mercado agregado (R$ mi)", _formatar(sum(x.market_cap for x in medidas), "mi")),
+        ("Dividendos LTM agregados (R$ mi)", _formatar(sum(x.dividendos for x in medidas), "mi")),
+        ("Crescimento nominal ano 1..N (Focus)", " / ".join(_taxa(g) for g in c.crescimentos)),
+        ("g perpétuo (média histórica)", _taxa(c.g_perpetuo)),
+        ("Rf (NTN-F)", _taxa(c.rf)),
+        ("Ke do mercado", _taxa(c.ke)),
+        ("ERP central", f"[bold]{_taxa(c.erp)}[/]"),
+        ("Faixa do ERP", f"{_taxa(resultado.inferior.erp)} a {_taxa(resultado.superior.erp)}"),
+    ]
+    for item, valor in linhas:
+        tabela.add_row(item, valor)
+    console.print(tabela)
+    if resultado.erro:
+        for aviso in todos_avisos:
+            console.print(f"[yellow]Aviso:[/] {aviso}")
+        raise _erro(resultado.erro)
+    caminho = _caminho_erp()
+    arq.gravar_json(
+        {
+            "data_base": base,
+            "gerado_em": agora,
+            "erp": c.erp,
+            "erp_min": resultado.inferior.erp,
+            "erp_max": resultado.superior.erp,
+            "ke": c.ke,
+            "rf": c.rf,
+            "g_perpetuo": c.g_perpetuo,
+            "crescimentos": list(c.crescimentos),
+            "valor_indice": sum(x.market_cap for x in medidas),
+            "fluxo_base": sum(x.dividendos for x in medidas),
+            "companhias": [x.ticker for x in medidas],
+            "pib_focus": macro.pib_esperado,
+            "ipca_focus": macro.ipca_esperado,
+            "avisos": todos_avisos,
+        },
+        caminho,
+    )
+    for aviso in todos_avisos:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
+    console.print("Estudo pessoal; não é recomendação de investimento.")
+    console.print(f"Gravado em {caminho}")
+
+
 def _ke(
     moeda: capm.Moeda, beta: float, m: _Mercado, settings: Settings, avisos: list[str]
 ) -> capm.CustoCapitalProprio:
@@ -1465,7 +1686,7 @@ def _ke(
         metodo=metodo,
         moeda=moeda,
         beta=beta,
-        erp=cfg.erp,
+        erp=_erp_efetivo(settings, m.macro.data_base, avisos),
         rf_brl=m.macro.rf_brl.valor,
         rf_usd=cfg.rf_usd,
         crp=cfg.crp,

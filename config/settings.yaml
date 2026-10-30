@@ -19,7 +19,10 @@ impostos:
 custo_capital:
   metodo: brl_direto               # brl_direto | usd_crp
   rf_brl: {fonte: tesouro_prefixado_longo, override: null}
-  erp: 0.05                        # premissa do usuário (2026-10-30), sem fonte externa; ver docs/fontes.md
+  # ERP: manual (valor, premissa do usuário de 2026-10-30, sem fonte externa; docs/fontes.md) ou
+  # implicito_ibovespa (ADR 0018; rode `valuation erp` antes). anos_explicitos: anos de
+  # crescimento pelo Focus; faixa_g: +- do g perpétuo na faixa; validade_dias: idade máxima do cálculo.
+  erp: {fonte: manual, valor: 0.05, anos_explicitos: 5, faixa_g: 0.01, validade_dias: 30}
   crp: 0.0                         # só usado em usd_crp
   rf_usd: 0.04                     # PLACEHOLDER, só usd_crp
   inflacao_usd_lp: 0.02            # PLACEHOLDER, só usd_crp
