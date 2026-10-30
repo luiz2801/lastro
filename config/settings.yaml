@@ -1,0 +1,42 @@
+# Parâmetros globais.
+# ATENÇÃO: todos os números de mercado abaixo são [PLACEHOLDER].
+# Revise cada um antes de confiar em qualquer resultado.
+versao: 1
+data_base: hoje                    # "hoje" ou "AAAA-MM-DD"
+historico_anos: 10
+moeda_saida: BRL
+
+csv:
+  separador: ";"
+  decimal: ","
+  encoding: "utf-8-sig"
+
+cache_ttl_horas: {cvm: 168, precos: 12, macro: 12}
+
+impostos:
+  aliquota_nominal: 0.34           # IRPJ+CSLL, regra geral (financeiras têm outra)
+
+custo_capital:
+  metodo: brl_direto               # brl_direto | usd_crp
+  rf_brl: {fonte: tesouro_prefixado_longo, override: null}
+  erp: 0.05                        # PLACEHOLDER
+  crp: 0.0                         # só usado em usd_crp
+  rf_usd: 0.04                     # PLACEHOLDER, só usd_crp
+  inflacao_usd_lp: 0.02            # PLACEHOLDER, só usd_crp
+  beta: {metodo: regressao, janela_semanas: 260, ajuste_blume: true, min_r2_aviso: 0.10}
+  estrutura_alvo: {metodo: mercado_atual}   # mercado_atual | setor | manual
+
+terminal:
+  g_nominal_max: 0.045             # PLACEHOLDER: teto do crescimento perpétuo
+  ronic: wacc                      # wacc | roic_historico | valor numérico
+  checagem_multiplo_saida: true
+
+dcf:
+  convencao_meio_periodo: true
+  alerta_tv_sobre_ev: 0.75
+
+sensibilidade:
+  wacc_passo: 0.005
+  wacc_faixa: 0.02
+  g_passo: 0.0025
+  g_faixa: 0.01

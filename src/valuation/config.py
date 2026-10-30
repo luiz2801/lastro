@@ -1,0 +1,122 @@
+"""Carga e validação de `config/settings.yaml`.
+
+Campos desconhecidos geram erro (`extra="forbid"`) para pegar erros de digitação no YAML.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+from pathlib import Path
+from typing import Literal
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+RAIZ_PROJETO = Path(__file__).resolve().parents[2]
+CAMINHO_SETTINGS = RAIZ_PROJETO / "config" / "settings.yaml"
+
+
+class _Modelo(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class ConfigCsv(_Modelo):
+    separador: str = ";"
+    decimal: str = ","
+    encoding: str = "utf-8-sig"
+
+
+class CacheTtlHoras(_Modelo):
+    cvm: float = Field(gt=0)
+    precos: float = Field(gt=0)
+    macro: float = Field(gt=0)
+
+
+class Impostos(_Modelo):
+    aliquota_nominal: float = Field(ge=0, le=1)
+
+
+class RfBrl(_Modelo):
+    fonte: Literal["tesouro_prefixado_longo", "manual"]
+    override: float | None = None
+
+    @model_validator(mode="after")
+    def _manual_exige_override(self) -> RfBrl:
+        if self.fonte == "manual" and self.override is None:
+            raise ValueError("rf_brl.fonte = manual exige rf_brl.override")
+        return self
+
+
+class ConfigBeta(_Modelo):
+    metodo: Literal["regressao", "comparaveis", "manual"]
+    janela_semanas: int = Field(gt=0)
+    ajuste_blume: bool
+    min_r2_aviso: float = Field(ge=0, le=1)
+
+
+class EstruturaAlvo(_Modelo):
+    metodo: Literal["mercado_atual", "setor", "manual"]
+
+
+class ConfigCustoCapital(_Modelo):
+    metodo: Literal["brl_direto", "usd_crp"]
+    rf_brl: RfBrl
+    erp: float
+    crp: float
+    rf_usd: float
+    inflacao_usd_lp: float
+    beta: ConfigBeta
+    estrutura_alvo: EstruturaAlvo
+
+
+class ConfigTerminal(_Modelo):
+    g_nominal_max: float
+    ronic: Literal["wacc", "roic_historico"] | float
+    checagem_multiplo_saida: bool
+
+
+class ConfigDcf(_Modelo):
+    convencao_meio_periodo: bool
+    alerta_tv_sobre_ev: float = Field(gt=0, le=1)
+
+
+class ConfigSensibilidade(_Modelo):
+    wacc_passo: float = Field(gt=0)
+    wacc_faixa: float = Field(gt=0)
+    g_passo: float = Field(gt=0)
+    g_faixa: float = Field(gt=0)
+
+
+class Settings(_Modelo):
+    versao: Literal[1]
+    data_base: Literal["hoje"] | dt.date
+    historico_anos: int = Field(gt=0, le=30)
+    moeda_saida: Literal["BRL", "USD"]
+    csv: ConfigCsv
+    cache_ttl_horas: CacheTtlHoras
+    impostos: Impostos
+    custo_capital: ConfigCustoCapital
+    terminal: ConfigTerminal
+    dcf: ConfigDcf
+    sensibilidade: ConfigSensibilidade
+
+    def resolver_data_base(self, hoje: dt.date) -> dt.date:
+        """Data-base efetiva. `hoje` vem de quem chama (CLI), nunca de `date.today()` aqui."""
+        return hoje if self.data_base == "hoje" else self.data_base
+
+
+class ErroConfiguracao(Exception):
+    """Arquivo de configuração ausente ou inválido."""
+
+
+def carregar_settings(caminho: Path = CAMINHO_SETTINGS) -> Settings:
+    if not caminho.is_file():
+        raise ErroConfiguracao(f"Arquivo de configuração não encontrado: {caminho}")
+    with caminho.open(encoding="utf-8") as f:
+        bruto = yaml.safe_load(f)
+    if not isinstance(bruto, dict):
+        raise ErroConfiguracao(f"{caminho} deve conter um mapeamento YAML no topo")
+    try:
+        return Settings.model_validate(bruto)
+    except ValueError as e:
+        raise ErroConfiguracao(f"{caminho} inválido:\n{e}") from e
