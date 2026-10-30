@@ -9,10 +9,10 @@ Legenda: ✅ confirmado · ⚠️ diferente do guia · ⏳ pendente
 
 | Item | Esperado no guia | Status | Observado / data |
 |---|---|---|---|
-| Cadastro | `CIA_ABERTA/CAD/DADOS/cad_cia_aberta.csv` | ✅ | Existe na listagem (2026-10-30); conteúdo ainda não inspecionado |
+| Cadastro | `CIA_ABERTA/CAD/DADOS/cad_cia_aberta.csv` | ✅ | 1,5 MB, latin-1, CRLF (2026-10-30) |
 | DFP | `CIA_ABERTA/DOC/DFP/DADOS/dfp_cia_aberta_{ano}.zip` | ✅ | Anos 2010–2026 (2026-10-30); 2025 tem 13 MB |
-| ITR | `CIA_ABERTA/DOC/ITR/DADOS/itr_cia_aberta_{ano}.zip` | ✅ | Existe até 2026 na listagem; conteúdo ainda não inspecionado |
-| FCA | `CIA_ABERTA/DOC/FCA/DADOS/fca_cia_aberta_{ano}.zip` | ✅ | Existe até 2026 na listagem |
+| ITR | `CIA_ABERTA/DOC/ITR/DADOS/itr_cia_aberta_{ano}.zip` | ✅ | Até 2026; 2026 tem 20 MB. Mesmos arquivos internos da DFP com prefixo `itr_` |
+| FCA | `CIA_ABERTA/DOC/FCA/DADOS/fca_cia_aberta_{ano}.zip` | ✅ | Até 2026; arquivo de tickers: `fca_cia_aberta_valor_mobiliario_{ano}.csv` |
 | Arquivos internos da DFP | ver seção 6.1 | ✅ | `dfp_cia_aberta_{BPA,BPP,DRE,DFC_MD,DFC_MI,DMPL,DRA,DVA}_{con,ind}_{ano}.csv`, `dfp_cia_aberta_composicao_capital_{ano}.csv`, `dfp_cia_aberta_parecer_{ano}.csv`, `dfp_cia_aberta_{ano}.csv` (índice) |
 | Dicionário DFP | — | ✅ | `DOC/DFP/META/meta_dfp_cia_aberta_txt.zip` (um `.txt` por arquivo) |
 | Dicionário FCA | — | ⚠️ | Nome fora do padrão: `DOC/FCA/META/fca_cia_aberta.zip` |
@@ -25,6 +25,41 @@ Legenda: ✅ confirmado · ⚠️ diferente do guia · ⏳ pendente
 - ⚠️ `MOEDA`: só `REAL`, inclusive para a Vale. Ver [ADR 0002](decisoes/0002-moeda-da-vale.md).
 - `CD_CVM` vem com zeros à esquerda (`009512`): tratar como texto ou normalizar.
 - Os dicionários não listam os valores possíveis dos campos, só o tipo.
+
+- Aspas aparecem literais dentro de `DS_CONTA` (ex.: `("VJORA")`), sem delimitar campos: ler com
+  `QUOTE_NONE`. Contagem de linhas conferida com o pandas em DFP 2011, DFP 2025, ITR 2026 e FCA 2026.
+- BPA/BPP não têm `DT_INI_EXERC` (saldo numa data). Só a DMPL tem `COLUNA_DF`.
+- Os arquivos de dados só trazem a versão mais recente de cada documento; o índice
+  (`dfp_cia_aberta_{ano}.csv`) lista todas as versões. O código mantém a maior `VERSAO` mesmo assim.
+
+### ITR (2026, observado em 2026-10-30)
+
+- DRE traz, por data, o acumulado no ano **e** o trimestre (`DT_INI_EXERC` distingue), para o
+  exercício atual e o anterior (`PENÚLTIMO`). DFC só traz o acumulado. Confirma a seção 7.3 do guia.
+- Não há ITR do 4º trimestre (vem na DFP). Em 2026-10-30 PETR4 e VALE3 tinham até 30/06, WEGE3 até 30/09.
+
+### Composição do capital
+
+- Existe na DFP a partir de 2020 (DFP 2010–2019 não trazem o arquivo) e em todos os ITR.
+- ⚠️ **Sem coluna de escala.** A Vale informa em milhares em todas as datas (4.262.534 em 2026-03-31);
+  a Petrobras informou em milhares só na DFP 2020 (13.044.497). Ver [ADR 0003](decisoes/0003-escala-das-acoes.md).
+
+### Cadastro (`cad_cia_aberta.csv`)
+
+- Várias linhas por CNPJ: uma por mercado (`TP_MERC`) e registros cancelados com outro `CD_CVM`
+  (Itaú: 1279 cancelado, 19348 ativo). O código fica com o registro `ATIVO` mais recente.
+- `CD_CVM` sem zeros à esquerda (`9512`), diferente da DFP/ITR (`009512`).
+- `SETOR_ATIV` tem variantes "Emp. Adm. Part. - <setor>", que incluem companhias operacionais
+  (a WEG é "Emp. Adm. Part. - Máqs., Equip., Veíc. e Peças"). Holdings não são detectáveis pelo
+  setor: ficam marcadas em `config/cadastro_manual.csv`.
+
+### FCA `valor_mobiliario`
+
+- `Valor_Mobiliario` usado: "Ações Ordinárias", "Ações Preferenciais", "Units"; `Mercado` = "Bolsa".
+- Lixo conhecido: códigos "NÃO HÁ", "N/A" e numéricos (`713854`); o mesmo ticker como ON e PN
+  (`CRTE3`); tickers encerrados com `Data_Fim_Negociacao` preenchida (`BRFS3`, 2025-09-22).
+- Nem toda companhia entrega o FCA do ano corrente: o código usa os FCA de `ano` e `ano - 1` e fica
+  com o documento mais recente de cada CNPJ.
 
 ### Chaves entre arquivos
 

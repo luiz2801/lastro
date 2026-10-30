@@ -17,7 +17,7 @@ make lint tipos testes
 
 ## Estado
 
-Fase 0 (fundação) concluída. Ver [`CHANGELOG.md`](CHANGELOG.md).
+Fases 0 (fundação) e 1 (cadastro e coleta CVM) concluídas. Ver [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Riscos e limitações
 
