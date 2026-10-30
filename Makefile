@@ -1,5 +1,6 @@
 UV ?= uv
 TICKER ?= PETR4
+TICKERS ?= PETR4,VALE3,WEGE3
 
 .PHONY: setup lint formatar tipos testes cobertura atualizar rodar
 
@@ -24,7 +25,7 @@ cobertura:
 	$(UV) run pytest --cov=valuation --cov-report=term-missing
 
 atualizar:
-	$(UV) run valuation atualizar --tudo
+	$(UV) run valuation atualizar --tickers $(TICKERS)
 
 rodar:
 	$(UV) run valuation rodar $(TICKER)
