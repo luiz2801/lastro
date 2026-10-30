@@ -16,6 +16,8 @@
 - `CONTRIBUTING.md`, `README.md` e `guia.md`: referências atualizadas para `docs/regras/`; versão do `guia.md` atualizada para 1.19.
 
 ### Fase 10 — Units no market cap
+- `fix`: papel avaliado pela unit (SANB11, BPAC11) tem o valor por ação contado em units, comparável
+  ao preço da unit (antes saía por ação, 2 a 3 vezes menor).
 - `data/cadastro.py`: coluna opcional `acoes_por_unit` no cadastro manual e em `ClasseAcao`.
 - `data/precos.py`: unit cotada com composição conhecida precifica ON e PN (preço da unit / ações
   por unit).

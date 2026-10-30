@@ -758,3 +758,23 @@ def test_atualizar_com_pares(ambiente_offline: Path) -> None:
     assert resultado.exit_code == 0, resultado.output
     assert (ambiente_offline / "processed" / "cvm" / "9512" / "demonstracoes.parquet").exists()
     assert "par ZZZZ3 ignorado" in " ".join(resultado.output.split())
+
+
+def test_acoes_do_papel_conta_units() -> None:
+    classes = (
+        cad.ClasseAcao("XXXX3", "ON"),
+        cad.ClasseAcao("XXXX4", "PN"),
+        cad.ClasseAcao("XXXX11", "UNIT", 3),
+    )
+    empresa = cad.Empresa("1", 1, "X", "X", "Bancos", "financeira", 1, classes)
+    cap = prc.MarketCap(
+        3000.0,
+        (
+            prc.ClasseMarketCap("XXXX11", "ON", 100, 10.0),
+            prc.ClasseMarketCap("XXXX11", "PN", 200, 10.0),
+        ),
+        dt.date(2026, 6, 30),
+        (),
+    )
+    assert cli._acoes_do_papel(empresa, cap, "XXXX11") == 100  # 300 ações = 100 units
+    assert cli._acoes_do_papel(empresa, cap, "XXXX4") == 300

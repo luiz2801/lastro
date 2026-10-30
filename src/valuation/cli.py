@@ -1121,16 +1121,33 @@ class _Comparaveis:
     avisos: tuple[str, ...]
 
 
+def _acoes_do_papel(empresa: cad.Empresa, cap: prc.MarketCap, ticker: str) -> int:
+    """Ações em circulação na unidade do papel cotado: com unit (`acoes_por_unit`), em units,
+    para que o valor "por ação" se compare ao preço da unit (ADR 0015)."""
+    n = next((c.acoes_por_unit for c in empresa.classes if c.ticker == ticker), 0)
+    total = sum(c.acoes for c in cap.classes)
+    return round(total / n) if n > 0 else total
+
+
 def _fundamentos(
-    p: _Padronizada, cap: prc.MarketCap, settings: Settings, base: dt.date, dolar: float
+    p: _Padronizada,
+    cap: prc.MarketCap,
+    settings: Settings,
+    base: dt.date,
+    dolar: float,
+    acoes: int | None = None,
 ) -> mt.Fundamentos:
-    """Métricas LTM no último balanço até a data-base e market cap, em BRL."""
+    """Métricas LTM no último balanço até a data-base e market cap, em BRL.
+
+    `acoes` = quantidade usada no valor por ação (padrão: ON + PN do market cap).
+    """
     data_bal = _data_balanco(p.contas, base)
+    acoes = sum(c.acoes for c in cap.classes) if acoes is None else acoes
     if p.plano.tipo == "financeira":
         return mt.fundamentos_financeira(
             p.premissas.ticker,
             fin.metricas_ltm(p.contas, dt_fim=data_bal),
-            acoes=sum(c.acoes for c in cap.classes),
+            acoes=acoes,
             data_balanco=data_bal.date(),
             market_cap=cap.valor,
         )
@@ -1142,7 +1159,7 @@ def _fundamentos(
     )
     itens = pt.itens_do_balanco(
         ltm,
-        acoes=sum(c.acoes for c in cap.classes),
+        acoes=acoes,
         data_balanco=data_bal.date(),
         coligadas=p.premissas.ajustes.coligadas,
         minoritarios="contabil",
@@ -1207,7 +1224,8 @@ def _multiplos(
     """Múltiplos dos pares e valores implícitos do alvo; None se nenhum par foi medido."""
     if not comps.pares:
         return None
-    alvo = _fundamentos(p, m.cap, settings, base, m.macro.cambio.valor)
+    acoes = _acoes_do_papel(m.empresa, m.cap, p.premissas.ticker)
+    alvo = _fundamentos(p, m.cap, settings, base, m.macro.cambio.valor, acoes)
     cfg = settings.multiplos
     financeira = p.plano.tipo == "financeira"
     return mt.avaliar(
@@ -1529,7 +1547,7 @@ def _dados_avaliacao(
     )
     itens = pt.itens_do_balanco(
         balanco,
-        acoes=sum(c.acoes for c in m.cap.classes),
+        acoes=_acoes_do_papel(m.empresa, m.cap, p.premissas.ticker),
         data_balanco=cc.data_balanco,
         coligadas=p.premissas.ajustes.coligadas,
         minoritarios=p.premissas.ajustes.minoritarios,
@@ -2020,7 +2038,7 @@ def _rodar_financeira(
         pl, data_bal = _pl_inicial(p, e.base)
         dados = ddm.DadosDDM(
             pl_inicial=pl,
-            acoes=float(sum(c.acoes for c in m.cap.classes)),
+            acoes=float(_acoes_do_papel(m.empresa, m.cap, ticker)),
             data_balanco=data_bal,
             data_base=e.base,
             alerta_vt_sobre_valor=settings.dcf.alerta_tv_sobre_ev,

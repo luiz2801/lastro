@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.20 — 2026-10-30**
+**Versão 1.21 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -141,7 +141,9 @@ settings, hoje, override)` (inteiro do YAML ou horizonte do perfil via `resolver
 (coleta comum a `mercado`, `wacc`, `comparar` e `rodar`; `.avisos`), que usa
 `_cotacoes(empresa, settings, base, yf, brapi) -> (precos, MarketCap)` (sem preço ou sem
 composição ⇒ `ErroDadosExternos`). `_padronizar(ticker, settings, cadastro=None)` aceita o
-cadastro já carregado (pares). `_custo_capital(p, m, settings, base, comps=None) ->
+cadastro já carregado (pares). `_acoes_do_papel(empresa, cap, ticker)`: ações em circulação na
+unidade do papel avaliado (em units quando o ticker é unit com `acoes_por_unit`), usada no valor
+por ação do `rodar` e no alvo dos múltiplos, para comparar com o preço da unit. `_custo_capital(p, m, settings, base, comps=None) ->
 wc.CustoCapital` (seção 19), com `_beta` (precedência YAML > settings, `_metodo_beta`;
 `_regressao` da classe mais líquida; comparáveis sobre `comps.pares`),
 `_divida_sobre_capital_setor` e `_data_balanco` (última data ≤ data-base com YTD e balanço; aviso
