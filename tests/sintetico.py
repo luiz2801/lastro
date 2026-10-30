@@ -282,3 +282,24 @@ def dfp_banco(
             )
         )
     return juntar(*partes)
+
+
+def criar_empresa_sintetica(
+    anos: Iterable[int] = (2023, 2024, 2025),
+    escala: str = "MIL",
+    cd_cvm: int = 1234,
+    banco: bool = False,
+    **trocas: dict[str, object],
+) -> pd.DataFrame:
+    """Gera demonstrações sintéticas completas multi-anuais (formato CVM) para testes.
+
+    Permite testar pipelines de contabilidade, QA, padronização e modelos de valuation
+    sem realizar downloads da CVM nem tocar a rede ou ler arquivos externos.
+    """
+    partes = []
+    for a in anos:
+        if banco:
+            partes.append(dfp_banco(a, cd_cvm=cd_cvm, **trocas))  # type: ignore[arg-type]
+        else:
+            partes.append(dfp_completa(a, escala=escala, **trocas))
+    return juntar(*partes)
