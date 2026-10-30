@@ -257,17 +257,14 @@ backlog por valor entregue ao usuário.
 
 Pré-requisito para qualquer trabalho posterior em financeiras e para a consistência dos testes.
 
-1. **Units no market cap** (ADR 0015): suporte a BPAC11/BRBI11 no `cadastro_manual.csv` e em
-   `precos.market_cap`; testes unitários novos.
-2. **YAMLs das financeiras**: gerar com `valuation premissas sugerir {T} --escrever` para ITUB4,
-   BBAS3, BBDC4, SANB11, BPAC11, BBSE3, CXSE3, PSSA3 e ajustar `pares.setor`.
-3. **Rodar e conferir seguradoras** (BBSE3, CXSE3, PSSA3, IRBR3); registrar ressalvas em `guia.md`.
+1. ✅ **Units no market cap** (ADR 0015): `e2196ed` e `0bd81df` (valor por unit).
+2. ✅ **YAMLs das financeiras**: `730a9a2`, nove arquivos em `config/empresas/` com o setor.
+3. ✅ **Rodar e conferir seguradoras**: rodadas sem erro; ressalva do setor em `guia.md` (armadilha 38).
 4. **Golden das financeiras**: solicitar ao usuário os números de ITUB4 e BBAS3; codificar em
    `tests/golden/referencias.yaml`.
-5. **Fechamento formal**: `guia.md` (seções 1, 12 e 14), `README.md`, ✅ na seção 17 do `CLAUDE.md`,
-   `make cobertura`.
+5. ✅ **Fechamento formal**: `16524f8` (`CLAUDE.md`, `README.md`, `guia.md`, CHANGELOG); cobertura de 96%.
 
-*Entrega:* Fase 10 fechada; pipeline de financeiras completo e testado.
+*Entrega:* Fase 10 fechada; pipeline de financeiras completo e testado. Falta só o item 4 (com o usuário).
 
 ### Etapa 2 — Fase 9: Saídas completas
 
