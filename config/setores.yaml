@@ -26,3 +26,18 @@ maquinas_equipamentos:
   tipo_modelo: nao_financeira
   commodity: false
   pares: [WEGE3, EMBJ3, RAPT4, TUPY3, POMO4, KEPL3, ROMI3, LEVE3, MYPK3, FRAS3]
+# Financeiras (DDM, ADR 0014). Pares: todos os bancos e seguradoras listados com cotação, por
+# decisão do usuário ("abranger o máximo de empresas possíveis"); a winsorização 10/90 segura os
+# extremos dos ilíquidos. BPAN4, MERC4 e DMFN3 ficam de fora (sem cotação). Os pares precisam de
+# `valuation atualizar --tickers ... --com-pares`.
+bancos:
+  descricao: Bancos
+  tipo_modelo: financeira
+  commodity: false
+  pares: [ITUB4, BBAS3, BBDC4, SANB11, BPAC11, ABCB4, BRSR6, BMGB4, PINE4, BMEB4, BEES3, BAZA3,
+          BNBR3, BGIP4, BPAR3, BMIN4, BSLI4, BRBI11]
+seguradoras:
+  descricao: Seguradoras, resseguradoras e holdings de seguros
+  tipo_modelo: financeira
+  commodity: false
+  pares: [BBSE3, CXSE3, PSSA3, IRBR3]

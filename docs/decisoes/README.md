@@ -24,6 +24,7 @@ Itens `[DECIDIDO]` não mudam por ADR sem o aval do usuário (regra 7 do `CLAUDE
 | [0011](0011-plano-de-contas-das-financeiras.md) | Plano `financeira` por regex de descrição (bancos, seguradoras, comercial), individual quando não há consolidado, documento só com zeros ignorado, ROE sobre o PL inicial, dividendos ausentes vazios, QA próprio, corretoras (WIZC3, QUAL3) como não financeiras | 6.4, 7.2, 7.5 | aceito |
 | [0012](0012-premissas-e-projecao-das-financeiras.md) | ROE de longo prazo pela mediana de 10 anos, payout da mediana de 5 anos até 1 − g/ROE_LP, YAML `projecao`/`cenarios` conforme o tipo, cenários por ROE (inclusive o de longo prazo), projeção a partir do PL do último balanço | 9.1, 9.2, 11.3 | aceito |
 | [0013](0013-ddm-ke-e-cenarios-das-financeiras.md) | DDM descontado no fim do ano, lucro residual com o custo de cada trecho (igual ao DDM), valor da controladora sem ponte, Ke sem WACC (comparáveis sem Hamada), Ke implícito como retorno esperado, matrizes Ke × g e ROE_LP × Ke | 10.4, 11.3, 12 | aceito |
+| [0014](0014-multiplos-e-pares-das-financeiras.md) | Múltiplos das financeiras (P/L, P/VP, DY, sem EV), regressão P/VP × ROE, setores `bancos` (18) e `seguradoras` (4), escala de ações de 5 bancos | 11.4 | aceito |
 
 ## Quando escrever um ADR
 

@@ -14,6 +14,10 @@ data-base (`nao_financeiras.metricas_ltm`) e market cap na data-base, tudo em BR
 Múltiplo com numerador ou denominador não positivo é descartado (indefinido). Os válidos são
 limitados aos percentis de winsorização dos pares antes das estatísticas. O valor implícito usa
 P25, mediana e P75 dos pares; no dividend yield a relação é inversa (yield maior, valor menor).
+
+Financeiras (ADR 0014): só P/L, P/VP e dividend yield (`MULTIPLOS_FINANCEIRA`), sem EV; os
+fundamentos vêm de `contabil.financeiras.metricas_ltm` e trazem o ROE. A regressão P/VP x ROE
+dos pares (`regressao_pvp_roe`) dá o P/VP esperado para o ROE do alvo.
 """
 
 from __future__ import annotations
@@ -54,6 +58,7 @@ DEFINICOES: dict[NomeMultiplo, tuple[Base, NomeMetrica]] = {
     "dividend_yield": ("yield", "dividendos"),
 }
 MULTIPLOS: tuple[NomeMultiplo, ...] = tuple(DEFINICOES)
+MULTIPLOS_FINANCEIRA: tuple[NomeMultiplo, ...] = ("p_l", "p_vp", "dividend_yield")
 ROTULOS: dict[NomeMultiplo, str] = {
     "p_l": "P/L",
     "ev_ebitda": "EV/EBITDA",
@@ -63,7 +68,6 @@ ROTULOS: dict[NomeMultiplo, str] = {
     "ev_fcf": "EV/FCF",
     "dividend_yield": "Dividend yield",
 }
-_METRICAS: tuple[NomeMetrica, ...] = tuple(d[1] for d in DEFINICOES.values())
 ESTATISTICAS = ("p25", "mediana", "p75")
 # P/VP abaixo disto quase sempre é quantidade de ações em milhares tratada como unidades
 # (ADR 0003): o par sai das estatísticas, com aviso.
@@ -84,6 +88,7 @@ class Fundamentos:
     patrimonio_liquido: float  # controladora
     fcff: float
     dividendos: float
+    roe: float = float("nan")  # financeiras: LTM sobre o PL da controladora de 12 meses antes
 
     @property
     def ev(self) -> float:
@@ -141,6 +146,36 @@ def fundamentos(
     )
 
 
+def fundamentos_financeira(
+    ticker: str,
+    ltm: pd.Series,
+    *,
+    acoes: int,
+    data_balanco: dt.date,
+    market_cap: float,
+) -> Fundamentos:
+    """Fundamentos de uma financeira (`financeiras.metricas_ltm`): sem dívida, caixa nem EV."""
+    itens = pt.ItensPonte(0.0, 0.0, 0.0, 0.0, 0.0, acoes, data_balanco)
+    nan = float("nan")
+
+    def valor(nome: str) -> float:
+        return float(ltm.get(nome, nan))
+
+    return Fundamentos(
+        ticker=ticker,
+        market_cap=market_cap,
+        itens=itens,
+        lucro_liquido=valor("lucro_liquido_controladora"),
+        ebitda=nan,
+        ebit=nan,
+        receita_liquida=nan,
+        patrimonio_liquido=valor("patrimonio_liquido"),
+        fcff=nan,
+        dividendos=valor("dividendos_pagos"),
+        roe=valor("roe"),
+    )
+
+
 def multiplo(f: Fundamentos, nome: NomeMultiplo) -> float:
     """Valor do múltiplo; NaN se numerador ou denominador não for positivo (ou for NaN)."""
     base, metrica = DEFINICOES[nome]
@@ -151,20 +186,39 @@ def multiplo(f: Fundamentos, nome: NomeMultiplo) -> float:
     return m / numerador if base == "yield" else numerador / m
 
 
-def tabela_pares(pares: Sequence[Fundamentos]) -> pd.DataFrame:
-    """Uma linha por companhia: data do balanço, market cap, EV, métricas e múltiplos (BRL)."""
+def tabela_pares(
+    pares: Sequence[Fundamentos], nomes: tuple[NomeMultiplo, ...] = MULTIPLOS
+) -> pd.DataFrame:
+    """Uma linha por companhia: data do balanço, market cap, EV, métricas e múltiplos (BRL).
+
+    Só com múltiplos de equity (financeiras) não há EV; entra o ROE.
+    """
+    com_ev = any(DEFINICOES[n][0] == "ev" for n in nomes)
+    metricas = list(dict.fromkeys(DEFINICOES[n][1] for n in nomes))
+    extras = ["ev"] if com_ev else []
     linhas = []
     for f in pares:
         linha: dict[str, object] = {
             "ticker": f.ticker,
             "data_balanco": f.data_balanco.isoformat(),
             "market_cap": f.market_cap,
-            "ev": f.ev,
         }
-        linha |= {m: f.metrica(m) for m in _METRICAS}
-        linha |= {n: multiplo(f, n) for n in MULTIPLOS}
+        if com_ev:
+            linha["ev"] = f.ev
+        linha |= {m: f.metrica(m) for m in metricas}
+        if not com_ev:
+            linha["roe"] = f.roe
+        linha |= {n: multiplo(f, n) for n in nomes}
         linhas.append(linha)
-    colunas = ["ticker", "data_balanco", "market_cap", "ev", *_METRICAS, *MULTIPLOS]
+    colunas = [
+        "ticker",
+        "data_balanco",
+        "market_cap",
+        *extras,
+        *metricas,
+        *([] if com_ev else ["roe"]),
+        *nomes,
+    ]
     return pd.DataFrame(linhas, columns=colunas).set_index("ticker")
 
 
@@ -177,12 +231,17 @@ def winsorizar(valores: pd.Series, inferior: float, superior: float) -> pd.Serie
 
 
 def estatisticas(
-    tabela: pd.DataFrame, *, inferior: float, superior: float, min_pares: int
+    tabela: pd.DataFrame,
+    *,
+    inferior: float,
+    superior: float,
+    min_pares: int,
+    nomes: tuple[NomeMultiplo, ...] = MULTIPLOS,
 ) -> pd.DataFrame:
     """Por múltiplo: n válidos, mediana, média, P25, P75, mínimo, máximo (após winsorizar) e
     `confianca` (`normal` ou `baixa`, se n < `min_pares`)."""
     linhas = {}
-    for nome in MULTIPLOS:
+    for nome in nomes:
         v = winsorizar(tabela[nome], inferior, superior)
         linhas[nome] = {
             "n": float(len(v)),
@@ -220,11 +279,13 @@ def valor_por_acao(alvo: Fundamentos, nome: NomeMultiplo, valor_multiplo: float)
     return equity / alvo.itens.acoes
 
 
-def valores_implicitos(alvo: Fundamentos, estat: pd.DataFrame) -> pd.DataFrame:
+def valores_implicitos(
+    alvo: Fundamentos, estat: pd.DataFrame, nomes: tuple[NomeMultiplo, ...] = MULTIPLOS
+) -> pd.DataFrame:
     """Por múltiplo: métrica do alvo, múltiplo do próprio alvo, múltiplos dos pares (P25,
     mediana, P75), valores por ação implícitos em cada um e a confiança."""
     linhas = {}
-    for nome in MULTIPLOS:
+    for nome in nomes:
         linha: dict[str, object] = {
             "metrica": DEFINICOES[nome][1],
             "valor_metrica": alvo.metrica(DEFINICOES[nome][1]),
@@ -242,16 +303,52 @@ def valores_implicitos(alvo: Fundamentos, estat: pd.DataFrame) -> pd.DataFrame:
 
 
 @dataclass(frozen=True)
+class RegressaoPVP:
+    """P/VP = intercepto + inclinacao x ROE, por mínimos quadrados entre os pares."""
+
+    intercepto: float
+    inclinacao: float
+    r2: float
+    n: int
+
+    def pvp(self, roe: float) -> float:
+        return self.intercepto + self.inclinacao * roe
+
+
+def regressao_pvp_roe(tabela: pd.DataFrame, *, min_pares: int) -> RegressaoPVP | None:
+    """Regressão P/VP x ROE dos pares com os dois definidos; None com menos de `min_pares`
+    pontos ou ROE sem variação."""
+    pontos = tabela[["roe", "p_vp"]].astype(float).dropna()
+    if len(pontos) < max(min_pares, 2) or pontos["roe"].nunique() < 2:
+        return None
+    x, y = pontos["roe"].to_numpy(), pontos["p_vp"].to_numpy()
+    inclinacao, intercepto = np.polyfit(x, y, 1)
+    previsto = intercepto + inclinacao * x
+    total = float(((y - y.mean()) ** 2).sum())
+    r2 = 1 - float(((y - previsto) ** 2).sum()) / total if total > 0 else float("nan")
+    return RegressaoPVP(float(intercepto), float(inclinacao), r2, len(pontos))
+
+
+@dataclass(frozen=True)
 class ResultadoMultiplos:
     alvo: Fundamentos
     pares: pd.DataFrame  # tabela_pares (sem o alvo)
     estatisticas: pd.DataFrame
     implicitos: pd.DataFrame
     avisos: tuple[str, ...]
+    nomes: tuple[NomeMultiplo, ...] = MULTIPLOS
+    regressao: RegressaoPVP | None = None  # financeiras
 
     def mediana(self, nome: NomeMultiplo) -> float:
         """Mediana dos pares; NaN se nenhum par válido."""
         return celula(self.estatisticas, nome, "mediana")
+
+    @property
+    def valor_regressao(self) -> float:
+        """Valor por ação do alvo ao P/VP da regressão no ROE dele (NaN sem regressão)."""
+        if self.regressao is None or not np.isfinite(self.alvo.roe):
+            return float("nan")
+        return valor_por_acao(self.alvo, "p_vp", self.regressao.pvp(self.alvo.roe))
 
 
 def avaliar(
@@ -261,6 +358,7 @@ def avaliar(
     inferior: float,
     superior: float,
     min_pares: int,
+    nomes: tuple[NomeMultiplo, ...] = MULTIPLOS,
 ) -> ResultadoMultiplos:
     """Múltiplos dos pares (sem o próprio alvo), estatísticas e valores implícitos do alvo.
 
@@ -280,22 +378,31 @@ def avaliar(
         avisos.append(_aviso_escala(alvo, "confira antes de usar o resultado"))
     if not outros:
         raise ErroModelo(f"{alvo.ticker} sem pares válidos para os múltiplos.")
-    tab = tabela_pares(outros)
-    estat = estatisticas(tab, inferior=inferior, superior=superior, min_pares=min_pares)
-    impl = valores_implicitos(alvo, estat)
-    baixa = [n for n in MULTIPLOS if estat.loc[n, "confianca"] == "baixa"]
+    tab = tabela_pares(outros, nomes)
+    estat = estatisticas(
+        tab, inferior=inferior, superior=superior, min_pares=min_pares, nomes=nomes
+    )
+    impl = valores_implicitos(alvo, estat, nomes)
+    baixa = [n for n in nomes if estat.loc[n, "confianca"] == "baixa"]
     if baixa:
         detalhe = ", ".join(f"{n} ({celula(estat, n, 'n'):.0f})" for n in baixa)
         avisos.append(
             f"Múltiplos com menos de {min_pares} pares válidos (baixa confiança): {detalhe}."
         )
-    sem_metrica = [n for n in MULTIPLOS if not alvo.metrica(DEFINICOES[n][1]) > 0]
+    sem_metrica = [n for n in nomes if not alvo.metrica(DEFINICOES[n][1]) > 0]
     if sem_metrica:
         avisos.append(
             f"{alvo.ticker} sem métrica positiva para {', '.join(sem_metrica)}: sem valor "
             "implícito por esses múltiplos."
         )
-    return ResultadoMultiplos(alvo, tab, estat, impl, tuple(avisos))
+    regressao = None
+    if "roe" in tab.columns:
+        regressao = regressao_pvp_roe(tab, min_pares=min_pares)
+        if regressao is None:
+            avisos.append(
+                f"Regressão P/VP x ROE sem pontos suficientes (mínimo de {min_pares} pares)."
+            )
+    return ResultadoMultiplos(alvo, tab, estat, impl, tuple(avisos), nomes, regressao)
 
 
 def _aviso_escala(f: Fundamentos, consequencia: str) -> str:

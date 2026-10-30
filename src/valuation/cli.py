@@ -1126,6 +1126,14 @@ def _fundamentos(
 ) -> mt.Fundamentos:
     """Métricas LTM no último balanço até a data-base e market cap, em BRL."""
     data_bal = _data_balanco(p.contas, base)
+    if p.plano.tipo == "financeira":
+        return mt.fundamentos_financeira(
+            p.premissas.ticker,
+            fin.metricas_ltm(p.contas, dt_fim=data_bal),
+            acoes=sum(c.acoes for c in cap.classes),
+            data_balanco=data_bal.date(),
+            market_cap=cap.valor,
+        )
     ltm = nf.metricas_ltm(
         p.contas,
         aliquota_nominal=settings.impostos.aliquota_nominal,
@@ -1201,12 +1209,14 @@ def _multiplos(
         return None
     alvo = _fundamentos(p, m.cap, settings, base, m.macro.cambio.valor)
     cfg = settings.multiplos
+    financeira = p.plano.tipo == "financeira"
     return mt.avaliar(
         alvo,
         [x.fundamentos for x in comps.pares],
         inferior=cfg.winsorizar.inferior,
         superior=cfg.winsorizar.superior,
         min_pares=cfg.min_pares,
+        nomes=mt.MULTIPLOS_FINANCEIRA if financeira else mt.MULTIPLOS,
     )
 
 
@@ -1668,16 +1678,20 @@ def _mostrar_pares(r: mt.ResultadoMultiplos) -> None:
     tabela.add_column("Ticker")
     tabela.add_column("Balanço")
     tabela.add_column("Market cap (R$ mi)", justify="right")
-    for nome in mt.MULTIPLOS:
+    com_roe = "roe" in r.pares.columns
+    if com_roe:
+        tabela.add_column("ROE", justify="right")
+    for nome in r.nomes:
         tabela.add_column(mt.ROTULOS[nome], justify="right")
-    todos = pd.concat([mt.tabela_pares([r.alvo]), r.pares])
+    todos = pd.concat([mt.tabela_pares([r.alvo], r.nomes), r.pares])
     for ticker, linha in todos.iterrows():
         rotulo = f"[bold]{ticker}[/]" if ticker == r.alvo.ticker else str(ticker)
         tabela.add_row(
             rotulo,
             str(linha["data_balanco"]),
             _formatar(float(linha["market_cap"]), "mi"),
-            *(_multiplo_fmt(n, float(linha[n])) for n in mt.MULTIPLOS),
+            *([_formatar(float(linha["roe"]), "%")] if com_roe else []),
+            *(_multiplo_fmt(n, float(linha[n])) for n in r.nomes),
         )
     console.print(tabela)
 
@@ -1696,7 +1710,7 @@ def _mostrar_implicitos(r: mt.ResultadoMultiplos, preco: float) -> None:
     ):
         tabela.add_column(coluna, justify="left" if coluna == "Múltiplo" else "right")
     impl = r.implicitos
-    for nome in mt.MULTIPLOS:
+    for nome in r.nomes:
 
         def x(coluna: str, nome: mt.NomeMultiplo = nome) -> float:
             return mt.celula(impl, nome, coluna)
@@ -1712,6 +1726,15 @@ def _mostrar_implicitos(r: mt.ResultadoMultiplos, preco: float) -> None:
             _reais(x("valor_mediana")),
         )
     console.print(tabela)
+    if r.regressao is not None:
+        reg_pvp = r.regressao
+        numeros = (reg_pvp.r2, reg_pvp.intercepto, reg_pvp.inclinacao)
+        r2, a, b = (f"{x:.2f}".replace(".", ",") for x in numeros)
+        console.print(
+            f"Regressão P/VP x ROE dos pares ({reg_pvp.n} pontos, R² {r2}): P/VP = {a} + {b} x "
+            f"ROE; no ROE de {r.alvo.ticker} ({_taxa(r.alvo.roe)}), P/VP "
+            f"{_multiplo_fmt('p_vp', reg_pvp.pvp(r.alvo.roe))} ⇒ {_reais(r.valor_regressao)}."
+        )
     console.print(f"Preço de mercado: {_reais(preco)}.")
 
 
@@ -1720,7 +1743,7 @@ def _gravar_multiplos(
 ) -> None:
     """`multiplos_pares.csv` (alvo e pares) e `multiplos_implicitos.csv` (estatísticas)."""
     pares = pd.concat(
-        [mt.tabela_pares([r.alvo]).assign(papel="alvo"), r.pares.assign(papel="par")]
+        [mt.tabela_pares([r.alvo], r.nomes).assign(papel="alvo"), r.pares.assign(papel="par")]
     ).reset_index()
     gravar_csv(pares, raiz / "multiplos_pares.csv", settings.csv, fmt)
     estat = r.estatisticas.drop(columns=["n", "confianca"])
@@ -1991,8 +2014,9 @@ def _rodar_financeira(
         resolvidas = pf.resolver(p.premissas.projecao_ddm, sugestoes, anos=anos)
         deltas = pf.resolver_cenarios(p.premissas.cenarios_ddm, sugestoes)
         m = _mercado(ticker, settings, e.base, e.agora, e.forcar)
-        comps = _coletar_pares(p, m, settings, e.base) if _precisa_pares(p, settings) else None
+        comps = _coletar_pares(p, m, settings, e.base)
         cc = _custo_capital_financeira(p, m, settings, e.base, comps)
+        multiplos = _multiplos(p, m, comps, settings, e.base)
         pl, data_bal = _pl_inicial(p, e.base)
         dados = ddm.DadosDDM(
             pl_inicial=pl,
@@ -2057,6 +2081,8 @@ def _rodar_financeira(
     _mostrar_projecao_financeira(
         av_ref.projecao, f"Projeção {e.referencia} — {ticker} (R$ milhões)"
     )
+    if multiplos:
+        _mostrar_implicitos(multiplos, r.preco)
     tabela = Table(title=f"Sensibilidade Ke x g — valor por ação ({e.referencia})")
     tabela.add_column("Ke \\ g")
     for g in ke_g.columns:
@@ -2070,14 +2096,17 @@ def _rodar_financeira(
         gravar_csv(ddm.tabela(av), raiz / f"projecao_{c}.csv", settings.csv, fmt)
     gravar_matriz(ke_g, raiz / "sensibilidade_ke_g.csv", settings.csv, fmt)
     gravar_matriz(roe_ke, raiz / "sensibilidade_roe_ke.csv", settings.csv, fmt)
+    if multiplos:
+        _gravar_multiplos(multiplos, raiz, settings, fmt)
     avisos = [
         *r.avisos,
         *cc.avisos,
-        *(comps.avisos if comps else ()),
+        *comps.avisos,
+        *(multiplos.avisos if multiplos else ()),
         *m.avisos,
         *sugestoes.avisos,
     ]
-    resumo = _resumo_financeira(ticker, e, cc, r, avisos)
+    resumo = _resumo_financeira(ticker, e, cc, r, multiplos, avisos)
     gravar_csv(resumo, raiz / "resumo.csv", settings.csv, fmt)
     for aviso in avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
@@ -2146,6 +2175,7 @@ def _resumo_financeira(
     e: _Execucao,
     cc: wc.CustoCapitalFinanceira,
     r: cen.ResultadoCenarios[ddm.AvaliacaoDDM],
+    multiplos: mt.ResultadoMultiplos | None,
     avisos: list[str],
 ) -> pd.DataFrame:
     """Linha única de `resumo.csv` de uma financeira (DDM)."""
@@ -2179,6 +2209,13 @@ def _resumo_financeira(
         "valor_lucro_residual": d.valor_lucro_residual / av.acoes,
         "divergencia_lucro_residual": d.divergencia,
         "pl_inicial": d.pl_inicial,
+        "pvp_pares": multiplos.mediana("p_vp") if multiplos else None,
+        "n_pares": float(len(multiplos.pares)) if multiplos else None,
+        **{
+            f"valor_{n}": multiplos.implicitos.loc[n, "valor_mediana"] if multiplos else None
+            for n in mt.MULTIPLOS_FINANCEIRA
+        },
+        "valor_regressao_pvp_roe": multiplos.valor_regressao if multiplos else None,
         "data_balanco": cc.data_balanco.isoformat(),
         "avisos": " | ".join(avisos),
     }

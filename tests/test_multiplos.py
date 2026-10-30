@@ -196,3 +196,64 @@ def test_g_implicito() -> None:
     assert dcf.g_implicito(7.875, ronic=0.05, **kw) is None
     assert dcf.g_implicito(-1.0, ronic="wacc", **kw) is None
     assert dcf.g_implicito(5.0, ronic="wacc", ebitda_t=200.0, nopat_t=-1.0, wacc=0.1) is None
+
+
+def banco(ticker: str, market_cap: float, roe: float, pl: float = 100.0) -> mt.Fundamentos:
+    """Financeira com PL da controladora `pl`, lucro = ROE x PL e dividendos de metade dele."""
+    ltm = pd.Series(
+        {
+            "lucro_liquido_controladora": roe * pl,
+            "patrimonio_liquido": pl,
+            "dividendos_pagos": roe * pl / 2,
+            "roe": roe,
+        }
+    )
+    return mt.fundamentos_financeira(
+        ticker, ltm, acoes=10, data_balanco=DATA, market_cap=market_cap
+    )
+
+
+def test_fundamentos_e_tabela_de_financeira() -> None:
+    f = banco("BANC4", 150.0, 0.2)
+    assert np.isnan(f.ebitda) and np.isnan(mt.multiplo(f, "ev_ebitda"))
+    assert mt.multiplo(f, "p_vp") == pytest.approx(1.5)
+    assert mt.multiplo(f, "p_l") == pytest.approx(7.5)
+    assert mt.multiplo(f, "dividend_yield") == pytest.approx(10 / 150)
+    tab = mt.tabela_pares([f], mt.MULTIPLOS_FINANCEIRA)
+    assert "ev" not in tab.columns and "ebitda" not in tab.columns
+    assert list(tab.columns[-4:]) == ["roe", "p_l", "p_vp", "dividend_yield"]
+
+
+def test_regressao_pvp_roe_a_mao() -> None:
+    # P/VP = 0,5 + 5 x ROE exatamente nos pares.
+    roes = (("A", 0.1), ("B", 0.15), ("C", 0.2))
+    pares = [banco(t, 100 * (0.5 + 5 * roe), roe) for t, roe in roes]
+    r = mt.avaliar(
+        banco("ALVO", 100.0, 0.18),
+        pares,
+        inferior=0.0,
+        superior=1.0,
+        min_pares=3,
+        nomes=mt.MULTIPLOS_FINANCEIRA,
+    )
+    assert r.nomes == mt.MULTIPLOS_FINANCEIRA
+    assert list(r.implicitos.index) == list(mt.MULTIPLOS_FINANCEIRA)
+    assert r.regressao is not None
+    assert r.regressao.intercepto == pytest.approx(0.5)
+    assert r.regressao.inclinacao == pytest.approx(5.0)
+    assert r.regressao.r2 == pytest.approx(1.0)
+    # ROE 18% => P/VP 1,4 => equity 140 / 10 ações.
+    assert r.valor_regressao == pytest.approx(14.0)
+    assert r.mediana("p_vp") == pytest.approx(1.25)
+    poucos = mt.avaliar(
+        banco("ALVO", 100.0, 0.18),
+        pares[:2],
+        inferior=0.0,
+        superior=1.0,
+        min_pares=3,
+        nomes=mt.MULTIPLOS_FINANCEIRA,
+    )
+    assert poucos.regressao is None and np.isnan(poucos.valor_regressao)
+    assert any("Regressão P/VP x ROE" in a for a in poucos.avisos)
+    sem_variacao = mt.tabela_pares(pares[:1] * 3, mt.MULTIPLOS_FINANCEIRA)
+    assert mt.regressao_pvp_roe(sem_variacao, min_pares=3) is None

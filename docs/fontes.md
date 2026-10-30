@@ -56,6 +56,8 @@ Legenda: ✅ confirmado · ⚠️ diferente do guia · ⏳ pendente
   companhia): 0,0005 a 0,005 nessas 19; 0,9 a 10 nas demais (a B3 conta só o free float e as units
   pesam mais); VALE3 e EMBJ3, já corrigidas, dão ≈ 1. SANB11 (unit; razão 0,021, não comparável)
   ficou como está, e units não têm market cap no cálculo.
+- Financeiras (Fase 10, 2026-10-30): também em milhares SANB3/4/11 (7.498.531), BRSR3/5/6
+  (408.974), BMEB3/4 (123.380), BNBR3 (98.700) e BMIN3/4 (4.825); `escala_acoes` 1000 (ADR 0014).
 - ⚠️ **Significado de `QT_ACAO_TOTAL_CAP_INTEGR` varia por companhia.** Na Vale é o total **sem**
   tesouraria (4.255.763 mil = "Total (sem ações em tesouraria)" do RI; capital total 4.439.159.764).
   Na WEG é o capital total (4.197.317.998). Calcular "total − tesouraria" para todas subtrai a

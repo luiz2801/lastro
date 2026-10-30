@@ -2,6 +2,15 @@
 
 ## [Não lançado]
 
+### Fase 10 — Financeiras: múltiplos e pares
+- `modelos/multiplos.py`: `fundamentos_financeira`, `MULTIPLOS_FINANCEIRA` (P/L, P/VP, DY),
+  regressão P/VP × ROE (`regressao_pvp_roe`, `valor_regressao`).
+- `config/setores.yaml`: setores `bancos` e `seguradoras`; `cadastro_manual.csv`: escala de ações
+  de Santander, Banrisul, Mercantil, BNB e Mercantil Investimentos.
+- CLI: `comparar` e `rodar` de financeiras medem os pares (ROE na tabela, regressão no terminal e
+  `valor_regressao_pvp_roe` no `resumo.csv`).
+- ADR 0014; `guia.md` 1.15.
+
 ### Fase 10 — Financeiras: DDM, Ke, cenários e sensibilidade
 - `modelos/ddm.py`: DDM em dois estágios (dividendos descontados no fim de cada ano, ano corrente
   parcial, valor terminal pelo P/VP justificado) e checagem por lucro residual, que coincide com

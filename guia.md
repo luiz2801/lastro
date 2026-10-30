@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.14 — 2026-10-30**
+**Versão 1.15 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
 > (Fases 0 a 8 implementadas; Fase 10, financeiras, em andamento) para que você não precise reler os módulos. Para o que ainda
@@ -512,7 +512,7 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | Fase | Falta | Dica de onde conectar |
 |---|---|---|
 | 9 | gráficos (football field, cascata da ponte, heatmap, histórico × projeção, composição do valor), `meta.json`, `premissas_usadas.yaml`, `qa.json`, `historico.csv`, `valores_reais.csv`, `--sem-graficos` | `rodar` já tem tudo em memória: `ResultadoCenarios`, matrizes, `ResultadoMultiplos` (barras P/L, EV/EBITDA, P/VP pelos quartis: `implicitos.valor_p25/p75`; `mt.ROTULOS`) e `PerfilEfetivo.origem` (vai ao `meta.json`). `premissas_usadas.yaml` = serializar `Avaliacao.premissas` de cada cenário |
-| 10 | Múltiplos financeiros (P/L, P/VP, DY, regressão P/VP × ROE), pares de bancos e seguradoras, market cap de units | `comparar` e os pares do `rodar` ainda supõem métricas não financeiras (par financeiro vira "par ignorado"); `_fundamentos` é o ponto de conexão |
+| 10 | Market cap de units (BPAC11, BRBI11 viram "par ignorado"), YAMLs das financeiras em `config/empresas/`, golden das financeiras, fechamento da fase | Múltiplos financeiros já existem: `mt.fundamentos_financeira`, `MULTIPLOS_FINANCEIRA`, `regressao_pvp_roe`, `ResultadoMultiplos.nomes/regressao/valor_regressao` (ADR 0014); `cli._fundamentos` escolhe pelo tipo; setores `bancos` e `seguradoras` |
 
 ## 13. Convenções que o código já segue (siga também)
 
