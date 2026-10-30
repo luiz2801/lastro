@@ -74,7 +74,7 @@ from valuation.universo import SetorCVM, buscar_setor, carregar_universo, empres
 
 app = typer.Typer(
     help="Valuation de ações da B3. Uso pessoal e educacional; não é recomendação de investimento.",
-    no_args_is_help=True,
+    invoke_without_command=True,
     add_completion=False,
 )
 cadastro_app = typer.Typer(help="Consulta ao cadastro de companhias abertas.", no_args_is_help=True)
@@ -88,12 +88,77 @@ console = Console()
 
 @app.callback()
 def principal(
+    ctx: typer.Context,
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Log em nível DEBUG."),
 ) -> None:
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    if ctx.invoked_subcommand is None:
+        _menu_interativo()
+
+
+def _escolher(titulo: str, opcoes: list[str], voltar: str) -> int | None:
+    """Mostra as opções numeradas de 1 a N e devolve o índice (base 0) da escolhida, ou `None`
+    se o usuário digitar 0 (`voltar`). Entrada inválida pergunta de novo."""
+    console.print(f"\n[bold]{titulo}[/]")
+    for numero, opcao in enumerate(opcoes, start=1):
+        console.print(f"  {numero:>2}. {opcao}")
+    console.print(f"   0. {voltar}")
+    while True:
+        resposta = typer.prompt("Escolha").strip()
+        if resposta.isdigit() and int(resposta) <= len(opcoes):
+            return None if int(resposta) == 0 else int(resposta) - 1
+        console.print(f"[red]Digite um número de 0 a {len(opcoes)}.[/]")
+
+
+def _menu_interativo() -> None:
+    """Setores numerados -> empresas do setor -> `rodar` da empresa escolhida (padrões do `rodar`).
+    O 0 da lista de empresas volta aos setores; o 0 dos setores sai."""
+    try:
+        universo = carregar_universo()
+    except ErroConfiguracao as e:
+        raise _erro(str(e)) from e
+    setores_disponiveis = [s for s in SetorCVM if empresas_do_setor(universo, s)]
+    rotulos = [f"{s.value} ({len(empresas_do_setor(universo, s))})" for s in setores_disponiveis]
+    while True:
+        i_setor = _escolher("Setores", rotulos, voltar="Sair")
+        if i_setor is None:
+            return
+        empresas = empresas_do_setor(universo, setores_disponiveis[i_setor])
+        rotulos_empresas = [
+            e.ticker
+            if e.tipo_modelo in ("nao_financeira", "financeira")
+            else f"{e.ticker} (fora da v1: {e.tipo_modelo})"
+            for e in empresas
+        ]
+        while True:
+            i_empresa = _escolher(
+                f"Empresas de {setores_disponiveis[i_setor].value}",
+                rotulos_empresas,
+                voltar="Voltar aos setores",
+            )
+            if i_empresa is None:
+                break
+            escolhida = empresas[i_empresa]
+            if escolhida.tipo_modelo not in ("nao_financeira", "financeira"):
+                console.print(
+                    f"[yellow]{escolhida.ticker} não é suportada na v1; escolha outra.[/]"
+                )
+                continue
+            rodar(
+                ticker=escolhida.ticker,
+                cenario="todos",
+                data_base=None,
+                perfil_override=None,
+                saida=None,
+                formato_csv="br",
+                forcar=False,
+                sem_graficos=False,
+                explicar=False,
+            )
+            return
 
 
 @app.command()

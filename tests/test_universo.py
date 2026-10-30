@@ -128,3 +128,47 @@ def test_rodar_setor_sem_perfil_falha_antes_de_rodar(
     resultado = CliRunner().invoke(app, ["rodar-setor", "BANCOS"])
     assert resultado.exit_code == 1
     assert "Perfil ausente" in resultado.stdout
+
+
+def _rodar_registrando(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    chamadas: list[str] = []
+    monkeypatch.setattr(cli, "rodar", lambda **kw: chamadas.append(str(kw["ticker"])))
+    return chamadas
+
+
+def test_menu_sem_argumentos_roda_a_empresa_escolhida(
+    universo_pequeno: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    chamadas = _rodar_registrando(monkeypatch)
+    resultado = CliRunner().invoke(app, [], input="1\n2\n")
+    assert resultado.exit_code == 0
+    assert "Setores" in resultado.stdout
+    assert "Bancos (3)" in resultado.stdout
+    assert chamadas == ["BBDC4"]
+
+
+def test_menu_holding_nao_roda_e_pergunta_de_novo(
+    universo_pequeno: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    chamadas = _rodar_registrando(monkeypatch)
+    resultado = CliRunner().invoke(app, [], input="1\n3\n1\n")
+    assert resultado.exit_code == 0
+    assert "não é suportada" in resultado.stdout
+    assert chamadas == ["ITUB4"]
+
+
+def test_menu_voltar_aos_setores_e_entrada_invalida(
+    universo_pequeno: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    chamadas = _rodar_registrando(monkeypatch)
+    resultado = CliRunner().invoke(app, [], input="9\nabc\n1\n0\n2\n1\n")
+    assert resultado.exit_code == 0
+    assert "Digite um número de 0 a" in resultado.stdout
+    assert chamadas == ["VALE3"]
+
+
+def test_menu_sair_nao_roda_nada(universo_pequeno: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    chamadas = _rodar_registrando(monkeypatch)
+    resultado = CliRunner().invoke(app, [], input="0\n")
+    assert resultado.exit_code == 0
+    assert chamadas == []

@@ -22,7 +22,10 @@ distintos). `config/setores.yaml` tem outra função (pares e tipo de modelo) e 
    mesmas opções do `rodar`. Holdings (e tipos não suportados) são puladas com aviso. Um erro em
    uma empresa não interrompe as demais; ao final, uma tabela mostra o resultado de cada uma e a
    execução sai com 1 se alguma falhou. Perfil inválido é checado uma vez, antes do laço.
-5. **Sem resumo consolidado entre empresas.** Cada execução grava sua pasta
+5. **Menu interativo.** `valuation` sem comando mostra os setores numerados, lê o número, mostra
+   as empresas do setor, lê o número e chama `rodar` com os padrões (um ticker por vez). `0` volta
+   ou sai; holding é recusada com aviso. É o caminho para quem não quer digitar ticker ou setor.
+6. **Sem resumo consolidado entre empresas.** Cada execução grava sua pasta
    `saida/{TICKER}/{data}/`, como no `rodar`.
 
 ## Consequências

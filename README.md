@@ -48,6 +48,7 @@ uv run valuation premissas sugerir PETR4 --escrever   # regenera config/empresas
 uv run valuation wacc PETR4                 # beta, Ke, Kd e WACC; grava saida/PETR4/{data}/wacc.csv
 uv run valuation atualizar --tickers PETR4 --com-pares   # baixa também os pares do setor
 uv run valuation comparar PETR4             # múltiplos dos pares e valor implícito
+uv run valuation                             # menu: setores numerados -> empresas -> rodar
 uv run valuation setores                     # setores do universo (enum) e nº de empresas
 uv run valuation setores BANCOS              # empresas do setor
 uv run valuation rodar-setor BANCOS --sem-graficos   # roda o rodar em cada empresa do setor

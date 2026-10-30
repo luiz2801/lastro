@@ -10,6 +10,8 @@
 - `valuation rodar-setor SETOR`: roda `rodar` em cada empresa do setor, em sequência; holdings
   são puladas; uma falha não interrompe as demais; tabela final e saída 1 se houver falha.
 - Testes em `tests/test_universo.py` (enum × CSV, busca, comandos com `rodar` substituído).
+- `uv run valuation` sem comando abre um menu interativo: setores numerados → empresas do setor →
+  `rodar` da empresa escolhida (padrões do `rodar`); 0 volta ou sai.
 
 ### Glossário das métricas (Etapa 7 do backlog)
 - `valuation glossario [TERMO]`: 37 termos (WACC, Ke, g, RONIC, VT/EV, múltiplos, hurdle…) com o
