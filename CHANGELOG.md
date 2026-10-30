@@ -2,6 +2,20 @@
 
 ## [Não lançado]
 
+### Fase 4 — Perfil do investidor
+- `perfil/questionario.py`: 10 perguntas de suitability (1 a 5 pontos cada) com vetos de horizonte
+  menor que 2 anos e de "não aceito perdas"; `VERSAO_QUESTIONARIO`.
+- `perfil/pontuacao.py`: soma de 10 a 50 em faixas conservador / moderado / arrojado; veto força
+  conservador.
+- `perfil/registro.py`: `perfil/perfil_investidor.json` no esquema da seção 8.3, validade de 12
+  meses, leitura que recalcula a classificação e recusa arquivo adulterado ou de outra versão,
+  `resolver_perfil` com override explícito (para o futuro `rodar --perfil`).
+- `perfil/parametros.py` e `settings.yaml > perfil`: margem de segurança, pesos dos cenários,
+  horizonte e hurdle (Selic + spread) por perfil, valores placeholder da seção 8.4; pesos devem
+  somar 1.
+- CLI: `valuation perfil [--mostrar] [--refazer]`.
+- `guia.md` 1.2.
+
 ### Documentação
 - `CONTRIBUTING.md`: ambiente, política de commits (`make lint tipos testes` antes de cada um,
   atômicos, formato `area: o quê`), tabela de qual documento atualizar em cada mudança, lista

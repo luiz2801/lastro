@@ -1,9 +1,9 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.1 — 2026-10-30**
+**Versão 1.2 — 2026-10-30**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap). Este arquivo descreve **o que existe hoje**
-> (Fases 0 a 3 implementadas) para que você não precise reler os módulos. Para o que ainda
+> (Fases 0 a 4 implementadas) para que você não precise reler os módulos. Para o que ainda
 > **não** existe, veja a seção 12.
 > Política de commits, que documento atualizar em cada mudança e ADRs: `CONTRIBUTING.md` e
 > `docs/decisoes/README.md`.
@@ -36,10 +36,11 @@
 | Config | `config.py` | ✅ pronto |
 | Dados | `data/{http,cvm,cadastro,validacao,precos,macro}.py` | ✅ prontos |
 | Contábil | `contabil/{padronizacao,periodos,moeda,qa,nao_financeiras}.py` + `config/mapeamento_contas.yaml` | ✅ prontos (só plano `nao_financeira`) |
-| CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura` |
-| `projecao`, `custo_capital`, `modelos`, `analise`, `perfil`, `saida` | `__init__.py` de 1 linha | ❌ vazios (Fases 4–10) |
+| Perfil | `perfil/{questionario,pontuacao,registro,parametros}.py` | ✅ prontos (seção 17) |
+| CLI | `cli.py` | `versao`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil` |
+| `projecao`, `custo_capital`, `modelos`, `analise`, `saida` | `__init__.py` de 1 linha | ❌ vazios (Fases 5–10) |
 
-~3.400 linhas de código, 252 testes (11 golden pulados por motivo declarado), mypy `strict`,
+~3.900 linhas de código, 292 testes (11 golden pulados por motivo declarado), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -100,6 +101,7 @@ Callback global: `-v/--verbose` → logging DEBUG. Erros: `_erro()` imprime em v
 | `qa TICKER` | — | Padroniza, roda o QA, imprime verificações, cobertura e contas não mapeadas relevantes; grava `data/processed/qa/qa_{TICKER}.json` | **Sai com 1 se houver erro de QA.** Exige `atualizar` antes |
 | `historico TICKER` | `--anos N` (5); `--trimestral` | Métricas anuais (R$ mi) + coluna LTM | `--anos` = quantos exercícios; `--trimestral` mostra os 8 últimos trimestres (receita, EBITDA, lucro, D&A, capex, dividendos) |
 | `cobertura` | `--tickers A,B` ou `--tudo` | Matriz conta crítica × ticker com a fração dos exercícios mapeados (verde ≥ 95%) | igual a `atualizar` |
+| `perfil` | `--mostrar` ou `--refazer` | Sem perfil (ou vencido): roda o questionário (resposta = número da alternativa; inválida ⇒ pergunta de novo), grava `CAMINHO_PERFIL` e mostra perfil + parâmetros. Com perfil válido: só mostra | `--mostrar` só mostra (sem perfil ⇒ sai com 1); `--refazer` responde de novo mesmo válido e aceita JSON corrompido (sem ele, JSON inválido ⇒ sai com 1). Os dois juntos ⇒ erro. Validade conferida contra `date.today()`, **não** contra `data_base` |
 
 Observação: `mercado` usa `settings.custo_capital.rf_brl.override` como Rf manual **independentemente
 de `rf_brl.fonte`** (a regra `fonte=manual ⇒ override` está só no validador pydantic).
@@ -112,7 +114,7 @@ e testar com `typer.testing.CliRunner` em `tests/test_cli.py`.
 
 Constantes de caminho (relativas à raiz do repo): `DIR_CONFIG`, `CAMINHO_SETTINGS`,
 `CAMINHO_CADASTRO_MANUAL`, `CAMINHO_UNIVERSO`, `DIR_RAW` (`data/raw`), `DIR_PROCESSED`
-(`data/processed`).
+(`data/processed`), `CAMINHO_PERFIL` (`perfil/perfil_investidor.json`, gitignored).
 
 `Settings` (todos os submodelos herdam `_Modelo`: `extra="forbid"`, `frozen=True` → **campo novo no
 YAML exige campo novo na classe, e vice-versa**, senão `ErroConfiguracao`).
@@ -141,6 +143,10 @@ validados.
 | `validacao_cruzada.selic_abs` | 0.003 | Diferença absoluta máx. Selic meta × diária anualizada |
 | `validacao_cruzada.ipca_abs` | 0.0005 | Idem IPCA 12m (direto × composto) |
 | `validacao_cruzada.rf_abs` | 0.025 | Idem Rf (NTN-F × NTN-B+Focus). Apertar gera aviso permanente (spread de inflação ≈ 3 p.p.) |
+| `perfil.{conservador,moderado,arrojado}.margem_seguranca` | 0.30 / 0.20 / 0.10 | `parametros_do_perfil` (seção 17); exibido em `valuation perfil`. Uso no preço máximo de compra: Fase 7 |
+| `perfil.*.pesos_cenarios.{pessimista,base,otimista}` | 40/50/10, 25/50/25, 15/50/35 % | Idem; validador exige soma 1. Ponderação dos cenários: Fase 7 |
+| `perfil.*.horizonte_anos` | 5 / 7 / 10 | Idem; horizonte explícito da projeção quando `horizonte_anos: perfil` (Fase 5) |
+| `perfil.*.hurdle_spread_selic` | 0.03 / 0.05 / 0.07 | `ParametrosPerfil.hurdle(selic)` = Selic + spread. Comparação com o retorno esperado: Fase 7 |
 
 Todos os números de mercado do YAML são **PLACEHOLDER** (regra do projeto: nunca inventar dado).
 
@@ -382,10 +388,10 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 |---|---|---|
 | 2 | `contabil/financeiras.py` e seção `financeira:` do mapeamento | Fase 10, após inspecionar ITUB4/BBAS3. `_padronizar` da CLI recusa tipo ≠ `nao_financeira` |
 | 5 | Leitura do YAML da empresa (`ajustes`, `mapeamento_extra`, `caixa_extra`, `divida_extra`, `moeda_relatorio`) | `AjustesContabeis`/`NaoRecorrente` e `carregar_mapeamento(extra=…)` já aceitam; hoje a CLI usa os padrões |
-| 4 | Perfil/questionário | `perfil/perfil_investidor.json` (gitignored) |
 | 5–10 | projeção, beta/CAPM/WACC, DCF, DDM, múltiplos, sensibilidade, saídas CSV/PNG | Parâmetros já validados em `Settings` |
 | — | `config/universo_ibovespa.csv`, `config/setores.yaml`, `config/empresas/*.yaml` | `--tudo` falha sem o universo |
-| — | comandos `perfil`, `premissas`, `rodar`, `comparar` | seção 14 do `CLAUDE.md` |
+| — | comandos `premissas`, `rodar`, `comparar` | seção 14 do `CLAUDE.md`. `rodar --perfil` ⇒ `registro.resolver_perfil(CAMINHO_PERFIL, hoje, override)` e gravar `PerfilEfetivo.origem` no `meta.json` |
+| 7 | uso dos parâmetros do perfil (valor ponderado, preço máximo de compra, TIR × hurdle) | `ParametrosPerfil` já pronto (seção 17) |
 
 ## 13. Convenções que o código já segue (siga também)
 
@@ -412,7 +418,8 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 | `test_cvm.py` | parsing, escala, versões, `coletar` | `zip_cvm("dfp_cia_aberta_2025")` etc. |
 | `test_cadastro.py` | FCA, manual, classificação, busca | `tests/fixtures/cvm/*` |
 | `test_validacao.py`, `test_precos.py`, `test_macro.py` | `cruzar`, providers falsos, market cap, SGS/Focus/Tesouro | respostas sintéticas |
-| `test_config.py`, `test_cli.py` | YAML real, `CliRunner` (`qa`/`historico`/`cobertura` sobre DFP sintética) | `ambiente_offline`, `weg_sintetica` |
+| `test_config.py`, `test_cli.py` | YAML real, `CliRunner` (`qa`/`historico`/`cobertura` sobre DFP sintética; `perfil` com `input=`) | `ambiente_offline`, `weg_sintetica`, `caminho_perfil` |
+| `test_perfil.py` | questionário (10 perguntas, 1–5 pontos, vetos), faixas, vetos, validade, JSON ida e volta e adulterado, `resolver_perfil`, parâmetros do settings | `respostas(padrao, **trocas)` |
 | `test_padronizacao.py`, `test_periodos.py`, `test_moeda.py`, `test_nao_financeiras.py`, `test_qa.py` | regras, reapresentação, LTM/trimestre, métricas calculadas à mão, cada verificação do QA | `tests/sintetico.py` |
 | `test_golden.py` | 94 valores de `tests/golden/referencias.yaml` contra o pipeline | **dados reais** em `data/processed/cvm/`; pulado se ausentes |
 
@@ -443,6 +450,9 @@ vez de baixar dados reais. Sem rede nos testes.
 | Nova métrica histórica | `nao_financeiras.metricas` (+ `OPCIONAIS` se a conta pode faltar) + linha em `cli._LINHAS_HISTORICO` + teste à mão |
 | Nova verificação de QA | gerador `_x(...) -> Iterable[Verificacao]` em `qa.py`, chamado em `verificar`; colunas lidas em `_*_USADOS` |
 | Novo valor de conciliação | `tests/golden/referencias.yaml` (R$ mi) + chave em `FLUXOS`/`SALDOS` de `test_golden.py` |
+| Mudar pergunta, pontos ou veto do questionário | `perfil/questionario.py`; se a classificação puder mudar, **suba `VERSAO_QUESTIONARIO`** (perfis antigos passam a ser recusados) |
+| Mudar faixas de pontuação | `LIMITE_CONSERVADOR`/`LIMITE_MODERADO` em `perfil/pontuacao.py` + subir `VERSAO_QUESTIONARIO` |
+| Mudar margem, pesos, horizonte ou hurdle de um perfil | `settings.yaml > perfil` (sem código) |
 | Registrar fonte/URL validada | `docs/fontes.md` (obrigatório pelo CLAUDE.md) |
 | Decisão que desvia do CLAUDE.md | ADR em `docs/decisoes/NNNN-*.md` + linha no índice `docs/decisoes/README.md` + item em "Decisões" do `README.md` |
 | Fechar uma fase | atualizar `CHANGELOG.md`, `README.md` (Estado atual), seções 1 e 12 deste guia e o ✅ na seção 17 do `CLAUDE.md`; `make lint tipos testes`; resumir ao usuário |
@@ -471,3 +481,24 @@ vez de baixar dados reais. Sem rede nos testes.
     dividendos e pagamento de arrendamento ficam positivos. IR do `golden` é positivo.
 15. Dividendos YTD da WEG nem sempre crescem ao longo do ano (dado da companhia): trimestre pode
     sair estranho sem ser bug.
+16. `perfil_investidor.json` guarda o **número da alternativa** escolhida (1 = primeira), não os
+    pontos. `registro.ler` recalcula tudo e recusa o arquivo se pontuação, perfil, vetos ou validade
+    não baterem (editar o JSON à mão não funciona: refaça o questionário).
+17. A validade do perfil (12 meses, `VALIDADE_MESES`) é conferida contra a data real passada por
+    quem chama (`date.today()` na CLI), não contra `data_base`.
+
+## 17. `perfil/` — perfil do investidor
+
+Seção 8 do `CLAUDE.md`. Não importa `data`, `contabil` nem camadas de cálculo; só `config`
+(`ConfigPerfil`). Exceção: `ErroPerfil`; literal `NomePerfil` (`conservador|moderado|arrojado`),
+ambos em `perfil/__init__.py`.
+
+| Módulo | Símbolos | Detalhe |
+|---|---|---|
+| `questionario.py` | `QUESTIONARIO` (10 `Pergunta(chave, tema, enunciado, alternativas)`), `Alternativa(texto, pontos, veto=None)`, `VERSAO_QUESTIONARIO=1`, `VETO_HORIZONTE_CURTO`, `VETO_NAO_ACEITA_PERDAS` | Só dados. Chaves `q1`–`q10`; cada pergunta vai de 1 a 5 pontos (testado). Vetos: q2 "Menos de 2 anos", q9 "Não aceito perdas" |
+| `pontuacao.py` | `classificar(respostas, questionario=QUESTIONARIO) -> Classificacao(pontuacao, perfil, vetos_aplicados)`, `perfil_da_pontuacao` | Faixas 10–24 / 25–37 / 38–50 (`LIMITE_*`). Qualquer veto ⇒ conservador. Resposta faltando, sobrando ou fora de 1..n ⇒ `ErroPerfil` |
+| `registro.py` | `RegistroPerfil` (esquema da seção 8.3, `.vencido(hoje)`, `.para_dict()`), `criar_registro(respostas, data)`, `gravar`, `ler`, `somar_meses`, `resolver_perfil(caminho, hoje, override) -> PerfilEfetivo(perfil, origem, registro)` | `valido_ate = data + 12 meses` (29/02 ⇒ 28/02). `ler`: ausente ⇒ `FileNotFoundError`; versão diferente, JSON inválido ou classificação inconsistente ⇒ `ErroPerfil`. `resolver_perfil`: override vence (origem `override`); sem arquivo ou vencido ⇒ `ErroPerfil` pedindo `valuation perfil` |
+| `parametros.py` | `parametros_do_perfil(perfil, settings.perfil) -> ParametrosPerfil(perfil, margem_seguranca, peso_{pessimista,base,otimista}, horizonte_anos, hurdle_spread_selic)`, `.hurdle(selic)` | Valores no `settings.yaml` (seção 4), todos PLACEHOLDER |
+
+O perfil **não** altera fatos contábeis nem o custo de capital: o valor intrínseco por cenário é o
+mesmo para todos os perfis.

@@ -16,6 +16,7 @@ from rich.table import Table
 from valuation import __version__
 from valuation.config import (
     CAMINHO_CADASTRO_MANUAL,
+    CAMINHO_PERFIL,
     CAMINHO_UNIVERSO,
     DIR_PROCESSED,
     DIR_RAW,
@@ -35,6 +36,10 @@ from valuation.data import macro as mac
 from valuation.data import precos as prc
 from valuation.data.http import ErroDownload, criar_sessao
 from valuation.data.validacao import ErroDadosExternos, Leitura, Validado
+from valuation.perfil import ErroPerfil
+from valuation.perfil import registro as reg
+from valuation.perfil.parametros import parametros_do_perfil
+from valuation.perfil.questionario import QUESTIONARIO
 
 app = typer.Typer(
     help="Valuation de ações da B3. Uso pessoal e educacional; não é recomendação de investimento.",
@@ -500,6 +505,97 @@ def cobertura(
         tabela.add_row(str(conta), *celulas)
     console.print(tabela)
     console.print(f"Média geral: {matriz.to_numpy().mean():.1%}")
+
+
+def _perguntar_questionario() -> dict[str, int]:
+    console.print(
+        "[bold]Questionário de perfil do investidor[/] — responda com o número da alternativa.\n"
+        "Uso pessoal: o perfil só ajusta margem de segurança, pesos dos cenários, horizonte e "
+        "retorno mínimo; não é recomendação de investimento.\n"
+    )
+    respostas: dict[str, int] = {}
+    for i, pergunta in enumerate(QUESTIONARIO, start=1):
+        console.print(f"[bold]{i}/{len(QUESTIONARIO)}. {pergunta.enunciado}[/]")
+        for n, alternativa in enumerate(pergunta.alternativas, start=1):
+            console.print(f"  {n}) {alternativa.texto}")
+        while True:
+            texto = typer.prompt("Resposta").strip()
+            if texto.isdigit() and 1 <= int(texto) <= len(pergunta.alternativas):
+                break
+            console.print(f"[yellow]Digite um número de 1 a {len(pergunta.alternativas)}.[/]")
+        respostas[pergunta.chave] = int(texto)
+        console.print()
+    return respostas
+
+
+def _mostrar_perfil(registro: reg.RegistroPerfil, settings: Settings, hoje: dt.date) -> None:
+    situacao = (
+        f"[red]vencido em {registro.valido_ate}[/]"
+        if registro.vencido(hoje)
+        else f"válido até {registro.valido_ate}"
+    )
+    console.print(
+        f"Perfil: [bold]{registro.perfil}[/] (pontuação {registro.pontuacao} de 50; "
+        f"respondido em {registro.data}; {situacao})"
+    )
+    if registro.vetos_aplicados:
+        console.print(f"Vetos aplicados: {', '.join(registro.vetos_aplicados)}")
+    p = parametros_do_perfil(registro.perfil, settings.perfil)
+    tabela = Table(title=f"Parâmetros do perfil {p.perfil} (settings.yaml)")
+    tabela.add_column("Parâmetro")
+    tabela.add_column("Valor", justify="right")
+    tabela.add_row("Margem de segurança", f"{p.margem_seguranca:.0%}")
+    tabela.add_row(
+        "Pesos dos cenários (pess./base/otim.)",
+        f"{p.peso_pessimista:.0%} / {p.peso_base:.0%} / {p.peso_otimista:.0%}",
+    )
+    tabela.add_row("Horizonte de projeção explícita", f"{p.horizonte_anos} anos")
+    spread = f"{p.hurdle_spread_selic * 100:.1f}".replace(".", ",")
+    tabela.add_row("Retorno mínimo (hurdle)", f"Selic + {spread} p.p.")
+    console.print(tabela)
+
+
+@app.command()
+def perfil(
+    mostrar: bool = typer.Option(False, "--mostrar", help="Só mostra o perfil gravado."),
+    refazer: bool = typer.Option(
+        False, "--refazer", help="Refaz o questionário mesmo com perfil válido."
+    ),
+) -> None:
+    """Questionário de perfil do investidor; grava perfil/perfil_investidor.json (12 meses)."""
+    if mostrar and refazer:
+        raise _erro("Use --mostrar ou --refazer, não os dois.")
+    hoje = dt.date.today()
+    try:
+        settings = carregar_settings()
+        atual: reg.RegistroPerfil | None = None
+        try:
+            atual = reg.ler(CAMINHO_PERFIL)
+        except FileNotFoundError:
+            pass
+        except ErroPerfil as e:
+            if not refazer:
+                raise
+            console.print(f"[yellow]Aviso:[/] {e}")
+    except (ErroConfiguracao, ErroPerfil) as e:
+        raise _erro(str(e)) from e
+
+    if mostrar:
+        if atual is None:
+            raise _erro("Nenhum perfil gravado. Rode `valuation perfil`.")
+        _mostrar_perfil(atual, settings, hoje)
+        return
+    if atual is not None and not atual.vencido(hoje) and not refazer:
+        console.print("Já existe um perfil válido; use --refazer para responder de novo.")
+        _mostrar_perfil(atual, settings, hoje)
+        return
+    if atual is not None and atual.vencido(hoje):
+        console.print(f"[yellow]O perfil gravado venceu em {atual.valido_ate}.[/]")
+
+    novo = reg.criar_registro(_perguntar_questionario(), hoje)
+    caminho = reg.gravar(novo, CAMINHO_PERFIL)
+    _mostrar_perfil(novo, settings, hoje)
+    console.print(f"Gravado em {caminho}")
 
 
 if __name__ == "__main__":  # pragma: no cover

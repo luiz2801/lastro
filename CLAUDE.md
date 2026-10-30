@@ -759,7 +759,7 @@ Repo, `pyproject.toml`, `uv`, `ruff`, `mypy`, `pytest`, Makefile, `settings.yaml
 `precos.py`, `macro.py` com cache e fallback.
 *Pronto:* market cap correto (multi-classe), Ibovespa e câmbio, Selic/IPCA/Focus e taxa livre de risco carregados.
 
-**Fase 4 — Perfil do investidor**
+**Fase 4 — Perfil do investidor** ✅ concluída
 Questionário, pontuação, JSON, validade, mapeamento de parâmetros.
 *Pronto:* `valuation perfil` gera JSON válido; testes de pontuação e vetos.
 

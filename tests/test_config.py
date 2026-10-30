@@ -29,6 +29,15 @@ def test_campo_desconhecido_falha(tmp_path: Path) -> None:
         carregar_settings(caminho)
 
 
+def test_pesos_dos_cenarios_devem_somar_um(tmp_path: Path) -> None:
+    original = carregar_settings().model_dump(mode="json")
+    original["perfil"]["moderado"]["pesos_cenarios"]["base"] = 0.6
+    caminho = tmp_path / "settings.yaml"
+    caminho.write_text(yaml.safe_dump(original), encoding="utf-8")
+    with pytest.raises(ErroConfiguracao, match="somar 1"):
+        carregar_settings(caminho)
+
+
 def test_arquivo_ausente_falha(tmp_path: Path) -> None:
     with pytest.raises(ErroConfiguracao, match="não encontrado"):
         carregar_settings(tmp_path / "nao_existe.yaml")

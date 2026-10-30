@@ -12,6 +12,8 @@ from valuation import __version__, cli
 from valuation.cli import app
 from valuation.config import Settings, carregar_settings
 from valuation.data.cvm import url_cadastro, url_documento, url_fca
+from valuation.perfil import registro as reg
+from valuation.perfil.questionario import QUESTIONARIO
 
 
 def test_versao() -> None:
@@ -150,3 +152,61 @@ def test_cobertura(weg_sintetica: Path) -> None:
     assert resultado.exit_code == 0, resultado.output
     assert "Média geral: 100.0%" in resultado.output
     assert CliRunner().invoke(app, ["cobertura"]).exit_code == 1
+
+
+@pytest.fixture
+def caminho_perfil(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    caminho = tmp_path / "perfil" / "perfil_investidor.json"
+    monkeypatch.setattr(cli, "CAMINHO_PERFIL", caminho)
+    return caminho
+
+
+def test_perfil_questionario_grava_json(caminho_perfil: Path) -> None:
+    # "9" é inválido e deve ser perguntado de novo; depois, alternativa 3 em tudo (30 pontos).
+    entrada = "9\n" + "3\n" * 10
+    resultado = CliRunner().invoke(app, ["perfil"], input=entrada)
+    assert resultado.exit_code == 0, resultado.output
+    assert "Digite um número de 1 a 5" in resultado.output
+    assert "Perfil: moderado (pontuação 30 de 50" in resultado.output
+    assert "Selic + 5,0 p.p." in resultado.output
+    registro = reg.ler(caminho_perfil)
+    assert registro.perfil == "moderado"
+    assert registro.data == dt.date.today()
+
+
+def test_perfil_valido_nao_repergunta(caminho_perfil: Path) -> None:
+    respostas = {p.chave: 5 for p in QUESTIONARIO}
+    reg.gravar(reg.criar_registro(respostas, dt.date.today()), caminho_perfil)
+    resultado = CliRunner().invoke(app, ["perfil"])
+    assert resultado.exit_code == 0, resultado.output
+    assert "Já existe um perfil válido" in resultado.output
+    assert "arrojado" in resultado.output
+    mostrar = CliRunner().invoke(app, ["perfil", "--mostrar"])
+    assert mostrar.exit_code == 0
+    assert "Margem de segurança" in mostrar.output
+
+
+def test_perfil_refazer_e_vencido(caminho_perfil: Path) -> None:
+    respostas = {p.chave: 5 for p in QUESTIONARIO}
+    antigo = dt.date.today() - dt.timedelta(days=800)
+    reg.gravar(reg.criar_registro(respostas, antigo), caminho_perfil)
+    assert "vencido em" in CliRunner().invoke(app, ["perfil", "--mostrar"]).output
+    resultado = CliRunner().invoke(app, ["perfil"], input="1\n" * 10)
+    assert resultado.exit_code == 0, resultado.output
+    assert "venceu em" in resultado.output
+    assert reg.ler(caminho_perfil).perfil == "conservador"
+    refeito = CliRunner().invoke(app, ["perfil", "--refazer"], input="5\n" * 10)
+    assert refeito.exit_code == 0, refeito.output
+    assert reg.ler(caminho_perfil).perfil == "arrojado"
+
+
+def test_perfil_erros(caminho_perfil: Path) -> None:
+    assert CliRunner().invoke(app, ["perfil", "--mostrar"]).exit_code == 1
+    assert CliRunner().invoke(app, ["perfil", "--mostrar", "--refazer"]).exit_code == 1
+    caminho_perfil.parent.mkdir(parents=True)
+    caminho_perfil.write_text("{", encoding="utf-8")
+    quebrado = CliRunner().invoke(app, ["perfil"])
+    assert quebrado.exit_code == 1
+    assert "--refazer" in quebrado.output
+    refeito = CliRunner().invoke(app, ["perfil", "--refazer"], input="3\n" * 10)
+    assert refeito.exit_code == 0, refeito.output

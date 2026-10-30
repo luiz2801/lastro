@@ -50,3 +50,23 @@ validacao_cruzada:
   selic_abs: 0.003
   ipca_abs: 0.0005
   rf_abs: 0.025                    # NTN-F x (NTN-B + Focus): o spread de inflação é grande
+
+# Perfil do investidor -> parâmetros (seção 8.4 do CLAUDE.md). Todos [PLACEHOLDER].
+# O perfil não muda fatos contábeis nem o custo de capital: só o desconto exigido, a ponderação
+# dos cenários, o horizonte de projeção explícita e o retorno mínimo (Selic + spread).
+perfil:
+  conservador:
+    margem_seguranca: 0.30
+    pesos_cenarios: {pessimista: 0.40, base: 0.50, otimista: 0.10}
+    horizonte_anos: 5
+    hurdle_spread_selic: 0.03
+  moderado:
+    margem_seguranca: 0.20
+    pesos_cenarios: {pessimista: 0.25, base: 0.50, otimista: 0.25}
+    horizonte_anos: 7
+    hurdle_spread_selic: 0.05
+  arrojado:
+    margem_seguranca: 0.10
+    pesos_cenarios: {pessimista: 0.15, base: 0.50, otimista: 0.35}
+    horizonte_anos: 10
+    hurdle_spread_selic: 0.07

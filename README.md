@@ -34,10 +34,11 @@ uv run valuation historico PETR4             # métricas anuais + LTM (R$ milhõ
 uv run valuation historico PETR4 --trimestral
 uv run valuation cobertura --tickers PETR4,VALE3,WEGE3
 uv run valuation mercado PETR4               # preço, market cap, Ibovespa, dólar, Selic, IPCA, Rf
+uv run valuation perfil                      # questionário de perfil (--mostrar, --refazer)
 ```
 
 `atualizar` precisa rodar antes de `qa`, `historico`, `cobertura` e `mercado`. `make rodar` e os
-comandos `perfil`, `premissas`, `rodar` e `comparar` ainda não existem (Fases 4 a 9). Parâmetros e
+comandos `premissas`, `rodar` e `comparar` ainda não existem (Fases 5 a 9). Parâmetros e
 efeitos de cada comando: seção 3 do [`guia.md`](guia.md).
 
 Para validar o preço de qualquer ticker na brapi (sem token, só PETR4, VALE3, MGLU3 e ITUB4), crie
@@ -46,7 +47,7 @@ um token gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
 ## Estrutura
 
 - `src/valuation/`: código, em camadas `data` → `contabil` → `projecao` → `custo_capital` →
-  `modelos` → `analise` → `saida` (as cinco últimas e `perfil` ainda vazias).
+  `modelos` → `analise` → `saida` (as cinco últimas ainda vazias), mais `perfil`.
 - `config/`: `settings.yaml` (parâmetros globais), `mapeamento_contas.yaml` (plano de contas
   padronizado) e `cadastro_manual.csv` (holdings e escala de ações).
 - `docs/`: fontes validadas e ADRs.
@@ -57,7 +58,7 @@ um token gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
 
 ## Estado atual
 
-**Fases 0 a 3 concluídas** (seção 17 do `CLAUDE.md`). Próxima: Fase 4, perfil do investidor.
+**Fases 0 a 4 concluídas** (seção 17 do `CLAUDE.md`). Próxima: Fase 5, premissas e projeção.
 Pilotos: PETR4, VALE3 e WEGE3.
 
 - **Coleta CVM** (Fase 1): cadastro, DFP de 10 anos, ITR dos dois últimos anos e composição do
@@ -76,9 +77,12 @@ Pilotos: PETR4, VALE3 e WEGE3.
   CVM.
 - **Preços e macro** (Fase 3): preço por classe, market cap sem tesouraria, Ibovespa, dólar,
   Selic, IPCA 12 meses, Focus e taxa livre de risco, cada um conferido numa segunda fonte.
-- **Testes**: 252 (241 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
+- **Perfil do investidor** (Fase 4): questionário de 10 perguntas com vetos, classificação em
+  conservador/moderado/arrojado, `perfil/perfil_investidor.json` válido por 12 meses e parâmetros
+  por perfil (margem de segurança, pesos dos cenários, horizonte, hurdle) em `settings.yaml`.
+- **Testes**: 292 (281 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
 - **Ainda não**: plano de contas de financeiras, YAML por empresa (`config/empresas/`), universo
-  do Ibovespa (`atualizar --tudo` falha sem ele), perfil, projeção, custo de capital, modelos,
+  do Ibovespa (`atualizar --tudo` falha sem ele), projeção, custo de capital, modelos,
   sensibilidade e saídas. Lista completa na seção 12 do `guia.md`.
 
 ## Decisões que completam ou divergem do `CLAUDE.md`
@@ -101,7 +105,7 @@ Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
   DFC; EBITDA pela definição das companhias; saldos com periodicidade `S`.
 
 Os parâmetros de mercado de `config/settings.yaml` (ERP, teto do g terminal, Rf e inflação em USD)
-continuam **placeholders** até o usuário revisá-los (dúvidas em aberto na seção 19 do `CLAUDE.md`).
+e o mapeamento perfil → parâmetros continuam **placeholders** até o usuário revisá-los (dúvidas em aberto na seção 19 do `CLAUDE.md`).
 
 ## Riscos e limitações
 

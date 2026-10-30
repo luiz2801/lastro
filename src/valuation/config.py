@@ -19,6 +19,7 @@ CAMINHO_CADASTRO_MANUAL = DIR_CONFIG / "cadastro_manual.csv"
 CAMINHO_UNIVERSO = DIR_CONFIG / "universo_ibovespa.csv"
 DIR_RAW = RAIZ_PROJETO / "data" / "raw"
 DIR_PROCESSED = RAIZ_PROJETO / "data" / "processed"
+CAMINHO_PERFIL = RAIZ_PROJETO / "perfil" / "perfil_investidor.json"
 
 
 class _Modelo(BaseModel):
@@ -103,6 +104,33 @@ class ValidacaoCruzada(_Modelo):
     rf_abs: float = Field(gt=0)
 
 
+class PesosCenarios(_Modelo):
+    pessimista: float = Field(ge=0, le=1)
+    base: float = Field(ge=0, le=1)
+    otimista: float = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _soma_um(self) -> PesosCenarios:
+        if abs(self.pessimista + self.base + self.otimista - 1) > 1e-9:
+            raise ValueError("pesos_cenarios devem somar 1")
+        return self
+
+
+class ParametrosPerfilConfig(_Modelo):
+    """O que o perfil muda: desconto exigido, ponderação dos cenários, horizonte e hurdle."""
+
+    margem_seguranca: float = Field(ge=0, lt=1)
+    pesos_cenarios: PesosCenarios
+    horizonte_anos: int = Field(gt=0, le=30)
+    hurdle_spread_selic: float = Field(ge=0)  # hurdle = Selic + spread (decimal)
+
+
+class ConfigPerfil(_Modelo):
+    conservador: ParametrosPerfilConfig
+    moderado: ParametrosPerfilConfig
+    arrojado: ParametrosPerfilConfig
+
+
 class Settings(_Modelo):
     versao: Literal[1]
     data_base: Literal["hoje"] | dt.date
@@ -116,6 +144,7 @@ class Settings(_Modelo):
     dcf: ConfigDcf
     sensibilidade: ConfigSensibilidade
     validacao_cruzada: ValidacaoCruzada
+    perfil: ConfigPerfil
 
     def resolver_data_base(self, hoje: dt.date) -> dt.date:
         """Data-base efetiva. `hoje` vem de quem chama (CLI), nunca de `date.today()` aqui."""
