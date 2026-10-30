@@ -3,6 +3,8 @@
 ## [Não lançado]
 
 ### Documentação para Agentes de IA
+- Criação do `docs/contexto_rapido.md` (cheatsheet que indica o que ler por tipo de tarefa) e
+  mensagens de g >= WACC / g >= Ke em `dcf.py` e `ddm.py` com a ação sugerida (`economizar.md`).
 - Criação do `tests/README.md` (Guia de Mocks, Fixtures e Testes Rápidos) com orientações sobre comandos cirúrgicos de teste, política estrita de zero acesso à rede e exemplos de dados sintéticos.
 - Adição da função helper `criar_empresa_sintetica` em `tests/sintetico.py` para geração de demonstrações sintéticas completas multi-anuais no padrão CVM.
 - Criação do diagrama de atividades UML em `docs/diagrama_atividades.md` mapeando o fluxo completo do pipeline (CLI, ingestão, DCF/DDM, sensibilidade e saídas).

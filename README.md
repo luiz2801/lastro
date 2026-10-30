@@ -17,6 +17,7 @@ investimento.**
 | [`docs/fontes.md`](docs/fontes.md) | O que foi confirmado em cada fonte real (URLs, arquivos, contas, séries SGS) |
 | [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md) | Diagrama de atividades UML do pipeline (complementa o `guia.md` com o fluxo dinâmico de processos e decisões) |
 | [`docs/recipes_agentes.md`](docs/recipes_agentes.md) | Playbooks de tarefas frequentes e procedimentos operacionais passo a passo para agentes de IA |
+| [`docs/contexto_rapido.md`](docs/contexto_rapido.md) | Cheatsheet de ~80 linhas: o que ler para cada tipo de tarefa, convenções e armadilhas mais repetidas (poupa contexto de agentes) |
 | [`CHANGELOG.md`](CHANGELOG.md) | O que foi entregue em cada fase |
 | [`referencias/README.md`](referencias/README.md) | Índice dos documentos das companhias usados na conciliação (os arquivos ficam fora do git) |
 
