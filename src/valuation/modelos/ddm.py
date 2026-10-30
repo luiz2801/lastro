@@ -88,7 +88,7 @@ def descontar(
     if ke <= g:
         raise ErroModelo(
             f"Ke de {pct(ke, 2)} não é maior que o g terminal de {pct(g, 2)}: a perpetuidade "
-            "não converge."
+            "não converge: reduza terminal.g_nominal (settings ou YAML da empresa) ou revise o Ke."
         )
     por_vir = projecao[projecao["fracao"] > 0]
     if por_vir.empty:

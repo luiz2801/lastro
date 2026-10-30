@@ -89,7 +89,8 @@ def descontar(
     if wacc <= g:
         raise ErroModelo(
             f"WACC de {wacc:.2%} não é maior que o g terminal de {g:.2%}: a perpetuidade não "
-            "converge."
+            "converge: reduza terminal.g_nominal (settings ou YAML da empresa) ou revise o "
+            "custo de capital."
         )
     r = wacc if ronic == "wacc" else float(ronic)
     if r <= max(g, 0.0):
