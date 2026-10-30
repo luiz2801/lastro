@@ -2,6 +2,23 @@
 
 ## [Não lançado]
 
+### Fase 6 — Custo de capital
+- `custo_capital/beta.py`: regressão OLS semanal (260 semanas, `adj_close`) contra o Ibovespa com
+  erro-padrão, R² e avisos de R² baixo, janela incompleta e baixa liquidez; Blume; Hamada
+  (desalavancar/realavancar); beta por comparáveis (mediana desalavancada) e manual; escolha da
+  classe de ação mais líquida.
+- `custo_capital/capm.py`: Ke `brl_direto` (sem risco-país sobre a NTN-F) e `usd_crp` com
+  conversão por Fisher; empresa que reporta em USD usa `usd_crp`.
+- `custo_capital/kd.py`: Kd histórico (despesas financeiras / dívida bruta média, mediana de 3
+  exercícios) limitado a Rf + faixa, ou manual.
+- `custo_capital/wacc.py`: estrutura de capital (mercado atual ou alvo manual, com beta
+  realavancado), WACC, checagem WACC > g e tabela de componentes.
+- `saida/csv.py`: CSV no formato do `settings.csv` (pt-BR) ou internacional.
+- `settings.yaml`: `custo_capital.kd` (faixa do Kd) e `estrutura_alvo.divida_sobre_capital`.
+- CLI: `valuation wacc TICKER [--data-base] [--forcar] [--saida] [--formato-csv]`, que grava
+  `saida/{TICKER}/{data}/wacc.csv`; `mercado` passa a usar a mesma coleta (`_mercado`).
+- ADR 0007; `guia.md` 1.5.
+
 ### Fase 5 — Premissas e projeção
 - `contabil/nao_financeiras.py`: ajustes `caixa_extra` (contas somadas ao caixa e à redução da
   dívida líquida) e `divida_extra` (métrica à parte, para a ponte EV → equity).

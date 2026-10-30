@@ -570,6 +570,10 @@ WACC = Ke × E/(D+E) + Kd × (1-t) × D/(D+E)
 - Nuance reconhecida e **não modelada na v1**: benefício fiscal de JCP.
 - Validar: `WACC > g` sempre; erro explícito caso contrário.
 
+> **ADR 0007:** a DRE da CVM só traz as despesas financeiras totais; o Kd histórico usa-as sobre a
+> dívida bruta média (3 anos) e é limitado a Rf + faixa (`custo_capital.kd`). Benefício fiscal pela
+> alíquota nominal.
+
 ### 10.4 Financeiras
 
 Só **Ke** (não há WACC). Mesma lógica de beta/CAPM.
@@ -769,7 +773,7 @@ Questionário, pontuação, JSON, validade, mapeamento de parâmetros.
 Schema pydantic, `sugestor.py`, `projetor.py`, ano parcial.
 *Pronto:* `valuation premissas sugerir PETR4 --escrever` produz YAML comentado; projeção reproduz exemplo manual.
 
-**Fase 6 — Custo de capital**
+**Fase 6 — Custo de capital** ✅ concluída
 Beta, CAPM (`brl_direto` e `usd_crp`), Kd, WACC.
 *Pronto:* testes unitários; relatório `wacc.csv` com avisos de qualidade do beta.
 
@@ -817,6 +821,8 @@ Modo em lote/screening, SOTP/NAV para holdings, Monte Carlo, deck de commodities
 5. Aceitar os valores iniciais do mapeamento perfil → parâmetros (seção 8.4) ou ajustá-los (Fase 4).
 6. Conferência dos números dos pilotos contra os releases das empresas (fim da Fase 2).
 7. Tratamento de JCP e de diluição: ignorar na v1 (padrão) ou incluir.
+8. Faixa do Kd histórico (`custo_capital.kd`, hoje Rf + 0 a 5 p.p.) e se o piso deve ser a Rf em BRL
+   para empresas com dívida em dólar (ADR 0007) (Fase 6).
 
 ---
 

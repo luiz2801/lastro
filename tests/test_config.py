@@ -41,3 +41,21 @@ def test_pesos_dos_cenarios_devem_somar_um(tmp_path: Path) -> None:
 def test_arquivo_ausente_falha(tmp_path: Path) -> None:
     with pytest.raises(ErroConfiguracao, match="não encontrado"):
         carregar_settings(tmp_path / "nao_existe.yaml")
+
+
+@pytest.mark.parametrize(
+    ("caminho_campo", "valor", "mensagem"),
+    [
+        (("estrutura_alvo",), {"metodo": "manual"}, "divida_sobre_capital"),
+        (("kd",), {"spread_min": 0.05, "spread_max": 0.01}, "spread_min"),
+    ],
+)
+def test_custo_capital_invalido(
+    tmp_path: Path, caminho_campo: tuple[str, ...], valor: object, mensagem: str
+) -> None:
+    original = carregar_settings().model_dump(mode="json")
+    original["custo_capital"][caminho_campo[0]] = valor
+    caminho = tmp_path / "settings.yaml"
+    caminho.write_text(yaml.safe_dump(original), encoding="utf-8")
+    with pytest.raises(ErroConfiguracao, match=mensagem):
+        carregar_settings(caminho)

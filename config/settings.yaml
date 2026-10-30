@@ -24,7 +24,10 @@ custo_capital:
   rf_usd: 0.04                     # PLACEHOLDER, só usd_crp
   inflacao_usd_lp: 0.02            # PLACEHOLDER, só usd_crp
   beta: {metodo: regressao, janela_semanas: 260, ajuste_blume: true, min_r2_aviso: 0.10}
-  estrutura_alvo: {metodo: mercado_atual}   # mercado_atual | setor | manual
+  # Faixa do Kd histórico (despesas financeiras / dívida bruta média): Rf da moeda + spread.
+  kd: {spread_min: 0.0, spread_max: 0.05}  # PLACEHOLDER
+  # mercado_atual | setor (Fase 8) | manual (exige divida_sobre_capital = D/(D+E))
+  estrutura_alvo: {metodo: mercado_atual, divida_sobre_capital: null}
 
 terminal:
   g_nominal_max: 0.045             # PLACEHOLDER: teto do crescimento perpétuo

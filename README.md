@@ -37,6 +37,7 @@ uv run valuation mercado PETR4               # preço, market cap, Ibovespa, dó
 uv run valuation perfil                      # questionário de perfil (--mostrar, --refazer)
 uv run valuation premissas sugerir PETR4     # sugestões × histórico e projeção base
 uv run valuation premissas sugerir PETR4 --escrever   # regenera config/empresas/PETR4.yaml
+uv run valuation wacc PETR4                 # beta, Ke, Kd e WACC; grava saida/PETR4/{data}/wacc.csv
 ```
 
 `atualizar` precisa rodar antes de `qa`, `historico`, `cobertura`, `mercado` e `premissas`.
@@ -61,7 +62,8 @@ um token gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
 
 ## Estado atual
 
-**Fases 0 a 5 concluídas** (seção 17 do `CLAUDE.md`). Próxima: Fase 6, custo de capital.
+**Fases 0 a 6 concluídas** (seção 17 do `CLAUDE.md`). Próxima: Fase 7, DCF, ponte, sensibilidade
+e cenários.
 Pilotos: PETR4, VALE3 e WEGE3.
 
 - **Coleta CVM** (Fase 1): cadastro, DFP de 10 anos, ITR dos dois últimos anos e composição do
@@ -87,9 +89,13 @@ Pilotos: PETR4, VALE3 e WEGE3.
   cenários e pares; sugestões a partir de 10 anos de histórico (com a origem de cada uma e aviso
   para commodity); projeção de receita a FCFF com ano corrente parcial e cenários
   pessimista/otimista; `valuation premissas sugerir TICKER [--escrever]`.
-- **Testes**: 335 (324 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
+- **Custo de capital** (Fase 6): beta por regressão semanal contra o Ibovespa (Blume, avisos de R²
+  e liquidez), manual ou realavancado na estrutura-alvo; Ke por `brl_direto` ou `usd_crp`; Kd
+  histórico limitado ou manual; WACC conferido contra o g terminal; `valuation wacc TICKER` grava
+  `saida/{TICKER}/{data}/wacc.csv`.
+- **Testes**: 368 (357 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
 - **Ainda não**: plano de contas de financeiras, universo do Ibovespa (`atualizar --tudo` falha
-  sem ele), custo de capital, modelos, sensibilidade e saídas. Lista completa na seção 12 do `guia.md`.
+  sem ele), beta por comparáveis (precisa dos pares), modelos, sensibilidade e saídas. Lista completa na seção 12 do `guia.md`.
 
 ## Decisões que completam ou divergem do `CLAUDE.md`
 
@@ -113,8 +119,13 @@ Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
   fica no YAML e é recalculado a cada execução (o valor de hoje vai em comentário); margem EBITDA
   ajustada com reversão de metade à mediana de 10a; ΔNWC incremental; deltas dos cenários de ±1
   desvio-padrão; arrendamento projetado como reposição; ano corrente pela fração restante.
+- **Custo de capital** ([ADR 0007](docs/decisoes/0007-custo-de-capital.md)): o Kd histórico usa
+  as despesas financeiras totais da DRE sobre a dívida bruta média (3 anos) e é limitado a Rf +
+  faixa do `settings`; benefício fiscal pela alíquota nominal; IPCA de longo prazo pelo Focus;
+  o beta do YAML da empresa vence o do `settings`; comando extra `valuation wacc`.
 
-Os parâmetros de mercado de `config/settings.yaml` (ERP, teto do g terminal, Rf e inflação em USD)
+Os parâmetros de mercado de `config/settings.yaml` (ERP, faixa do Kd, teto do g terminal, Rf e
+inflação em USD)
 e o mapeamento perfil → parâmetros continuam **placeholders** até o usuário revisá-los (dúvidas em aberto na seção 19 do `CLAUDE.md`).
 
 ## Riscos e limitações

@@ -22,6 +22,7 @@ DIR_EMPRESAS = DIR_CONFIG / "empresas"
 DIR_RAW = RAIZ_PROJETO / "data" / "raw"
 DIR_PROCESSED = RAIZ_PROJETO / "data" / "processed"
 CAMINHO_PERFIL = RAIZ_PROJETO / "perfil" / "perfil_investidor.json"
+DIR_SAIDA = RAIZ_PROJETO / "saida"
 
 
 class _Modelo(BaseModel):
@@ -64,6 +65,26 @@ class ConfigBeta(_Modelo):
 
 class EstruturaAlvo(_Modelo):
     metodo: Literal["mercado_atual", "setor", "manual"]
+    divida_sobre_capital: float | None = Field(default=None, ge=0, lt=1)  # D/(D+E), só manual
+
+    @model_validator(mode="after")
+    def _manual_exige_valor(self) -> EstruturaAlvo:
+        if self.metodo == "manual" and self.divida_sobre_capital is None:
+            raise ValueError("estrutura_alvo.metodo = manual exige divida_sobre_capital")
+        return self
+
+
+class LimitesKd(_Modelo):
+    """Faixa aceita para o Kd histórico, em spread sobre a Rf da moeda (decimal)."""
+
+    spread_min: float
+    spread_max: float
+
+    @model_validator(mode="after")
+    def _ordem(self) -> LimitesKd:
+        if self.spread_min > self.spread_max:
+            raise ValueError("kd.spread_min deve ser <= kd.spread_max")
+        return self
 
 
 class ConfigCustoCapital(_Modelo):
@@ -74,6 +95,7 @@ class ConfigCustoCapital(_Modelo):
     rf_usd: float
     inflacao_usd_lp: float
     beta: ConfigBeta
+    kd: LimitesKd
     estrutura_alvo: EstruturaAlvo
 
 

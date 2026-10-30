@@ -23,6 +23,7 @@ from valuation.config import (
     DIR_EMPRESAS,
     DIR_PROCESSED,
     DIR_RAW,
+    DIR_SAIDA,
     ErroConfiguracao,
     Setor,
     Settings,
@@ -35,6 +36,10 @@ from valuation.contabil import padronizacao as pad
 from valuation.contabil import periodos as per
 from valuation.contabil import qa as qa_mod
 from valuation.contabil.moeda import detectar_moeda
+from valuation.custo_capital import ErroCustoCapital, capm
+from valuation.custo_capital import beta as bt
+from valuation.custo_capital import kd as kd_mod
+from valuation.custo_capital import wacc as wc
 from valuation.data import cadastro as cad
 from valuation.data import cvm
 from valuation.data import macro as mac
@@ -50,6 +55,7 @@ from valuation.projecao import escrita as esc
 from valuation.projecao import premissas as pm
 from valuation.projecao import projetor as pj
 from valuation.projecao import sugestor as sg
+from valuation.saida.csv import FormatoCsv, gravar_csv
 
 app = typer.Typer(
     help="Valuation de ações da B3. Uso pessoal e educacional; não é recomendação de investimento.",
@@ -224,6 +230,79 @@ def _linha_validada(v: Validado, formato: str) -> tuple[str, ...]:
     )
 
 
+@dataclass(frozen=True)
+class _Mercado:
+    empresa: cad.Empresa
+    precos: dict[str, Validado]
+    ibov: Validado
+    macro: mac.Macro
+    cap: prc.MarketCap
+    yf: prc.YFinanceProvider
+
+    @property
+    def avisos(self) -> list[str]:
+        validados = (*self.precos.values(), self.ibov)
+        return [*self.cap.avisos, *self.macro.avisos, *(a for v in validados if (a := v.aviso))]
+
+
+def _mercado(
+    ticker: str, settings: Settings, base: dt.date, agora: dt.datetime, forcar: bool
+) -> _Mercado:
+    """Preço por classe, Ibovespa, macro e market cap na data-base, cada um em 2 fontes."""
+    tol = settings.validacao_cruzada
+    sessao = criar_sessao()
+    cadastro = _carregar_cadastro(settings, base, forcar)
+    empresa = cad.empresa_por_ticker(cadastro, ticker)
+    yf = prc.YFinanceProvider(
+        DIR_RAW / "precos",
+        dt.timedelta(hours=settings.cache_ttl_horas.precos),
+        agora,
+        forcar=forcar,
+    )
+    brapi = prc.BrapiProvider(sessao)
+
+    precos: dict[str, Validado] = {}
+    for classe in empresa.classes:
+        try:
+            precos[classe.ticker] = prc.preco_validado(
+                classe.ticker, base, yf, brapi, tolerancia_rel=tol.preco_rel
+            )
+        except ErroDadosExternos as e:
+            console.print(f"[yellow]Aviso:[/] {classe.ticker} sem preço: {e}")
+    if not precos:
+        raise _erro(f"Nenhum preço disponível para {', '.join(empresa.tickers)}.")
+    ibov = prc.preco_validado("^BVSP", base, yf, brapi, tolerancia_rel=tol.preco_rel)
+
+    cambio_yf: Leitura | None = None
+    try:
+        d, v = prc.fechamento_ate(yf.historico("BRL=X", base - dt.timedelta(days=15), base), base)
+        cambio_yf = Leitura(v, "yfinance BRL=X", d)
+    except ErroDadosExternos as e:
+        console.print(f"[yellow]Aviso:[/] dólar sem segunda fonte: {e}")
+
+    macro = mac.carregar_macro(
+        base,
+        tolerancias=tol,
+        rf_override=settings.custo_capital.rf_brl.override,
+        cambio_alternativo=cambio_yf,
+        dir_raw=DIR_RAW,
+        ttl=dt.timedelta(hours=settings.cache_ttl_horas.macro),
+        sessao=sessao,
+        agora=agora,
+        forcar=forcar,
+    )
+    try:
+        composicao = pd.read_parquet(
+            DIR_PROCESSED / "cvm" / str(empresa.cd_cvm) / "composicao_capital.parquet"
+        )
+    except FileNotFoundError as e:
+        raise _erro(
+            f"{e.filename} não existe. Rode `valuation atualizar --tickers {ticker}`."
+        ) from e
+    cap = prc.market_cap(empresa, composicao, {t: p.valor for t, p in precos.items()}, base)
+    return _Mercado(empresa, precos, ibov, macro, cap, yf)
+
+
 @app.command()
 def mercado(
     ticker: str = typer.Argument(..., help="Ex.: PETR4."),
@@ -241,67 +320,17 @@ def mercado(
             if data_base
             else settings.resolver_data_base(agora.date())
         )
-        tol = settings.validacao_cruzada
-        sessao = criar_sessao()
-        cadastro = _carregar_cadastro(settings, base, forcar)
-        empresa = cad.empresa_por_ticker(cadastro, ticker)
-        yf = prc.YFinanceProvider(
-            DIR_RAW / "precos",
-            dt.timedelta(hours=settings.cache_ttl_horas.precos),
-            agora,
-            forcar=forcar,
-        )
-        brapi = prc.BrapiProvider(sessao)
-
-        precos: dict[str, Validado] = {}
-        for classe in empresa.classes:
-            try:
-                precos[classe.ticker] = prc.preco_validado(
-                    classe.ticker, base, yf, brapi, tolerancia_rel=tol.preco_rel
-                )
-            except ErroDadosExternos as e:
-                console.print(f"[yellow]Aviso:[/] {classe.ticker} sem preço: {e}")
-        if not precos:
-            raise _erro(f"Nenhum preço disponível para {', '.join(empresa.tickers)}.")
-        ibov = prc.preco_validado("^BVSP", base, yf, brapi, tolerancia_rel=tol.preco_rel)
-
-        cambio_yf: Leitura | None = None
-        try:
-            d, v = prc.fechamento_ate(
-                yf.historico("BRL=X", base - dt.timedelta(days=15), base), base
-            )
-            cambio_yf = Leitura(v, "yfinance BRL=X", d)
-        except ErroDadosExternos as e:
-            console.print(f"[yellow]Aviso:[/] dólar sem segunda fonte: {e}")
-
-        macro = mac.carregar_macro(
-            base,
-            tolerancias=tol,
-            rf_override=settings.custo_capital.rf_brl.override,
-            cambio_alternativo=cambio_yf,
-            dir_raw=DIR_RAW,
-            ttl=dt.timedelta(hours=settings.cache_ttl_horas.macro),
-            sessao=sessao,
-            agora=agora,
-            forcar=forcar,
-        )
-        composicao = pd.read_parquet(
-            DIR_PROCESSED / "cvm" / str(empresa.cd_cvm) / "composicao_capital.parquet"
-        )
-        cap = prc.market_cap(empresa, composicao, {t: p.valor for t, p in precos.items()}, base)
-    except FileNotFoundError as e:
-        raise _erro(
-            f"{e.filename} não existe. Rode `valuation atualizar --tickers {ticker}`."
-        ) from e
+        m = _mercado(ticker, settings, base, agora, forcar)
     except (ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroDadosExternos) as e:
         raise _erro(str(e)) from e
+    macro, cap = m.macro, m.cap
 
-    tabela = Table(title=f"Mercado — {', '.join(empresa.tickers)} em {base}")
+    tabela = Table(title=f"Mercado — {', '.join(m.empresa.tickers)} em {base}")
     for coluna in ("Dado", "Valor", "Fonte principal", "Segunda fonte", "Validação", "Data"):
         tabela.add_column(coluna)
-    for preco in precos.values():
+    for preco in m.precos.values():
         tabela.add_row(*_linha_validada(preco, ".2f"))
-    tabela.add_row(*_linha_validada(ibov, ".0f"))
+    tabela.add_row(*_linha_validada(m.ibov, ".0f"))
     tabela.add_row(*_linha_validada(macro.cambio, ".4f"))
     for taxa in (macro.selic, macro.ipca_12m, macro.rf_brl):
         tabela.add_row(*_linha_validada(taxa, ".2%"))
@@ -316,8 +345,7 @@ def mercado(
     if macro.ipca_esperado:
         focus = ", ".join(f"{ano}: {x:.2%}" for ano, x in macro.ipca_esperado.items())
         console.print(f"IPCA esperado (Focus de {macro.data_focus}): {focus}")
-    avisos = [*cap.avisos, *macro.avisos, *(a for v in (*precos.values(), ibov) if (a := v.aviso))]
-    for aviso in avisos:
+    for aviso in m.avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
 
 
@@ -829,6 +857,196 @@ def premissas_sugerir(
         console.print(f"Gravado em {caminho}")
     elif not p.caminho_premissas.is_file():
         console.print(f"{p.caminho_premissas} não existe; use --escrever para criá-lo.")
+
+
+# Prazo do ITR é de 45 dias após o trimestre: até ~140 dias de defasagem é o normal.
+DEFASAGEM_AVISO_DIAS = 140
+
+
+def _data_balanco(contas: pd.DataFrame, base: dt.date) -> pd.Timestamp:
+    """Última data até a data-base com fluxos acumulados e balanço (ponto do LTM)."""
+    comuns = per.acumulado_no_ano(contas).index.intersection(per.saldos(contas).index)
+    comuns = comuns[comuns <= pd.Timestamp(base)]
+    if comuns.empty:
+        raise ErroContabil(f"Nenhuma demonstração até {base}.")
+    return pd.Timestamp(comuns.max())
+
+
+def _beta(
+    p: _Padronizada, m: _Mercado, settings: Settings, base: dt.date, aliquota: float
+) -> bt.ResultadoBeta:
+    """Beta pelo método do YAML da empresa (se declarado) ou do `settings`."""
+    cfg = settings.custo_capital.beta
+    empresa = p.premissas.custo_capital
+    metodo = empresa.beta.metodo if "beta" in empresa.model_fields_set else cfg.metodo
+    if metodo == "manual":
+        if empresa.beta.valor is None:
+            raise ErroConfiguracao("beta manual exige custo_capital.beta.valor no YAML da empresa.")
+        return bt.manual(empresa.beta.valor)
+    if metodo == "comparaveis":
+        setor = _setor(p.premissas.pares.setor)
+        if setor is None or not setor.pares:
+            return bt.comparaveis({}, divida_sobre_equity_alvo=0.0, aliquota=aliquota)
+        raise ErroCustoCapital("Beta por comparáveis ainda não implementado (Fase 8).")
+    inicio = base - dt.timedelta(weeks=cfg.janela_semanas + 2)
+    historicos = {t: m.yf.historico(prc.simbolo_yahoo(t), inicio, base) for t in m.precos}
+    ticker = bt.classe_mais_liquida(historicos, base, cfg.janela_semanas)
+    ibov = m.yf.historico("^BVSP", inicio, base)
+    return bt.regressao(
+        historicos[ticker]["adj_close"],
+        ibov["adj_close"],
+        data_base=base,
+        janela_semanas=cfg.janela_semanas,
+        ajuste_blume=cfg.ajuste_blume,
+        min_r2_aviso=cfg.min_r2_aviso,
+        ticker=ticker,
+    )
+
+
+def _custo_capital(
+    p: _Padronizada, m: _Mercado, settings: Settings, base: dt.date
+) -> wc.CustoCapital:
+    """Beta, Ke, Kd, estrutura e WACC na moeda de reporte da empresa."""
+    cfg = settings.custo_capital
+    aliquota = settings.impostos.aliquota_nominal
+    moeda = cast(capm.Moeda, p.moeda)
+    avisos: list[str] = []
+
+    metodo, aviso = capm.metodo_efetivo(cfg.metodo, moeda)
+    if aviso:
+        avisos.append(aviso)
+    inflacao_brl = (
+        m.macro.ipca_esperado[max(m.macro.ipca_esperado)] if m.macro.ipca_esperado else None
+    )
+
+    data_bal = _data_balanco(p.contas, base)
+    ltm = nf.metricas_ltm(p.contas, aliquota_nominal=aliquota, dt_fim=data_bal, ajustes=p.ajustes)
+    defasagem = (base - data_bal.date()).days
+    if defasagem > DEFASAGEM_AVISO_DIAS:
+        avisos.append(f"Balanço de {data_bal.date()} ({defasagem} dias antes da data-base).")
+    equity = m.cap.valor if moeda == "BRL" else m.cap.valor / m.macro.cambio.valor
+    est = wc.estrutura(
+        metodo=cfg.estrutura_alvo.metodo,
+        divida=float(ltm["divida_bruta"]),
+        equity=equity,
+        divida_sobre_capital_alvo=cfg.estrutura_alvo.divida_sobre_capital,
+    )
+
+    beta = wc.beta_na_estrutura(_beta(p, m, settings, base, aliquota), est, aliquota)
+    ke = capm.custo_capital_proprio(
+        metodo=metodo,
+        moeda=moeda,
+        beta=beta.beta,
+        erp=cfg.erp,
+        rf_brl=m.macro.rf_brl.valor,
+        rf_usd=cfg.rf_usd,
+        crp=cfg.crp,
+        inflacao_usd=cfg.inflacao_usd_lp,
+        inflacao_brl=inflacao_brl,
+    )
+
+    kd_cfg = p.premissas.custo_capital.kd
+    if kd_cfg.metodo == "manual" and kd_cfg.valor is not None:
+        kd = kd_mod.manual(kd_cfg.valor)
+    else:
+        anual = per.anual(p.contas)
+        if "despesas_financeiras" not in anual.columns:
+            raise ErroCustoCapital(
+                "Sem despesas financeiras na DRE para o Kd histórico: use "
+                "custo_capital.kd: {metodo: manual, valor: ...} no YAML da empresa."
+            )
+        fechados = anual.index < pj.primeiro_ano_aberto(base)
+        hist = nf.metricas(anual[fechados], aliquota_nominal=aliquota, ajustes=p.ajustes)
+        rf = m.macro.rf_brl.valor if moeda == "BRL" else cfg.rf_usd
+        kd = kd_mod.historico(
+            anual.loc[fechados, "despesas_financeiras"],
+            hist["divida_bruta"],
+            piso=rf + cfg.kd.spread_min,
+            teto=rf + cfg.kd.spread_max,
+        )
+
+    cc = wc.montar(
+        data_base=base,
+        beta=beta,
+        ke=ke,
+        kd=kd,
+        aliquota=aliquota,
+        estrutura=est,
+        data_balanco=data_bal.date(),
+        avisos=tuple(avisos),
+    )
+    g = pj.g_terminal(p.premissas.projecao.terminal, settings.terminal)
+    wc.validar_g(cc.wacc, g.valor)
+    return cc
+
+
+def _formatar_componente(componente: str, valor: float) -> str:
+    if pd.isna(valor):
+        return ""
+    if componente in ("divida_bruta", "market_cap"):
+        return f"{_formatar(valor, 'mi')} mi"
+    if componente == "beta_n_obs":
+        return f"{valor:.0f}"
+    if componente.startswith("beta"):
+        return f"{valor:.3f}".replace(".", ",")
+    return f"{valor:.2%}".replace(".", ",")
+
+
+@app.command()
+def wacc(
+    ticker: str = typer.Argument(..., help="Ex.: PETR4."),
+    data_base: str | None = typer.Option(
+        None, "--data-base", help="AAAA-MM-DD (padrão: settings)."
+    ),
+    forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+    saida: str | None = typer.Option(
+        None, "--saida", help="Diretório raiz da saída (padrão: saida/)."
+    ),
+    formato_csv: str = typer.Option("br", "--formato-csv", help="br | intl."),
+) -> None:
+    """Beta, Ke, Kd e WACC; grava saida/{TICKER}/{data-base}/wacc.csv."""
+    agora = dt.datetime.now(dt.UTC)
+    if formato_csv not in ("br", "intl"):
+        raise _erro("--formato-csv deve ser br ou intl.")
+    try:
+        settings = carregar_settings()
+        base = (
+            dt.date.fromisoformat(data_base)
+            if data_base
+            else settings.resolver_data_base(agora.date())
+        )
+        p = _padronizar(ticker, settings)
+        m = _mercado(ticker, settings, base, agora, forcar)
+        cc = _custo_capital(p, m, settings, base)
+    except ValueError as e:
+        raise _erro(f"--data-base inválida: {e}") from e
+    except (
+        ErroConfiguracao,
+        ErroDownload,
+        cad.ErroCadastro,
+        ErroDadosExternos,
+        ErroContabil,
+        ErroProjecao,
+        ErroCustoCapital,
+    ) as e:
+        raise _erro(str(e)) from e
+
+    tab = wc.tabela(cc)
+    tabela = Table(title=f"Custo de capital — {p.premissas.ticker} em {base} ({cc.ke.moeda})")
+    for coluna in ("Componente", "Valor", "Detalhe"):
+        tabela.add_column(coluna)
+    for componente, valor, detalhe in zip(
+        tab["componente"], tab["valor"], tab["detalhe"], strict=True
+    ):
+        if componente != "aviso":
+            tabela.add_row(str(componente), _formatar_componente(str(componente), valor), detalhe)
+    console.print(tabela)
+    raiz = Path(saida) if saida else DIR_SAIDA
+    caminho = raiz / p.premissas.ticker / base.isoformat() / "wacc.csv"
+    gravar_csv(tab, caminho, settings.csv, cast(FormatoCsv, formato_csv))
+    for aviso in [*cc.avisos, *m.avisos]:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
+    console.print(f"Gravado em {caminho}")
 
 
 if __name__ == "__main__":  # pragma: no cover

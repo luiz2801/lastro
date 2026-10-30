@@ -2,6 +2,7 @@ import datetime as dt
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 import yaml
@@ -12,7 +13,11 @@ from sintetico import dfp_completa, juntar
 from valuation import __version__, cli
 from valuation.cli import app
 from valuation.config import Settings, carregar_settings
+from valuation.data import cadastro as cad
+from valuation.data import macro as mac
+from valuation.data import precos as prc
 from valuation.data.cvm import url_cadastro, url_documento, url_fca
+from valuation.data.validacao import manual
 from valuation.perfil import registro as reg
 from valuation.perfil.questionario import QUESTIONARIO
 from valuation.projecao import premissas as pm
@@ -281,3 +286,106 @@ def test_premissas_sugerir_erros(weg_sintetica: Path, caminho_perfil: Path) -> N
     codigo, saida = _sugerir()
     assert codigo == 1
     assert "pares.setor 'inexistente'" in saida
+
+
+class _PrecosFalsos:
+    """Provedor com preços semanais sintéticos: ação com beta 1,2 exato contra o índice."""
+
+    nome = "falso"
+
+    def __init__(self) -> None:
+        datas = pd.date_range(end="2026-10-30", periods=301, freq="W-FRI")
+        rm = np.random.default_rng(3).normal(0.002, 0.03, 300)
+        self._indice = 100 * np.cumprod(np.r_[1.0, 1 + rm])
+        self._acao = 100 * np.cumprod(np.r_[1.0, 1 + 1.2 * rm])
+        self._datas = datas
+
+    def historico(self, simbolo: str, inicio: dt.date, fim: dt.date) -> pd.DataFrame:
+        valores = self._indice if simbolo == "^BVSP" else self._acao
+        return pd.DataFrame(
+            {"close": valores, "adj_close": valores, "volume": 1e6}, index=self._datas
+        )
+
+
+@pytest.fixture
+def mercado_falso(weg_sintetica: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """WEGE3 sintética com dívida 100, despesa financeira 12 e market cap 900 (D/(D+E) = 10%)."""
+    pasta = weg_sintetica / "processed" / "cvm" / "5410"
+    dados = juntar(
+        dfp_completa(2024, cd_cvm=5410, DRE={"3.06.02": -12}),
+        dfp_completa(2025, cd_cvm=5410, DRE={"3.06.02": -12}),
+    )
+    dados.to_parquet(pasta / "demonstracoes.parquet", index=False)
+
+    def mercado(
+        ticker: str, settings: Settings, base: dt.date, agora: dt.datetime, forcar: bool
+    ) -> cli._Mercado:
+        empresa = cad.empresa_por_ticker(cli._carregar_cadastro(settings, base, False), ticker)
+        macro = mac.Macro(
+            base,
+            selic=manual("Selic", 0.15),
+            ipca_12m=manual("IPCA", 0.05),
+            cambio=manual("Dólar", 5.0),
+            rf_brl=manual("Rf", 0.13),
+            ipca_esperado={2027: 0.04, 2030: 0.035},
+            data_focus=base,
+        )
+        cap = prc.MarketCap(900.0, (), base, ())
+        precos = {"WEGE3": manual("Preço WEGE3", 40.0)}
+        return cli._Mercado(empresa, precos, manual("^BVSP", 1.0), macro, cap, _PrecosFalsos())  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cli, "_mercado", mercado)
+    return weg_sintetica
+
+
+def test_wacc(mercado_falso: Path) -> None:
+    saida = mercado_falso / "saida"
+    resultado = CliRunner().invoke(app, ["wacc", "WEGE3", "--saida", str(saida)])
+    assert resultado.exit_code == 0, resultado.output
+    tab = pd.read_csv(
+        saida / "WEGE3" / "2026-10-30" / "wacc.csv", sep=";", decimal=",", encoding="utf-8-sig"
+    ).set_index("componente")
+    valor = tab["valor"]
+    assert valor["beta_bruto"] == pytest.approx(1.2)
+    assert valor["beta"] == pytest.approx(0.67 * 1.2 + 0.33)
+    assert valor["ke"] == pytest.approx(0.13 + valor["beta"] * 0.05)
+    # Kd = 12 / 100 = 12%, abaixo do piso (Rf 13%): limitado a 13%.
+    assert valor["kd_bruto"] == pytest.approx(0.12)
+    assert valor["kd"] == pytest.approx(0.13)
+    assert valor["peso_divida"] == pytest.approx(0.1)
+    assert valor["wacc"] == pytest.approx(valor["ke"] * 0.9 + 0.13 * 0.66 * 0.1)
+    assert "Kd histórico com só 1 exercício" in " ".join(resultado.output.split())
+
+
+def test_wacc_menor_que_g_falha(mercado_falso: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = cli.carregar_settings()
+    cfg = settings.custo_capital.model_copy(update={"erp": -0.2})
+    monkeypatch.setattr(
+        cli, "carregar_settings", lambda: settings.model_copy(update={"custo_capital": cfg})
+    )
+    resultado = CliRunner().invoke(app, ["wacc", "WEGE3", "--saida", str(mercado_falso)])
+    assert resultado.exit_code == 1
+    assert "não converge" in " ".join(resultado.output.split())
+
+
+def test_wacc_beta_manual_e_formato_invalido(mercado_falso: Path) -> None:
+    assert CliRunner().invoke(app, ["wacc", "WEGE3", "--formato-csv", "xx"]).exit_code == 1
+    yaml_weg = mercado_falso / "empresas" / "WEGE3.yaml"
+    yaml_weg.parent.mkdir()
+    yaml_weg.write_text(
+        yaml.safe_dump(
+            {
+                "ticker": "WEGE3",
+                "tipo_modelo": "nao_financeira",
+                "classes_acao": ["WEGE3"],
+                "custo_capital": {"beta": {"metodo": "manual", "valor": 0.8}},
+            }
+        ),
+        "utf-8",
+    )
+    resultado = CliRunner().invoke(
+        app, ["wacc", "WEGE3", "--saida", str(mercado_falso), "--formato-csv", "intl"]
+    )
+    assert resultado.exit_code == 0, resultado.output
+    texto = (mercado_falso / "WEGE3" / "2026-10-30" / "wacc.csv").read_text("utf-8")
+    assert "beta,0.8," in texto
