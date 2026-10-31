@@ -5,6 +5,9 @@
 # Perfil do investidor (pessoal)
 perfil/perfil_investidor.json
 
+# Carteira pessoal (transações e alvos)
+/carteira/
+
 # Cópia anterior das premissas (`premissas sugerir --escrever`)
 config/empresas/*.yaml.bak
 

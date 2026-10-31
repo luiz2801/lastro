@@ -160,6 +160,7 @@ flowchart TD
   - `valuation` (sem comando): menu interativo. Lista os setores numerados, lê a escolha, lista as empresas do setor, lê a escolha e executa `rodar` com os padrões (0 volta aos setores ou sai).
   - `valuation setores [SETOR]`: lista os setores do enum `SetorCVM` (`src/valuation/universo.py`, do `setor_cvm` do universo) ou as empresas de um setor.
   - `valuation rodar-setor SETOR`: confere o perfil uma vez, depois roda `rodar` em cada empresa do setor, em sequência. Holdings são puladas; uma falha não interrompe as demais, e a tabela final sai com 1 se houver falha (ADR 0019).
+  - `valuation carteira lancar` / `importar ARQUIVO` (ADR 0020, camada `carteira/`, fora do pipeline de valuation): ver a seção 4.
 - **Configuração:** Leitura estrita de `config/settings.yaml` (tipado via Pydantic com `extra="forbid"`) e premissas específicas da empresa em `config/empresas/{TICKER}.yaml`.
 
 ### Raia 2: Coleta de Dados & Validação Cruzada
@@ -229,4 +230,25 @@ flowchart TD
 | **Taxa de Desconto vs Perpetuidade** | $WACC \le g_{\text{terminal}}$ ou $K_e \le g_{\text{terminal}}$ | Encerra com código `1` por inconsistência matemática do modelo de Gordon |
 | **Tipo de Empresa** | Holding financeira pura ou estrutura não suportada na v1 | Bloqueia execução e alerta necessidade de avaliação por SOTP/NAV |
 | **Validação Cruzada de APIs** | Divergência de preço $> 2\%$ ou câmbio $> 1{,}5\%$ | Alerta exibido no terminal e registrado nos metadados |
+
+---
+
+## 4. Carteira pessoal: lançamento e importação (ADR 0020, Etapa C1)
+
+Fluxo à parte do valuation: não lê dados da CVM nem cotações. Posição, preço médio, proventos e
+alocação (Etapas C2 a C5) vão consumir `carteira/transacoes.csv` e ainda não existem.
+
+```mermaid
+flowchart TD
+  A[carteira lancar / importar] --> B{Entrada}
+  B -->|lancar| C[nova_transacao: normaliza e valida a linha]
+  B -->|importar| D[ler_arquivo: CSV ou XLSX, cabeçalho e cada linha]
+  C --> F
+  D -->|alguma linha inválida| X[Recusa o arquivo inteiro: linha N e motivo, saída 1]
+  D --> E{Idêntica a linha já gravada?}
+  E -->|sim, sem --permitir-duplicadas| X
+  E -->|não| F[validar_historico: carteira gravada + novas, por data]
+  F -->|venda acima da posição, evento sem posição, data futura| X
+  F -->|fecha| G[Acrescenta ao fim de carteira/transacoes.csv]
+```
 

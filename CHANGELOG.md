@@ -2,6 +2,16 @@
 
 ## [Não lançado]
 
+### Carteira pessoal, Etapa C1: transações e importação (ADR 0020)
+- `src/valuation/carteira/`: `transacoes.py` (esquema, validação por tipo e do histórico: venda
+  acima da posição, evento sem posição, data futura) e `arquivo.py` (leitura de CSV e XLSX, gravação
+  só-acréscimo em `carteira/transacoes.csv`, tudo ou nada, com o número de cada linha inválida).
+- `valuation carteira lancar` e `valuation carteira importar ARQUIVO` (`--formato-csv`,
+  `--permitir-duplicadas`; reimportação do mesmo arquivo é recusada).
+- Nova dependência `openpyxl` (autorizada no ADR 0020) e `types-openpyxl` (dev); `carteira/` no
+  `.gitignore`; `CAMINHO_TRANSACOES` em `config.py`.
+- 45 testes em `tests/test_carteira.py`, sem rede. Valuation (DCF, DDM, múltiplos) não mudou.
+
 ### Planejamento da carteira pessoal (ADR 0020)
 - Escopo: RF-004, 007, 008, 009, 010, 011 e 012 do plano de requisitos, de forma plena. Nenhum
   código novo ainda.

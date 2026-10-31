@@ -9,7 +9,7 @@ import platform
 import shlex
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import cast
+from typing import Annotated, cast
 
 import pandas as pd
 import typer
@@ -19,10 +19,14 @@ from rich.table import Table
 from valuation import __version__
 from valuation.analise import cenarios as cen
 from valuation.analise import sensibilidade as sens
+from valuation.carteira import ErroCarteira
+from valuation.carteira import arquivo as carteira_arq
+from valuation.carteira import transacoes as carteira_tr
 from valuation.config import (
     CAMINHO_CADASTRO_MANUAL,
     CAMINHO_PERFIL,
     CAMINHO_SETORES,
+    CAMINHO_TRANSACOES,
     CAMINHO_UNIVERSO,
     DIR_EMPRESAS,
     DIR_PROCESSED,
@@ -69,7 +73,7 @@ from valuation.saida import arquivos as arq
 from valuation.saida import glossario as gl
 from valuation.saida import graficos as gr
 from valuation.saida import real
-from valuation.saida.csv import FormatoCsv, gravar_csv, gravar_matriz
+from valuation.saida.csv import INTERNACIONAL, FormatoCsv, gravar_csv, gravar_matriz
 from valuation.universo import SetorCVM, buscar_setor, carregar_universo, empresas_do_setor
 
 app = typer.Typer(
@@ -83,6 +87,10 @@ premissas_app = typer.Typer(
     help="Premissas de projeção por empresa (config/empresas/).", no_args_is_help=True
 )
 app.add_typer(premissas_app, name="premissas")
+carteira_app = typer.Typer(
+    help="Carteira pessoal: transações em carteira/transacoes.csv (ADR 0020).", no_args_is_help=True
+)
+app.add_typer(carteira_app, name="carteira")
 console = Console()
 
 
@@ -2995,6 +3003,83 @@ def rodar_setor(
     falhas = [ticker for ticker, resultado in resultados if resultado == "falhou"]
     if falhas:
         raise _erro(f"{len(falhas)} empresa(s) falharam: {', '.join(falhas)}.")
+
+
+def _erro_carteira(e: ErroCarteira) -> typer.Exit:
+    for mensagem in e.erros:
+        console.print(f"[bold red]Erro:[/] {mensagem}", highlight=False)
+    return typer.Exit(code=1)
+
+
+@carteira_app.command("lancar")
+def carteira_lancar(
+    tipo: str = typer.Argument(
+        ..., help="compra | venda | provento | agrupamento | desdobramento | bonificacao."
+    ),
+    ticker: str = typer.Argument(..., help="Ex.: PETR4."),
+    quantidade: float = typer.Argument(
+        ..., help="Ações; nos eventos de agrupamento/desdobramento, o fator (> 1)."
+    ),
+    preco: float | None = typer.Option(None, "--preco", help="Preço por ação (compra/venda)."),
+    valor: float | None = typer.Option(None, "--valor", help="Valor bruto (provento)."),
+    taxas: float | None = typer.Option(
+        None, "--taxas", help="Corretagem/emolumentos ou IR retido."
+    ),
+    data: str | None = typer.Option(None, "--data", help="AAAA-MM-DD (padrão: hoje)."),
+    observacao: str = typer.Option("", "--observacao", help="Texto livre."),
+) -> None:
+    """Registra uma transação no fim de carteira/transacoes.csv (o histórico não é reescrito)."""
+    hoje = dt.date.today()
+    try:
+        settings = carregar_settings()
+        transacao = carteira_tr.nova_transacao(
+            dt.date.fromisoformat(data) if data else hoje,
+            ticker,
+            tipo,
+            quantidade,
+            preco,
+            valor,
+            taxas,
+            observacao,
+        )
+        carteira_arq.acrescentar(CAMINHO_TRANSACOES, settings.csv, [transacao], hoje=hoje)
+    except ErroCarteira as e:
+        raise _erro_carteira(e) from e
+    except ValueError as e:
+        raise _erro(f"data inválida: {e}") from e
+    console.print(
+        f"Gravado: {transacao.tipo.value} {transacao.ticker} x {transacao.quantidade:g} "
+        f"em {transacao.data.isoformat()} ({CAMINHO_TRANSACOES})."
+    )
+
+
+@carteira_app.command("importar")
+def carteira_importar(
+    arquivo: Annotated[Path, typer.Argument(help="CSV ou XLSX com o cabeçalho de transacoes.csv.")],
+    formato_csv: str = typer.Option("br", "--formato-csv", help="CSV de entrada: br | intl."),
+    permitir_duplicadas: bool = typer.Option(
+        False, "--permitir-duplicadas", help="Aceita linhas idênticas a já gravadas."
+    ),
+) -> None:
+    """Importa transações de CSV/XLSX; tudo ou nada, com o número da linha de cada erro."""
+    if formato_csv not in ("br", "intl"):
+        raise _erro("--formato-csv deve ser br ou intl.")
+    hoje = dt.date.today()
+    try:
+        settings = carregar_settings()
+        entrada = settings.csv if formato_csv == "br" else INTERNACIONAL
+        transacoes, linhas = carteira_arq.ler_arquivo(arquivo, entrada)
+        gravadas = carteira_arq.acrescentar(
+            CAMINHO_TRANSACOES,
+            settings.csv,
+            transacoes,
+            linhas,
+            hoje=hoje,
+            permitir_duplicadas=permitir_duplicadas,
+        )
+    except ErroCarteira as e:
+        raise _erro_carteira(e) from e
+    console.print(f"Importadas {gravadas} transações de {arquivo.name} ({CAMINHO_TRANSACOES}).")
 
 
 if __name__ == "__main__":  # pragma: no cover

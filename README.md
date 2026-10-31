@@ -52,6 +52,8 @@ uv run valuation                             # menu: setores numerados -> empres
 uv run valuation setores                     # setores do universo (enum) e nº de empresas
 uv run valuation setores BANCOS              # empresas do setor
 uv run valuation rodar-setor BANCOS --sem-graficos   # roda o rodar em cada empresa do setor
+uv run valuation carteira lancar compra PETR4 100 --preco 35.5   # grava em carteira/transacoes.csv
+uv run valuation carteira importar corretora.xlsx   # CSV ou XLSX, tudo ou nada (ADR 0020)
 uv run valuation rodar PETR4                # DCF por cenário, valor ponderado pelo perfil, sensibilidade
 make rodar TICKER=PETR4                      # o mesmo
 ```
@@ -119,7 +121,7 @@ Pilotos: PETR4, VALE3 e WEGE3.
   winsorização, quartis, aviso de poucos pares e de escala implausível; valor implícito do alvo;
   beta por comparáveis, estrutura-alvo do setor, minoritários pelo P/VP e g implícito no múltiplo
   de saída; `valuation comparar TICKER` e múltiplos no `rodar`.
-- **Testes**: 517 (506 passam, 11 golden pulados por motivo declarado), mypy strict e ruff limpos.
+- **Testes**: 566 (472 passam sem `data/`; os golden dependem dos dados baixados), mypy strict e ruff limpos.
 - **Universo**: `config/universo_ibovespa.csv` com os 76 ativos da carteira de 30/10/26 da B3;
   `valuation atualizar --tudo` baixa os dados de todos (holdings só avisam).
 - **Financeiras** (Fase 10): plano de contas de bancos e seguradoras (25 companhias

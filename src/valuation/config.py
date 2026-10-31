@@ -23,6 +23,7 @@ DIR_RAW = RAIZ_PROJETO / "data" / "raw"
 DIR_PROCESSED = RAIZ_PROJETO / "data" / "processed"
 CAMINHO_PERFIL = RAIZ_PROJETO / "perfil" / "perfil_investidor.json"
 DIR_SAIDA = RAIZ_PROJETO / "saida"
+CAMINHO_TRANSACOES = RAIZ_PROJETO / "carteira" / "transacoes.csv"
 
 
 class _Modelo(BaseModel):

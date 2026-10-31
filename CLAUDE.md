@@ -108,7 +108,7 @@ Reproduzir em Python o que um analista faz em Excel para avaliar uma empresa lis
 ## 4. Stack e setup
 
 - Python ≥ 3.11, gerenciador `uv`.
-- Dependências: `pandas`, `numpy`, `pyarrow`, `pydantic>=2`, `pyyaml`, `typer`, `rich`, `requests` (com `requests-cache` ou cache próprio), `yfinance`, `python-bcb`, `statsmodels` (regressão do beta), `scipy`, `matplotlib`.
+- Dependências: `pandas`, `numpy`, `pyarrow`, `pydantic>=2`, `pyyaml`, `typer`, `rich`, `requests` (com `requests-cache` ou cache próprio), `yfinance`, `python-bcb`, `statsmodels` (regressão do beta), `scipy`, `matplotlib`, `openpyxl` (importação XLSX da carteira, ADR 0020).
 - Dev: `pytest`, `pytest-cov`, `hypothesis` (opcional), `ruff`, `mypy`.
 - Opcional: `duckdb` para consultas ad hoc sobre os parquets.
 
