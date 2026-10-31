@@ -2,6 +2,15 @@
 
 ## [Não lançado]
 
+### Planejamento da carteira pessoal (ADR 0020)
+- Escopo: RF-004, 007, 008, 009, 010, 011 e 012 do plano de requisitos, de forma plena. Nenhum
+  código novo ainda.
+- `docs/decisoes/0020-modulo-carteira-pessoal.md`: camada `carteira/`, transações em CSV local,
+  preço médio, proventos com fonte a validar, alocação-alvo e `openpyxl` (nova dependência).
+- `docs/backlog.md`, seção "Carteira pessoal": perguntas abertas (fonte de proventos, tecnologia
+  da tela) e Etapas C1 a C6, com entregas.
+- `CLAUDE.md` (seção 1): nota apontando o ADR 0020; o corpo da especificação não muda.
+
 ### Setores como enum e execução por setor (ADR 0019)
 - `src/valuation/universo.py`: enum `SetorCVM` (33 setores do `setor_cvm` de
   `config/universo_ibovespa.csv`), `carregar_universo`, `buscar_setor` (nome do membro ou texto

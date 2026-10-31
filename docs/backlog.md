@@ -367,3 +367,94 @@ Só iniciar se o usuário pedir explicitamente; exige decisão sobre distribuiç
 3. ADR antes de qualquer implementação (distribuições, saída, integração com CLI).
 
 *Entrega:* distribuição do valor por ação e VaR do upside; Fase 11 do roadmap.
+
+## Carteira pessoal (ADR 0020, planejado em 2026-10-31)
+
+Escopo pedido pelo usuário: RF-004, 007, 008, 009, 010, 011 e 012 do plano de requisitos, de forma
+plena. Os RF-005 (gráficos interativos), RF-001 (tempo real) e RF-013 (aportes) não entram aqui.
+Regra de ordem: cada etapa só começa quando a anterior está com testes e `make lint tipos testes`
+passando, e a validação de fonte (`docs/fontes.md`) vem antes de qualquer código que dependa dela.
+
+### Perguntas abertas (dúvidas da seção 19 do `CLAUDE.md`)
+
+1. **Fonte de proventos anunciados (RF-010/011).** Recomendo inspecionar primeiro o yfinance
+   (`dividends`: data ex e valor, sem data de pagamento) e o cadastro de eventos da CVM, e escolher
+   por dado real. Sem fonte confiável, RF-010/011 viram aviso e só o histórico de recebidos segue.
+2. **Tela visual (RF-008 dashboard e página por ativo do RF-004).** Recomendo Streamlit local, como
+   já previsto na Etapa 9, por ADR próprio. Até lá, a entrega é a CLI da Etapa C4.
+3. **Carteira ou só valuation?** Já decidido pelo usuário em 2026-10-31 (ADR 0020). A pergunta 2
+   decide só a tecnologia da tela.
+
+### Etapa C1 — Transações e importação (RF-006 e RF-007) ✅
+
+Feita em 2026-10-31 (`carteira/transacoes.py`, `carteira/arquivo.py`, `carteira lancar` e `carteira importar`).
+
+Pré-requisito de todo o resto.
+
+1. Schema de `carteira/transacoes.csv` (ADR 0020, item 3) em `src/valuation/carteira/`, com validação
+   que recusa o arquivo inteiro e aponta a linha.
+2. Importação CSV (`;`, decimal `,`) e XLSX (`openpyxl`, nova dependência autorizada no ADR).
+3. Comando `valuation carteira lancar` (registro manual de compra, venda, provento, agrupamento,
+   desdobramento, bonificação) e `valuation carteira importar ARQUIVO`.
+4. Testes: linha inválida, venda acima da posição, XLSX e CSV equivalentes, histórico que não muda.
+
+*Entrega:* carteira em disco, validada, sem cálculo ainda.
+
+### Etapa C2 — Posição e preço médio (RF-008, parte de dados)
+
+1. Função pura de posição: preço médio ponderado pelo custo (taxas incluídas), venda sem mudar o
+   preço médio, agrupamento e desdobramento pelo fator, bonificação a custo zero.
+2. Patrimônio, lucro/prejuízo nominal e percentual (venda + proventos recebidos − custo) com a
+   cotação de fechamento na data-base, pela mesma função `fechamento_ate` de `precos.py`.
+3. Teste com valores calculados à mão (um caso de compra, compra, venda parcial, desdobramento).
+
+*Entrega:* `valuation carteira posicao` em tabela Rich, com aviso de cotação defasada.
+
+### Etapa C3 — Indicadores por ativo (RF-004)
+
+1. `analise/indicadores.py`: margem líquida, dívida líquida/EBITDA e ROE das não financeiras
+   (esta última usa o PL inicial, como o ROE das financeiras). Os indicadores já existentes
+   (P/L, P/VP, DY, EV/EBITDA, ROIC, margem EBITDA) são reexpostos sem mudar valor.
+2. Comando `valuation indicadores TICKER` com legenda via `--explicar` (glossário da Etapa 7).
+3. Golden de um ano conhecido (margem líquida e dívida líquida/EBITDA de PETR4 ou WEGE3, conferidos
+   com o usuário, como o fim da Fase 2).
+
+*Entrega:* a página por ativo em forma de tabela, pronta para a tela da pergunta 2.
+
+### Etapa C4 — Proventos e agenda (RF-010 e RF-011)
+
+Só começa com a pergunta 1 respondida.
+
+1. Inspecionar a fonte escolhida, registrar em `docs/fontes.md` e no `docs/regras/REGRAS_DADOS.md` a
+   regra de cache e de validação cruzada.
+2. Proventos recebidos por mês (das linhas `provento`), e calendário de proventos anunciados
+   cruzado com a posição (data com, data de pagamento, valor a receber).
+3. Comando `valuation carteira proventos [--meses N]`: histórico mensal e provisionado.
+4. Sem fonte confiável: só o histórico de recebidos, com aviso explícito.
+
+*Entrega:* renda passiva mensal, recebida e provisionada.
+
+### Etapa C5 — Alocação e alvos (RF-009 e RF-012)
+
+1. `carteira/alvos.yaml` (classe e ativo, soma 100%, validado por pydantic).
+2. Alocação atual por classe (`acao`) e por setor (`setor_cvm`) em percentual do patrimônio, com o
+   desvio em relação ao alvo.
+3. Saída CSV e PNG em rosca (`saida/carteira/{data}/alocacao.csv` e `alocacao.png`), no padrão
+   dos gráficos da Fase 9, com legendas em PT-BR.
+4. Fundos e renda fixa ficam fora (ADR 0020, item 7); FIIs seguem fora da v1 (seção 1 do `CLAUDE.md`).
+
+*Entrega:* alocação real × alvo, o insumo do cálculo de aportes (RF-013, fora deste plano).
+
+### Etapa C6 — Tela (RF-008 dashboard, RF-009 gráficos na tela)
+
+Depende da pergunta 2 e de ADR próprio para a tecnologia. Reaproveita as Etapas C1 a C5 sem lógica
+nova (mesmo princípio da Etapa 9).
+
+*Entrega:* dashboard de patrimônio e alocação, e página por ativo.
+
+### Documentação e testes desta frente
+
+- Cada etapa atualiza `guia.md`, `CHANGELOG.md` e `docs/diagrama_atividades.md` (fluxo de importação e
+  posição) na mesma entrega, como manda o `CONTRIBUTING.md`.
+- Testes com transações sintéticas (`tests/sintetico.py`), sem rede.
+- Nova dependência (`openpyxl`) entra em `pyproject.toml` só na Etapa C1.

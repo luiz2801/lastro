@@ -29,6 +29,7 @@ Itens `[DECIDIDO]` não mudam por ADR sem o aval do usuário (regra 7 do `CLAUDE
 | [0016](0016-saidas-da-fase-9.md) | Saídas da Fase 9: IPCA do Focus para deflacionar (último Focus além do horizonte), `valores_reais.csv` longo, `meta.json` com commit e hashes, `premissas_usadas.yaml`, gráficos sem `pyplot`, cascata só no DCF, DDM anualizado no gráfico, `--sem-graficos` | 11.5, 12, 13, 14 | aceito |
 | [0017](0017-kd-manual-da-petr4.md) | Kd da PETR4 manual: Rf (NTN-F) + spread de crédito de 0,60% do guia do usuário = 15,60%; número fixo; efeito de −1,3% no valor | 10.3 | aceito |
 | [0019](0019-rodar-por-setor.md) | Setores como enum (`SetorCVM`, do `setor_cvm` do universo) e `valuation setores` / `rodar-setor`: roda o `rodar` em cada empresa do setor, uma após a outra; holdings puladas, falha isolada por empresa | 11 (lote), 14 | aceito |
+| [0020](0020-modulo-carteira-pessoal.md) | Módulo de carteira pessoal (RF-004, 007–012): camada `carteira/` no topo, transações em CSV local, preço médio, proventos com fonte a validar, alocação-alvo, `openpyxl` para XLSX; tela visual fica para decisão própria | 1 (escopo), 4 (dependência), 5, 14 | aceito (planejamento) |
 | [0018](0018-erp-implicito-do-ibovespa.md) | ERP implícito do Ibovespa: dividendos agregados, Focus (PIB + IPCA) em 5 anos e g perpétuo pelo CAGR histórico (teto 5%), sem convergência, faixa ±1 p.p., erro fora de [0%, 15%], `valuation erp` grava o JSON lido pelo Ke; em 30/10/2026 o ERP deu −4,2% (padrão segue manual) | 10.2 | aceito |
 
 ## Quando escrever um ADR

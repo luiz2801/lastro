@@ -58,6 +58,8 @@ Reproduzir em Python o que um analista faz em Excel para avaliar uma empresa lis
 - 10 anos de histórico. Saída em CSV e gráficos (sem Excel).
 - Linux; usuário avançado em Python.
 
+> **ADR 0020:** a carteira pessoal (RF-004, 007–012 do plano de requisitos) entrou no escopo por decisão do usuário, como camada `carteira/` separada do valuation. Não altera as seções de valuation.
+
 **Fora do escopo na v1**: holdings (ITSA4, BRAP4 etc. — exigem NAV/SOTP), FIIs, REITs, empresas em recuperação judicial, SOTP, Monte Carlo, execução em lote, interface web.
 
 ---
