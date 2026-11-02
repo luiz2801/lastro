@@ -124,7 +124,7 @@ Pilotos: PETR4, VALE3 e WEGE3.
   winsorização, quartis, aviso de poucos pares e de escala implausível; valor implícito do alvo;
   beta por comparáveis, estrutura-alvo do setor, minoritários pelo P/VP e g implícito no múltiplo
   de saída; `valuation comparar TICKER` e múltiplos no `rodar`.
-- **Testes**: 566 (472 passam sem `data/`; os golden dependem dos dados baixados), mypy strict e ruff limpos.
+- **Testes**: 593 (582 passam, 11 golden pulados por motivo declarado; sem `data/`, os golden também são pulados), mypy strict e ruff limpos.
 - **Universo**: `config/universo_ibovespa.csv` com os 76 ativos da carteira de 30/10/26 da B3;
   `valuation atualizar --tudo` baixa os dados de todos (holdings só avisam).
 - **Financeiras** (Fase 10): plano de contas de bancos e seguradoras (25 companhias

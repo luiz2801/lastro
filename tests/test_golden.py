@@ -16,14 +16,17 @@ import pytest
 import yaml
 
 from valuation.config import DIR_PROCESSED
+from valuation.contabil import financeiras as fin
 from valuation.contabil import nao_financeiras as nf
 from valuation.contabil import padronizacao as pad
 from valuation.contabil import periodos as per
 
 REFERENCIAS = Path(__file__).parent / "golden" / "referencias.yaml"
-CD_CVM = {"PETR4": 9512, "VALE3": 4170, "WEGE3": 5410}
+CD_CVM = {"PETR4": 9512, "VALE3": 4170, "WEGE3": 5410, "ITUB4": 19348}
+FINANCEIRAS = {"ITUB4"}
 MILHAO = 1e6
-TOLERANCIA = {"PETR4": 0.5, "VALE3": 0.5, "WEGE3": 0.002}  # R$ mi (arredondamento dos releases)
+# R$ mi (arredondamento dos releases)
+TOLERANCIA = {"PETR4": 0.5, "VALE3": 0.5, "WEGE3": 0.002, "ITUB4": 0.5}
 TOLERANCIA_APROXIMADOS = 50.0
 
 # Chave da referência -> métrica do pipeline. Fluxos: sinal da companhia (IR positivo).
@@ -34,6 +37,17 @@ FLUXOS = {
     "da": lambda m: m["da"],
     "ebitda": lambda m: m["ebitda"],
     "ir_csll": lambda m: -m["ir_csll"],
+}
+# Financeiras (`financeiras.metricas`): o lucro e o PL são os do IFRS consolidado, o mesmo padrão
+# que a CVM recebe (o "recorrente gerencial" dos releases não é comparável).
+FLUXOS_FINANCEIRAS = {
+    "lucro_controladora": lambda m: m["lucro_liquido_controladora"],
+    "lucro_total": lambda m: m["lucro_liquido"],
+}
+SALDOS_FINANCEIRAS = {
+    "patrimonio_liquido_controladora": lambda m: m["patrimonio_liquido"],
+    "patrimonio_liquido_total": lambda m: m["patrimonio_liquido_total"],
+    "ativo_total": lambda m: m["ativo_total"],
 }
 SALDOS = {
     "divida_financeira_sem_arrendamento": lambda m: m["divida_financeira"],
@@ -64,7 +78,8 @@ def _contas(ticker: str) -> pd.DataFrame:
         demonstracoes = pad.ler_demonstracoes(DIR_PROCESSED, CD_CVM[ticker])
     except FileNotFoundError:
         pytest.skip(f"sem dados de {ticker} em data/processed (rode `valuation atualizar`)")
-    plano = pad.carregar_mapeamento()
+    tipo = "financeira" if ticker in FINANCEIRAS else "nao_financeira"
+    plano = pad.carregar_mapeamento(tipo=tipo)
     return pad.padronizar(pad.selecionar_reapresentacoes(demonstracoes), plano, ticker=ticker)
 
 
@@ -84,7 +99,13 @@ def _fluxos_do_periodo(ticker: str, periodo: str) -> pd.Series | None:
         )
     if data not in largo.index:
         return None
-    return nf.metricas(largo.loc[[data]], aliquota_nominal=0.34).iloc[0]
+    return _metricas(ticker, largo.loc[[data]]).iloc[0]
+
+
+def _metricas(ticker: str, largo: pd.DataFrame) -> pd.DataFrame:
+    if ticker in FINANCEIRAS:
+        return fin.metricas(largo)
+    return nf.metricas(largo, aliquota_nominal=0.34)
 
 
 def _saldos_na_data(ticker: str, data: str) -> tuple[pd.Series, pd.Series] | None:
@@ -93,7 +114,7 @@ def _saldos_na_data(ticker: str, data: str) -> tuple[pd.Series, pd.Series] | Non
     dt = pd.Timestamp(data)
     if dt not in largo.index:
         return None
-    return nf.metricas(largo.loc[[dt]], aliquota_nominal=0.34).iloc[0], largo.loc[dt]
+    return _metricas(ticker, largo.loc[[dt]]).iloc[0], largo.loc[dt]
 
 
 def _casos() -> list[Any]:
@@ -126,13 +147,13 @@ def test_conciliacao(
         metricas = _fluxos_do_periodo(ticker, periodo)
         if metricas is None:
             pytest.skip(f"{ticker} {periodo} ainda não está nos dados da CVM")
-        obtido = FLUXOS[chave](metricas)
+        obtido = (FLUXOS_FINANCEIRAS if ticker in FINANCEIRAS else FLUXOS)[chave](metricas)
     else:
         resultado = _saldos_na_data(ticker, periodo)
         if resultado is None:
             pytest.skip(f"{ticker} {periodo} ainda não está nos dados da CVM")
         metricas, contas = resultado
-        funcao = SALDOS[chave]
+        funcao = (SALDOS_FINANCEIRAS if ticker in FINANCEIRAS else SALDOS)[chave]
         try:
             obtido = funcao(metricas)
         except KeyError:

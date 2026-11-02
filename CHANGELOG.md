@@ -21,6 +21,14 @@
   da tela) e Etapas C1 a C6, com entregas.
 - `CLAUDE.md` (seção 1): nota apontando o ADR 0020; o corpo da especificação não muda.
 ### Tickers favoritos e cache de resultados (ADR 0021, Etapa 8 do backlog)
+### Golden do ITUB4 (seção 19, item 9 do `CLAUDE.md`, em parte)
+- `tests/golden/referencias.yaml`: lucro (controladora e total) de 1T25, 1T26, 2T25, 2T26, 1S25 e
+  1S26 e PL (controladora e total) e ativo total de 31/12/2025, 31/03/2026 e 30/06/2026, do IFRS
+  consolidado do Itaú (`relatorios/`). Todos batem com o pipeline.
+- `tests/test_golden.py` passou a conciliar financeiras (`financeiras.metricas`, plano `financeira`).
+- BBAS3 ficou de fora: os PDFs do BB em `relatorios/` são Cosif (BRGAAP), e a CVM traz o IFRS.
+
+### Tickers favoritos e cache de resultados (ADR 0020, Etapa 8 do backlog)
 - `config/favoritos.yaml` (lista de tickers) e `saida/favoritos.py`: carga/gravação e leitura do
   último `resumo.csv` de `saida/{TICKER}/` (o cache de resultados; nada novo é persistido).
 - `valuation favoritos`: tabela com data-base, idade, perfil, preço, valor ponderado, preço máximo

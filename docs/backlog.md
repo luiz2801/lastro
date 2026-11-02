@@ -256,7 +256,7 @@ Pré-requisito para qualquer trabalho posterior em financeiras e para a consist�
 1. ✅ **Units no market cap** (ADR 0015): `e2196ed` e `0bd81df` (valor por unit).
 2. ✅ **YAMLs das financeiras**: `730a9a2`, nove arquivos em `config/empresas/` com o setor.
 3. ✅ **Rodar e conferir seguradoras**: rodadas sem erro; ressalva do setor em `guia.md` (armadilha 38).
-4. **Golden das financeiras**: solicitar ao usuário os números de ITUB4 e BBAS3; codificar em
+4. **Golden das financeiras** (ITUB4 feito em 2026-11-02; falta o BBAS3, que precisa do IFRS do BB): solicitar ao usuário os números de ITUB4 e BBAS3; codificar em
    `tests/golden/referencias.yaml`.
 5. ✅ **Fechamento formal**: `16524f8` (`CLAUDE.md`, `README.md`, `guia.md`, CHANGELOG); cobertura de 96%.
 

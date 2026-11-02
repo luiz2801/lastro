@@ -34,3 +34,6 @@ build/
 /referencias/**
 !/referencias/
 !/referencias/README.md
+
+# Relatórios das companhias baixados (PDFs grandes; só os valores conferidos vão para o git)
+/relatorios/

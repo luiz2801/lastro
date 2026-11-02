@@ -77,3 +77,21 @@ WEGE3:
       arrendamento_cp: 221.934
       arrendamento_lp: 625.219
       caixa_liquido_companhia: 2652.010
+
+ITUB4:
+  # IFRS consolidado, em R$ milhões (o Itaú publica em R$ milhões). Fonte dos valores: balanço e
+  # DRE consolidados condensados. Não é o "lucro recorrente gerencial" (R$ 12,4 bi no 2T26).
+  fontes:
+    - "relatorios/Demonstrações contábeis completas em IFRS.pdf (2T26: Balanço e DRE consolidados condensados)"
+    - "relatorios/1T_2026 Demonstrações contábeis completas em IFRS.pdf (1T26)"
+  periodos:
+    2T26: {lucro_controladora: 11979, lucro_total: 12324}
+    1S26: {lucro_controladora: 23615, lucro_total: 24199}
+    2T25: {lucro_controladora: 11137, lucro_total: 11398}
+    1S25: {lucro_controladora: 21644, lucro_total: 22105}
+    1T26: {lucro_controladora: 11636}
+    1T25: {lucro_controladora: 10507}
+  saldos:
+    2026-06-30: {patrimonio_liquido_controladora: 217779, patrimonio_liquido_total: 228026, ativo_total: 3202125}
+    2026-03-31: {patrimonio_liquido_controladora: 209705}
+    2025-12-31: {patrimonio_liquido_controladora: 204501, patrimonio_liquido_total: 215076, ativo_total: 3066169}
