@@ -24,6 +24,7 @@ from valuation.carteira import arquivo as carteira_arq
 from valuation.carteira import transacoes as carteira_tr
 from valuation.config import (
     CAMINHO_CADASTRO_MANUAL,
+    CAMINHO_FAVORITOS,
     CAMINHO_PERFIL,
     CAMINHO_SETORES,
     CAMINHO_TRANSACOES,
@@ -70,6 +71,7 @@ from valuation.projecao import premissas as pm
 from valuation.projecao import projetor as pj
 from valuation.projecao import sugestor as sg
 from valuation.saida import arquivos as arq
+from valuation.saida import favoritos as fav
 from valuation.saida import glossario as gl
 from valuation.saida import graficos as gr
 from valuation.saida import real
@@ -91,6 +93,11 @@ carteira_app = typer.Typer(
     help="Carteira pessoal: transações em carteira/transacoes.csv (ADR 0020).", no_args_is_help=True
 )
 app.add_typer(carteira_app, name="carteira")
+favoritos_app = typer.Typer(
+    help="Tickers favoritos e o último resultado de cada um (config/favoritos.yaml).",
+    invoke_without_command=True,
+)
+app.add_typer(favoritos_app, name="favoritos")
 console = Console()
 
 
@@ -3080,6 +3087,158 @@ def carteira_importar(
     except ErroCarteira as e:
         raise _erro_carteira(e) from e
     console.print(f"Importadas {gravadas} transações de {arquivo.name} ({CAMINHO_TRANSACOES}).")
+
+
+def _pct(valor: float | None) -> str:
+    return "—" if valor is None else f"{valor * 100:.1f}%".replace(".", ",")
+
+
+def _preco_fav(valor: float | None) -> str:
+    return "—" if valor is None else f"R$ {valor:.2f}".replace(".", ",")
+
+
+@favoritos_app.callback()
+def favoritos(ctx: typer.Context) -> None:
+    """Sem subcomando, mostra a tabela dos favoritos com o último resultado gravado (sem rede)."""
+    if ctx.invoked_subcommand is not None:
+        return
+    try:
+        settings = carregar_settings()
+        tickers = fav.carregar_favoritos(CAMINHO_FAVORITOS)
+    except ErroConfiguracao as e:
+        raise _erro(str(e)) from e
+    if not tickers:
+        console.print("Nenhum favorito. Use `valuation favoritos adicionar TICKER`.")
+        return
+    hoje = dt.date.today()
+    tabela = Table(title="Favoritos (último resultado gravado em saida/)")
+    for coluna, alinhamento in (
+        ("Ticker", "left"),
+        ("Data-base", "left"),
+        ("Idade (dias)", "right"),
+        ("Perfil", "left"),
+        ("Preço", "right"),
+        ("Valor ponderado", "right"),
+        ("Preço máx. compra", "right"),
+        ("Upside", "right"),
+        ("Avisos", "right"),
+    ):
+        tabela.add_column(coluna, justify=alinhamento)  # type: ignore[arg-type]
+    for ticker in tickers:
+        try:
+            r = fav.ultimo_resumo(ticker, DIR_SAIDA, settings.csv)
+        except ErroConfiguracao as e:
+            raise _erro(str(e)) from e
+        if r is None:
+            tabela.add_row(ticker, "sem rodada", *("—",) * 7)
+            continue
+        tabela.add_row(
+            ticker,
+            r.data_base.isoformat(),
+            str(r.idade_dias(hoje)),
+            r.perfil,
+            _preco_fav(r.preco),
+            _preco_fav(r.valor_ponderado),
+            _preco_fav(r.preco_maximo_compra),
+            _pct(r.upside),
+            str(r.n_avisos),
+        )
+    console.print(tabela)
+    console.print("Uso pessoal e educacional; não é recomendação de investimento.")
+
+
+@favoritos_app.command("adicionar")
+def favoritos_adicionar(
+    tickers: Annotated[list[str], typer.Argument(help="Tickers do universo (ex.: PETR4 WEGE3).")],
+) -> None:
+    """Acrescenta tickers aos favoritos (devem estar em config/universo_ibovespa.csv)."""
+    try:
+        validos = {e.ticker for e in carregar_universo()}
+        atuais = fav.carregar_favoritos(CAMINHO_FAVORITOS)
+    except ErroConfiguracao as e:
+        raise _erro(str(e)) from e
+    novos = [t.strip().upper() for t in tickers]
+    desconhecidos = [t for t in novos if t not in validos]
+    if desconhecidos:
+        raise _erro(
+            f"Fora do universo: {', '.join(desconhecidos)}. Ver `valuation cadastro buscar`."
+        )
+    resultado = list(dict.fromkeys([*atuais, *novos]))
+    fav.gravar_favoritos(resultado, CAMINHO_FAVORITOS)
+    console.print(f"Favoritos: {', '.join(resultado)}")
+
+
+@favoritos_app.command("remover")
+def favoritos_remover(
+    tickers: Annotated[list[str], typer.Argument(help="Tickers a retirar dos favoritos.")],
+) -> None:
+    """Retira tickers dos favoritos."""
+    try:
+        atuais = fav.carregar_favoritos(CAMINHO_FAVORITOS)
+    except ErroConfiguracao as e:
+        raise _erro(str(e)) from e
+    fora = {t.strip().upper() for t in tickers}
+    ausentes = sorted(fora - set(atuais))
+    if ausentes:
+        raise _erro(f"Não estão nos favoritos: {', '.join(ausentes)}.")
+    resultado = [t for t in atuais if t not in fora]
+    fav.gravar_favoritos(resultado, CAMINHO_FAVORITOS)
+    console.print(f"Favoritos: {', '.join(resultado) or '(vazio)'}")
+
+
+@favoritos_app.command("atualizar")
+def favoritos_atualizar(
+    max_idade_dias: int = typer.Option(
+        1,
+        "--max-idade-dias",
+        min=0,
+        help="Só roda o favorito cujo último resultado tem mais dias que isto (0 = todos).",
+    ),
+    forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+    sem_graficos: bool = typer.Option(False, "--sem-graficos", help="Não gera os PNG."),
+) -> None:
+    """Roda `rodar` (padrões) nos favoritos desatualizados; uma falha não interrompe as demais."""
+    try:
+        settings = carregar_settings()
+        tickers = fav.carregar_favoritos(CAMINHO_FAVORITOS)
+        reg.resolver_perfil(CAMINHO_PERFIL, dt.date.today(), None)
+    except (ErroConfiguracao, ErroPerfil) as e:
+        raise _erro(str(e)) from e
+    if not tickers:
+        raise _erro("Nenhum favorito. Use `valuation favoritos adicionar TICKER`.")
+    hoje = dt.date.today()
+    resultados: list[tuple[str, str]] = []
+    for ticker in tickers:
+        r = fav.ultimo_resumo(ticker, DIR_SAIDA, settings.csv)
+        if r is not None and r.idade_dias(hoje) <= max_idade_dias and max_idade_dias > 0:
+            resultados.append((ticker, f"em dia ({r.idade_dias(hoje)} d)"))
+            continue
+        console.rule(ticker)
+        try:
+            rodar(
+                ticker=ticker,
+                cenario="todos",
+                data_base=None,
+                perfil_override=None,
+                saida=None,
+                formato_csv="br",
+                forcar=forcar,
+                sem_graficos=sem_graficos,
+                explicar=False,
+            )
+        except typer.Exit:
+            resultados.append((ticker, "falhou"))
+        else:
+            resultados.append((ticker, "ok"))
+    tabela = Table(title="Favoritos: resultado da atualização")
+    tabela.add_column("Ticker")
+    tabela.add_column("Resultado")
+    for ticker, resultado in resultados:
+        tabela.add_row(ticker, resultado)
+    console.print(tabela)
+    falhas = [t for t, res in resultados if res == "falhou"]
+    if falhas:
+        raise _erro(f"{len(falhas)} favorito(s) falharam: {', '.join(falhas)}.")
 
 
 if __name__ == "__main__":  # pragma: no cover

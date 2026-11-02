@@ -20,6 +20,13 @@
 - `docs/backlog.md`, seção "Carteira pessoal": perguntas abertas (fonte de proventos, tecnologia
   da tela) e Etapas C1 a C6, com entregas.
 - `CLAUDE.md` (seção 1): nota apontando o ADR 0020; o corpo da especificação não muda.
+### Tickers favoritos e cache de resultados (ADR 0021, Etapa 8 do backlog)
+- `config/favoritos.yaml` (lista de tickers) e `saida/favoritos.py`: carga/gravação e leitura do
+  último `resumo.csv` de `saida/{TICKER}/` (o cache de resultados; nada novo é persistido).
+- `valuation favoritos`: tabela com data-base, idade, perfil, preço, valor ponderado, preço máximo
+  de compra, upside e avisos, sem rede. `favoritos adicionar|remover` e `favoritos atualizar
+  [--max-idade-dias] [--forcar] [--sem-graficos]` (roda `rodar` só nos desatualizados).
+- Testes em `tests/test_favoritos.py`.
 
 ### Setores como enum e execução por setor (ADR 0019)
 - `src/valuation/universo.py`: enum `SetorCVM` (33 setores do `setor_cvm` de

@@ -54,6 +54,9 @@ uv run valuation setores BANCOS              # empresas do setor
 uv run valuation rodar-setor BANCOS --sem-graficos   # roda o rodar em cada empresa do setor
 uv run valuation carteira lancar compra PETR4 100 --preco 35.5   # grava em carteira/transacoes.csv
 uv run valuation carteira importar corretora.xlsx   # CSV ou XLSX, tudo ou nada (ADR 0020)
+uv run valuation favoritos adicionar PETR4 WEGE3   # lista em config/favoritos.yaml
+uv run valuation favoritos                  # último resultado de cada favorito (sem rede)
+uv run valuation favoritos atualizar        # reroda só os favoritos desatualizados
 uv run valuation rodar PETR4                # DCF por cenário, valor ponderado pelo perfil, sensibilidade
 make rodar TICKER=PETR4                      # o mesmo
 ```

@@ -336,7 +336,7 @@ Melhora a usabilidade sem alterar nenhum modelo.
 
 *Entrega:* ferramenta mais educativa; útil antes da GUI.
 
-### Etapa 8 — Tickers favoritos e cache de resultados
+### Etapa 8 — ✅ Tickers favoritos e cache de resultados (ADR 0021; falta só a aba na GUI)
 
 Agiliza o uso cotidiano depois que o universo estiver razoavelmente coberto (Etapa 4).
 

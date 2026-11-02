@@ -159,6 +159,7 @@ flowchart TD
   - `valuation rodar TICKER`: Executa a avaliação completa. Requer perfil cadastrado dentro da validade ou passagem explícita de `--perfil`.
   - `valuation` (sem comando): menu interativo. Lista os setores numerados, lê a escolha, lista as empresas do setor, lê a escolha e executa `rodar` com os padrões (0 volta aos setores ou sai).
   - `valuation setores [SETOR]`: lista os setores do enum `SetorCVM` (`src/valuation/universo.py`, do `setor_cvm` do universo) ou as empresas de um setor.
+  - `valuation favoritos [adicionar|remover|atualizar]`: tabela do último `resumo.csv` de cada ticker de `config/favoritos.yaml` (sem rede); `atualizar` roda `rodar` só nos favoritos mais velhos que `--max-idade-dias` (ADR 0021).
   - `valuation rodar-setor SETOR`: confere o perfil uma vez, depois roda `rodar` em cada empresa do setor, em sequência. Holdings são puladas; uma falha não interrompe as demais, e a tabela final sai com 1 se houver falha (ADR 0019).
   - `valuation carteira lancar` / `importar ARQUIVO` (ADR 0020, camada `carteira/`, fora do pipeline de valuation): ver a seção 4.
 - **Configuração:** Leitura estrita de `config/settings.yaml` (tipado via Pydantic com `extra="forbid"`) e premissas específicas da empresa em `config/empresas/{TICKER}.yaml`.
