@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.31 — 2026-11-02**
+**Versão 1.32 — 2026-11-03**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -64,6 +64,9 @@ Teste focado: `uv run pytest tests/test_cvm.py -k escala -q`.
 > O diagrama de atividades UML completo (da CLI aos artefatos de saída, com bifurcações DCF/DDM e travas de segurança)
 > está documentado em [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md). O agente deve consultá-lo
 > para se guiar no fluxo geral e mantê-lo atualizado conforme novas etapas e modelos forem introduzidos.
+> Os demais diagramas UML (casos de uso, classes, objetos, sequência, comunicação, estados, pacotes,
+> componentes e implantação) estão indexados em [`docs/diagramas.md`](docs/diagramas.md), com a
+> tabela de qual diagrama atualizar em cada tipo de mudança.
 
 ```
 settings.yaml ──► config.carregar_settings() ──► Settings (pydantic, frozen, extra=forbid)
@@ -819,7 +822,7 @@ do horizonte, e o ano-ponte sem DFP tem `fracao` 0.
 ## 19. `custo_capital/` e `saida/`
 
 Seção 10 do `CLAUDE.md` e ADR 0007 (custo de capital); seções 11.5 e 13 e ADR 0016 (`saida/`). Funções puras: preços, Rf e métricas entram por parâmetro;
-nada consulta rede. Importa `config` (não importa `data`, `projecao` nem a CLI). Exceção:
+nada consulta rede. `custo_capital` não importa nenhum outro pacote do projeto (nem `config`, `data`, `projecao` ou a CLI). Exceção:
 `ErroCustoCapital` (`custo_capital/__init__.py`). Taxas em decimal, valores na moeda de reporte.
 
 | Módulo | Símbolos | Detalhe |

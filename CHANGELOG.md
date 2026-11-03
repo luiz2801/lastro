@@ -2,6 +2,21 @@
 
 ## [Não lançado]
 
+### Diagramas UML do projeto
+- Conjunto completo de diagramas, um por assunto das aulas de UML (`diagramas/`), em Mermaid dentro
+  de `docs/`: `diagrama_casos_de_uso.md` (atores, `«include»`, `«extend»`, especialização e a
+  especificação dos casos principais), `diagrama_classes.md` (6 diagramas por camada e a hierarquia
+  de exceções), `diagrama_objetos.md` (cenário do `rodar` com os valores reais dos testes
+  sintéticos, perfil, cadastro e carteira), `diagrama_interacao.md` (sequência de `atualizar`,
+  `perfil`, `carteira importar` e lotes; comunicação de `rodar` e `carteira lancar`),
+  `diagrama_estados.md` (perfil, cache de download, validação cruzada, execução do `rodar`,
+  importação da carteira e favoritos) e `diagrama_arquitetura.md` (pacotes, componentes e
+  implantação). Os de atividades e de sequência do `rodar` já existiam.
+- `docs/diagramas.md`: índice, rastreabilidade caso de uso → diagramas, notação e quando atualizar
+  cada um. O grafo de pacotes foi extraído dos `import` reais; o `guia.md` (seção 19) dizia que
+  `custo_capital` importa `config`, e ele não importa nenhum outro pacote (corrigido, guia 1.32).
+- Só documentação: nenhum código nem teste mudou.
+
 ### Carteira pessoal, Etapa C1: transações e importação (ADR 0020)
 - `src/valuation/carteira/`: `transacoes.py` (esquema, validação por tipo e do histórico: venda
   acima da posição, evento sem posição, data futura) e `arquivo.py` (leitura de CSV e XLSX, gravação

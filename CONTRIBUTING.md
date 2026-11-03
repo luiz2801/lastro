@@ -78,6 +78,7 @@ se um arquivo de teste surgir ou sumir).
 |---|---|
 | Módulo, função, contrato, fórmula, parâmetro lido, comando da CLI, armadilha | [`guia.md`](guia.md) (versão no topo, conforme a regra de manutenção dele) |
 | Fluxo do pipeline, etapas, bifurcações, modelos ou saídas | [`docs/diagrama_atividades.md`](docs/diagrama_atividades.md) (complementa o `guia.md` com o fluxo dinâmico; atualizar com a evolução do fluxo) |
+| Comando, ator, classe, relação entre classes, ordem das chamadas, estado (perfil, cache, carteira…), pacote, componente ou fonte externa | O diagrama UML correspondente, conforme a tabela em [`docs/diagramas.md`](docs/diagramas.md) (casos de uso, classes, objetos, sequência, comunicação, estados e arquitetura) |
 | Procedimento operacional frequente (nova empresa, métrica, parâmetro, etc.) | [`docs/recipes_agentes.md`](docs/recipes_agentes.md) |
 | Princípios inegociáveis ou armadilhas de uma camada técnica | [`docs/regras/`](docs/regras/README.md) ([`REGRAS_*.md`](docs/regras/README.md)) |
 | Entrega concluída (o quê, por fase) | [`CHANGELOG.md`](CHANGELOG.md), seção `[Não lançado]` |
