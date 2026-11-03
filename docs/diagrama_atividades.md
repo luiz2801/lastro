@@ -2,6 +2,8 @@
 
 Este documento descreve o fluxo de atividades (UML Activity Diagram) de ponta a ponta do projeto **Lastro**, mapeando o ciclo de vida completo desde a interação via CLI e ingestão de dados até os cálculos contábeis, modelagem financeira (DCF e DDM), análise de sensibilidade e geração dos artefatos de saída.
 
+> Para a ordem das chamadas entre módulos em `valuation rodar`, veja o [diagrama de sequência](diagrama_sequencia.md).
+
 > **Importante:** Este documento **não substitui** o [`guia.md`](../guia.md); eles se **complementam**. O diagrama de atividades oferece a visão dinâmica do fluxo do processo, decisões e ciclo de vida do pipeline, enquanto o `guia.md` mapeia a estrutura dos módulos, contratos de funções, parâmetros, convenções e armadilhas do código. O agente e os desenvolvedores devem consultar ambos.
 
 ---
