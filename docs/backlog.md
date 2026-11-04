@@ -436,28 +436,46 @@ sem nenhuma conta feita na camada de tela.
 - **Escopo de dados por favoritas** (ver "Perguntas abertas"): carga primária só das favoritas
   (`config/favoritos.yaml`, ADR 0021); ativo não favorito é carregado sob demanda quando aberto.
 
-### Perguntas abertas (para fechar antes da S2)
+### Decisões fechadas (terceira rodada, 2026-11-03): S2 liberada
 
-1. **Corte fixo quando n < 15** (pares): qual teto? O guia cita 80x ou 100x "por setor".
-   Recomendação: **100x global**, parâmetro em `settings.yaml` (`multiplos.corte_pl`), com
-   sobrescrita por setor em `setores.yaml` depois, se precisar.
-2. **Média**: o guia manda priorizar a **mediana** e evitar a média simples. Recomendação: seletor
-   com **Mediana (padrão)**, **Média winsorizada** (limites do corte) e **Média simples** com aviso
-   "sensível a extremos".
-3. **`comparar`/`multiplos.py` já têm seu tratamento** (descarta negativos, winsoriza por
-   parâmetro, exige ≥ 3 pares). Trocar pelo guia mudaria os valores implícitos já gravados.
-   Recomendação: **não mexer agora**; o tratamento do guia entra em módulo novo
-   (`analise/anomalias.py`) usado só pela GUI, e a unificação fica para um ADR depois.
-4. **Outros múltiplos**: o guia fala só de P/L. Recomendação: mesmo procedimento para P/VP, EV/EBITDA
-   e EV/EBIT (razões sempre positivas, cauda à direita); dividend yield sem corte.
-5. **Carga e atualização na GUI** (muda ADR 0022, item 3):
-   - Ao abrir: ler o cache dos favoritos, sem rede, e mostrar a idade de cada um.
-   - Ativo **não favorito**: ao abrir, usa o cache se existir; se não existir, baixa e calcula na
-     hora (rede, com progresso). Botão "Atualizar" em toda página de ativo.
-   - Pergunta: ao abrir, os favoritos **desatualizados** (mais de N dias) devem ser atualizados
-     sozinhos, em segundo plano, ou só quando você clicar? Recomendação: **só no clique** (botão
-     "Atualizar favoritas", que reaproveita `favoritos atualizar`), e automático apenas quando um
-     favorito não tiver nenhum cache. Evita rede e espera inesperadas a cada abertura.
+1. **Corte fixo (n < 15): 80x**, parâmetro global `multiplos.corte_pl` no `settings.yaml`, com
+   sobrescrita por setor em `setores.yaml` depois. Escolha delegada pelo usuário ("80x e 100x já
+   parecem anomalias"); o menor dos dois valores do guia é o mais conservador para poucos pares.
+2. **Estatística de referência: mediana, média winsorizada e média simples, com seletor na tela.**
+   Padrão = mediana (guia, seção 5). Média simples mostra aviso de sensibilidade a extremos. A
+   winsorização usa os limites do filtro (corte superior; inferior só em métrica que pode ser
+   negativa).
+3. **`comparar`/`multiplos.py` não mudam.** O guia entra em `analise/anomalias.py`, usado só pela
+   GUI; unificar depende de ADR futuro, comparando os valores implícitos antes e depois.
+4. **Tratamento de anomalias para o máximo de métricas** (pedido do usuário):
+   - Múltiplos sempre positivos (P/L, P/VP, P/SR, EV/EBITDA, EV/EBIT, EV/Receita, P/Ativo,
+     P/Cap. giro): ≤ 0 removido, Log-IQR (n ≥ 15) ou corte fixo (n < 15). Corte fixo de cada um
+     é parâmetro (`multiplos.corte_*`) e **não** é 80x para todos; valor a escolher na S2.
+   - Métricas que podem ser negativas legitimamente (margens, ROE, ROIC, crescimento, dívida
+     líquida/EBITDA): IQR de Tukey **nos dois lados**, na escala linear. *Escolha minha, mudar se
+     discordar*: o guia não cobre esse caso.
+   - Dividend yield, payout e liquidez: sem corte, só marcação visual de pontos fora de 1,5·IQR.
+   - A série nunca é apagada; pontos descartados ficam em cinza e a tela mostra a contagem.
+5. **Atualização só no clique.** Abrir a GUI lê o cache dos favoritos, sem rede. Botão "Atualizar
+   favoritas" (reaproveita `favoritos atualizar`) e botão "Atualizar" em cada página de ativo.
+   Rede automática apenas para ativo sem nenhum cache: o favorito sem cache ou o não favorito
+   aberto pela primeira vez, com progresso e erro visível.
+
+### Métricas pedidas além do GUI-20 (registrado em 2026-11-03)
+
+O usuário quer "o máximo de métricas possíveis", inclusive **Basileia, endividamento e caixa**.
+- **Endividamento e caixa (não financeiras)** ✅/🔶: já existem dívida bruta/líquida, caixa,
+  aplicações, arrendamento, dívida líquida/EBITDA e PL; falta expor como série e acrescentar
+  dívida bruta/PL, dívida bruta/EBITDA, cobertura de juros (EBIT/despesa financeira), caixa/dívida
+  CP, liquidez corrente/seca/imediata. Cada definição segue a regra 7.
+- **Basileia (financeiras)** ❌ na CVM: o índice de Basileia não está na DFP (CLAUDE.md, seção 11.3
+  e riscos). Candidato de fonte gratuita: **IF.data do Banco Central** (dados abertos, índice de
+  Basileia, capital nível 1 e principal por instituição e trimestre). **[VALIDAR]** URL, formato,
+  cobertura de ITUB4, BBAS3, BBDC4, SANB11, BPAC11 e o casamento instituição ↔ ticker (conglomerado
+  prudencial × CNPJ). Entrada nova de fonte: adaptador em `data/` com cache, `docs/fontes.md` e
+  ADR próprio. Fora da sprint GUI 1; fica como item P2 da sprint seguinte.
+- **Financeiras:** além de ROE, P/VP, payout e PL, a carteira de crédito, índice de eficiência e
+  inadimplência só saem da DFP se as contas estiverem mapeadas (ADR 0011); revisar a cobertura.
 
 ### Critério de pronto da sprint
 
