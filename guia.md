@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.37 — 2026-11-04**
+**Versão 1.38 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -50,11 +50,11 @@
 | Análise | `analise/{cenarios,sensibilidade,indicadores}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade, FCFF e DDM; indicadores por ativo (seção 20) |
 | Saída | `saida/{csv,arquivos,real,graficos,glossario,favoritos}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG, glossário das métricas e favoritos (seção 19) |
 | Carteira | `carteira/{transacoes,arquivo,posicao}.py` | ✅ Etapas C1 e C2 do ADR 0020: transações, histórico validado, importação CSV/XLSX, posição, preço médio e resultado (seção 21); a C3 (indicadores por ativo) está em `analise/indicadores.py` e no comando `indicadores`; proventos e alocação ainda não (seção 12) |
-| Serviços | `servicos/{empresa,mercado}.py` | Em extração de `cli.py` (S1 da Sprint GUI 1, ADR 0022): cadastro, padronização, preços, market cap e macro (seção 22) |
+| Serviços | `servicos/{empresa,mercado,indicadores}.py` | Em extração de `cli.py` (S1 da Sprint GUI 1, ADR 0022): cadastro, padronização, preços, market cap, macro e indicadores (seção 22) |
 | CLI | `cli.py` | `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 673 testes (662 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 679 testes (668 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -120,7 +120,7 @@ Avaliações por cenário + matrizes + múltiplos ─► cli._gravar_complemento
     arquivos.faixas_football + graficos.* ─► PNG; montar_meta ─► meta.json (por último)
 
 setores.yaml pares + YAML (incluir/excluir) ─► cli._coletar_pares: por par, _padronizar +
-    _mercado_par (market cap) + _fundamentos (metricas_ltm, itens da ponte, em BRL)
+    _mercado_par (market cap) + sind.fundamentos (metricas_ltm, itens da ponte, em BRL)
   ─► multiplos.avaliar(alvo, pares) ─► tabela_pares, estatisticas (winsorizadas), implicitos
   ─► multiplos_*.csv, colunas do resumo, P/VP dos minoritários, g implícito (dcf.g_implicito);
       os mesmos pares alimentam o beta por comparáveis e a estrutura do setor
@@ -150,7 +150,7 @@ unidade do papel avaliado (em units quando o ticker é unit com `acoes_por_unit`
 por ação do `rodar` e no alvo dos múltiplos, para comparar com o preço da unit. `_custo_capital(p, m, settings, base, comps=None) ->
 wc.CustoCapital` (seção 19), com `_beta` (precedência YAML > settings, `_metodo_beta`;
 `_regressao` da classe mais líquida; comparáveis sobre `comps.pares`),
-`_divida_sobre_capital_setor` e `_data_balanco` (última data ≤ data-base com YTD e balanço; aviso
+`_divida_sobre_capital_setor` e `sind.data_balanco` (seção 22; aviso
 acima de `DEFASAGEM_AVISO_DIAS = 140`, `_aviso_defasagem`); `_ke(moeda, beta, m, settings, avisos)`
 (CAPM comum aos dois tipos; o ERP vem de `_erp_efetivo(settings, base, avisos)`: manual ou o JSON do comando `erp`) e `_custo_capital_financeira(p, m, settings, base, comps=None) ->
 wc.CustoCapitalFinanceira` (beta e Ke, sem Kd nem estrutura; comparáveis sem Hamada; Ke ≤ g ⇒
@@ -158,13 +158,12 @@ erro). Pares (seção 20): `_tickers_pares(premissas, proprios)`
 (setor + `incluir` − `excluir` − classes do alvo), `_pares_do_yaml(ticker)` (para
 `atualizar --com-pares`), `_coletar_pares(p, m, settings, base) -> _Comparaveis(pares, avisos)`
 (cada `_Par(padronizada, cap, fundamentos)`; par com erro vira aviso), `_mercado_par` (market cap
-do par; trocado nos testes), `_fundamentos` (LTM + itens da ponte com minoritários contábeis, em
-BRL), `_multiplos` (`None` sem pares), `_precisa_pares` (beta por comparáveis, estrutura `setor` ou
+do par; trocado nos testes), `sind.fundamentos` (seção 22), `_multiplos` (`None` sem pares), `_precisa_pares` (beta por comparáveis, estrutura `setor` ou
 `multiplo_pvp`), `_mostrar_pares`, `_mostrar_implicitos`, `_gravar_multiplos`. `_sugerir(p, settings, base) -> (histórico, setor, Sugestoes)`
 (métricas dos exercícios < data-base) e `_resolver(p, settings, sugestoes, base, horizonte)`
 (premissas do cenário base) servem a `premissas sugerir` e a `rodar`. Financeiras:
 `_sugerir_financeira(p, settings, base) -> (histórico, SugestoesFinanceira)`, `_pl_inicial(p, base)`
-(PL da controladora no balanço de `_data_balanco`), `_premissas_sugerir_financeira` e
+(PL da controladora no balanço de `sind.data_balanco`), `_premissas_sugerir_financeira` e
 `_escrever_premissas(p, texto, escrever)` (comum aos dois tipos). Do `rodar`:
 `_dados_avaliacao` (itens da ponte no balanço de `CustoCapital.data_balanco`, ações =
 soma de `MarketCap.classes`, câmbio 1 ou dólar), `_ronic` (YAML > settings; `roic_historico` =
@@ -180,7 +179,7 @@ mediana de 5a), `_resumo` (linha do `resumo.csv`), `_mostrar_valuation`. Finance
 | `mercado TICKER` | `--data-base AAAA-MM-DD`; `--forcar` | Preço por classe, Ibovespa, dólar, Selic, IPCA, Rf e market cap, cada um em 2 fontes | `--data-base` sobrescreve `settings.data_base`. Exige `atualizar` antes (lê `composicao_capital.parquet`; senão mensagem pedindo o comando) |
 | `qa TICKER` | — | Padroniza, roda o QA (verificações do plano da companhia), imprime verificações, cobertura e contas não mapeadas relevantes (só não financeiras); grava `data/processed/qa/qa_{TICKER}.json` | **Sai com 1 se houver erro de QA.** Exige `atualizar` antes |
 | `historico TICKER` | `--anos N` (5); `--trimestral` | Métricas anuais (R$ mi) + coluna LTM. Financeiras: receitas e resultado bruto (`3.01`/`3.03`), lucro, lucro da controladora, alíquota, PL da controladora, ROE, dividendos, payout, ativo, ativo/PL, ROA | `--anos` = quantos exercícios; `--trimestral` mostra os 8 últimos trimestres (receita, EBITDA, lucro, D&A, capex, dividendos; financeiras: lucro da controladora e dividendos) |
-| `indicadores TICKER` | `--anos N` (5); `--data-base AAAA-MM-DD`; `--forcar`; `--explicar` | Indicadores por ativo (Etapa C3, ADR 0020): tabela histórica por exercício encerrado até a data-base + coluna LTM (`LTM mm/aaaa`, balanço de `_data_balanco`) e tabela "De mercado" (preço, market cap, LTM até, P/L, P/VP, dividend yield, EV/EBITDA, EV/EBIT). Não financeira: margem líquida, margem EBITDA, dívida líquida/EBITDA, ROE (PL inicial), ROIC. Financeira: ROE, payout, ROA, ativo/PL e só os múltiplos de equity | `--anos` = quantos exercícios. `--explicar` imprime a legenda (`gl.legenda_indicadores`). **Mercado indisponível** (sem preço/composição, par de dados faltando) ⇒ aviso "Múltiplos de mercado indisponíveis" e o histórico sai mesmo assim (saída 0). Exige `atualizar`; consulta preços e macro como `mercado` (via `_mercado`/`_fundamentos`, os mesmos do `comparar`). Sem CSV de saída. `--data-base` inválida ⇒ saída 1 |
+| `indicadores TICKER` | `--anos N` (5); `--data-base AAAA-MM-DD`; `--forcar`; `--explicar` | Indicadores por ativo (Etapa C3, ADR 0020): tabela histórica por exercício encerrado até a data-base + coluna LTM (`LTM mm/aaaa`, balanço de `sind.data_balanco`) e tabela "De mercado" (preço, market cap, LTM até, P/L, P/VP, dividend yield, EV/EBITDA, EV/EBIT). Não financeira: margem líquida, margem EBITDA, dívida líquida/EBITDA, ROE (PL inicial), ROIC. Financeira: ROE, payout, ROA, ativo/PL e só os múltiplos de equity | `--anos` = quantos exercícios. `--explicar` imprime a legenda (`gl.legenda_indicadores`). **Mercado indisponível** (sem preço/composição, par de dados faltando) ⇒ aviso "Múltiplos de mercado indisponíveis" e o histórico sai mesmo assim (saída 0). Exige `atualizar`; consulta preços e macro como `mercado` (via `_mercado`/`sind.indicadores_de_mercado`, os mesmos do `comparar`). Sem CSV de saída. `--data-base` inválida ⇒ saída 1 |
 | `cobertura` | `--tickers A,B` ou `--tudo` | Matriz conta crítica × ticker com a fração dos exercícios mapeados (verde ≥ 95%); conta do outro plano aparece como `—` | igual a `atualizar` |
 | `premissas sugerir TICKER` | `--escrever`; `--perfil P`; `--data-base AAAA-MM-DD` | Sugere as premissas a partir dos exercícios encerrados antes da data-base e imprime "premissas sugeridas × histórico" (último ano, medianas 5a/10a, sugerido, valor no YAML), CAGR 3/5/10a, deltas dos cenários e a **projeção base** (R$ mi). Financeira: ROE (início → longo prazo) e payout inicial × histórico, g, payout final, delta do ROE e a projeção do DDM (ROE, payout, PL, lucro, dividendos) a partir do PL do último balanço. Avisos: setor de commodity, setor não definido, ano-ponte sem DFP, histórico curto | `--escrever` regenera `config/empresas/{TICKER}.yaml` comentado (anterior em `.yaml.bak`; sem ele, só avisa que o YAML não existe). `--perfil` só define o horizonte quando o YAML usa `horizonte_anos: perfil`; sem perfil válido nem `--perfil`, mostra as sugestões e pula a projeção (sai com 0). `--data-base` corta o histórico e define a fração do ano corrente. Exige `atualizar` antes |
 | `wacc TICKER` | `--data-base AAAA-MM-DD`; `--forcar`; `--saida DIR`; `--formato-csv br\|intl` | Beta, Ke, Kd, estrutura e WACC na moeda de reporte; tabela no terminal e `{saida}/{TICKER}/{data-base}/wacc.csv` (`componente;valor;detalhe`, avisos em linhas `aviso`). Financeira: só beta e Ke (sem Kd, estrutura nem WACC) e a data do balanço | `--saida` muda a raiz (padrão `saida/`); `intl` grava `,`/`.`/utf-8. **WACC ≤ g terminal ⇒ sai com 1.** Exige `atualizar` antes; consulta preços e macro como `mercado`. Mede os pares só se o beta for por comparáveis ou a estrutura for `setor` |
@@ -579,6 +578,7 @@ proposto; `docs/backlog.md`).
 |---|---|---|
 | `test_servicos_empresa.py` | `carregar_cadastro` nos diretórios recebidos, `padronizar` (sem aviso, individual com aviso no retorno e nada no terminal, sem demonstrações, holding), aviso nas notas quando o erro vem depois dele, CLI imprimindo esse aviso, pacote sem dependência de terminal | `SessaoFalsa`, `zip_cvm`, `dfp_completa` |
 | `test_servicos_mercado.py` | `cotacoes` (classe sem preço, nenhum preço, sem composição), `carregar_macro` (dólar sem segunda fonte), `carregar_mercado` (avisos separados, nada no terminal, ordem das notas no erro), invólucros da CLI imprimindo os avisos | `Falso`, `_composicao`, `provedores_falsos` |
+| `test_servicos_indicadores.py` | série não financeira e financeira à mão, corte por data-base e `anos`, `data_balanco`, múltiplos de mercado à mão, conversão só fora de BRL | `_padronizada`, `industria`, `_cap` |
 | `test_favoritos.py` | lista de favoritos (carga, chave inválida, ida e volta), último `resumo.csv` (pasta mais recente, `br`/`intl`, sem avisos, sem rodada), comandos `favoritos`, `adicionar`/`remover` e `atualizar` com `rodar` falso | `tmp_path`, `cli.CAMINHO_FAVORITOS`/`DIR_SAIDA` trocados |
 | `test_http.py` | cache, TTL, 304, retry, fallback | `sessao_falsa` |
 | `test_cvm.py` | parsing, escala, versões, `coletar` | `zip_cvm("dfp_cia_aberta_2025")` etc. |
@@ -862,7 +862,7 @@ interrompe); `IpcaProjetado(macro.ipca_esperado, macro.ipca_12m)` → `valores_r
 novos, que a CLI junta aos demais.
 
 Montagem na CLI (`_custo_capital`): moeda da padronização → `metodo_efetivo`; balanço =
-`_data_balanco` → `metricas_ltm(dt_fim=…)["divida_bruta"]`; equity = `MarketCap.valor` (÷ dólar se
+`sind.data_balanco` → `metricas_ltm(dt_fim=…)["divida_bruta"]`; equity = `MarketCap.valor` (÷ dólar se
 USD); beta (`_beta`) → `beta_na_estrutura`; Ke com `Macro.rf_brl`; Kd do YAML manual ou histórico
 dos exercícios encerrados com piso/teto = Rf da moeda + `kd.spread_*`; alíquota =
 `impostos.aliquota_nominal`; por fim `validar_g` contra `projetor.g_terminal`. Beta por
@@ -960,3 +960,15 @@ diretórios) entra por parâmetro nomeado, com a constante de `config.py` como p
   quando convém a cada comando; `.avisos_coleta` fala do que faltou (classe sem preço, dólar sem
   segunda fonte) e `cli._mercado` o imprime na hora. `.todos_os_avisos` junta os dois, para a GUI.
 - Falha depois de um aviso: mesma regra de `__notes__`, na ordem em que os avisos surgiram.
+
+**`indicadores.py`**
+- `data_balanco(contas, base) -> Timestamp`: última data até a data-base com fluxos acumulados e
+  balanço (ponto do LTM); nenhuma ⇒ `ErroContabil`. Usado também por `wacc`, `premissas`, `comparar`
+  e `rodar`.
+- `serie_indicadores(p, settings, base, anos) -> TabelaIndicadores(tabela, colunas, definicoes,
+  financeira)`: últimos `anos` exercícios encerrados até a data-base + LTM, com o plano certo
+  (financeira ou não financeira). Exige o balanço de 12 meses antes do LTM (`nf.metricas_ltm`).
+- `fundamentos(p, cap, settings, base, dolar, acoes=None) -> mt.Fundamentos`: LTM + itens da ponte
+  com minoritários contábeis, em BRL (`acoes` padrão: ON + PN do market cap).
+- `indicadores_de_mercado(p, mk, settings, base) -> IndicadoresMercado(fundamentos, multiplos)`:
+  a mesma conta do `comparar`.

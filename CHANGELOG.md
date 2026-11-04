@@ -7,6 +7,8 @@
   `cli.py`, sem terminal; o aviso de demonstrações individuais volta em `avisos`. Nenhuma saída muda:
   `cli._carregar_cadastro` e `cli._padronizar` ficam como invólucros e os testes da CLI seguem sem
   edição.
+- Fatia "indicadores": `servicos/indicadores.py` (`serie_indicadores`, `indicadores_de_mercado`,
+  `fundamentos`, `data_balanco`), usado pelo comando `indicadores` e por `wacc`, `comparar` e `rodar`.
 - Fatia "mercado": `servicos/mercado.py` (`cotacoes`, `carregar_macro`, `carregar_mercado`, `Mercado`).
   "Dólar sem segunda fonte" e "sem preço" voltam em `avisos_coleta`; a CLI os imprime igual a antes.
 

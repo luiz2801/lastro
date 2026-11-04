@@ -12,7 +12,7 @@ Estilo: **camadas em pipeline, com uma fachada de orquestração**. O grafo abai
 flowchart BT
     subgraph ORQ["Orquestração e interface"]
         cli["cli<br/>(typer, rich)"]
-        servicos["servicos<br/>empresa, mercado"]
+        servicos["servicos<br/>empresa, mercado,<br/>indicadores"]
     end
 
     subgraph APL["Aplicação (camadas de cálculo e saída)"]
@@ -34,7 +34,7 @@ flowchart BT
     config["config<br/>Settings, Setor, ler_yaml"]
 
     cli --> servicos
-    servicos --> contabil & data & projecao & config
+    servicos --> analise & modelos & contabil & data & projecao & config
     cli --> saida & analise & modelos & projecao & custo & contabil & perfil & data & carteira & universo & config
     analise --> modelos & projecao & custo & perfil
     saida --> modelos & config

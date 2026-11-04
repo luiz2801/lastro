@@ -20,7 +20,6 @@ from rich.table import Table
 
 from valuation import __version__
 from valuation.analise import cenarios as cen
-from valuation.analise import indicadores as ind
 from valuation.analise import sensibilidade as sens
 from valuation.carteira import ErroCarteira
 from valuation.carteira import arquivo as carteira_arq
@@ -80,6 +79,7 @@ from valuation.saida import graficos as gr
 from valuation.saida import real
 from valuation.saida.csv import INTERNACIONAL, FormatoCsv, gravar_csv, gravar_matriz
 from valuation.servicos import empresa as emp
+from valuation.servicos import indicadores as sind
 from valuation.servicos import mercado as mer
 from valuation.universo import SetorCVM, buscar_setor, carregar_universo, empresas_do_setor
 
@@ -675,11 +675,6 @@ def historico(
     console.print(tabela)
 
 
-def _anos_encerrados(indice: pd.Index, base: dt.date) -> list[object]:
-    """Exercícios (índice anual) encerrados em 31/12 até a data-base."""
-    return [a for a in indice if dt.date(int(a), 12, 31) <= base]
-
-
 @app.command()
 def indicadores(
     ticker: str = typer.Argument(..., help="Ex.: PETR4."),
@@ -700,24 +695,7 @@ def indicadores(
             else settings.resolver_data_base(agora.date())
         )
         p = _padronizar(ticker, settings)
-        financeira = p.plano.tipo == "financeira"
-        data_bal = _data_balanco(p.contas, base)
-        if financeira:
-            anual = fin.metricas(per.anual(p.contas))
-            ltm = fin.metricas_ltm(p.contas, dt_fim=data_bal)
-            definicoes = ind.HISTORICOS_FINANCEIRA
-            calcular = ind.historicos_financeira
-        else:
-            aliquota = settings.impostos.aliquota_nominal
-            anual = nf.metricas(per.anual(p.contas), aliquota_nominal=aliquota, ajustes=p.ajustes)
-            ltm = nf.metricas_ltm(
-                p.contas, aliquota_nominal=aliquota, dt_fim=data_bal, ajustes=p.ajustes
-            )
-            definicoes = ind.HISTORICOS
-            calcular = ind.historicos
-        anual = anual.loc[_anos_encerrados(anual.index, base)].tail(anos)
-        tabela_h = calcular(pd.concat([anual, ltm.to_frame().T]))
-        colunas = [*map(str, anual.index), f"LTM {data_bal:%m/%Y}"]
+        serie = sind.serie_indicadores(p, settings, base, anos)
     except ValueError as e:
         raise _erro(f"--data-base inválida: {e}") from e
     except (ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroContabil) as e:
@@ -725,18 +703,18 @@ def indicadores(
 
     tabela = Table(title=f"Indicadores — {', '.join(p.empresa.tickers)}")
     tabela.add_column("Indicador")
-    for coluna in colunas:
+    for coluna in serie.colunas:
         tabela.add_column(coluna, justify="right")
-    for chave, (rotulo, unidade, _) in definicoes.items():
-        tabela.add_row(rotulo, *(_formatar(v, unidade) for v in tabela_h[chave]))
+    for chave, (rotulo, unidade, _) in serie.definicoes.items():
+        tabela.add_row(rotulo, *(_formatar(v, unidade) for v in serie.tabela[chave]))
     console.print(tabela)
 
     avisos: list[str] = []
     mercado_mostrado: tuple[str, ...] = ()
     try:
         mk = _mercado(ticker, settings, base, agora, forcar)
-        f = _fundamentos(p, mk.cap, settings, base, mk.macro.cambio.valor)
-        multiplos = ind.de_mercado(f, financeira=financeira)
+        de_mercado = sind.indicadores_de_mercado(p, mk, settings, base)
+        f, multiplos = de_mercado.fundamentos, de_mercado.multiplos
         avisos.extend(mk.avisos)
     except (ErroDadosExternos, ErroContabil, ErroModelo, ErroConfiguracao, ErroDownload) as e:
         avisos.append(f"Múltiplos de mercado indisponíveis: {e}")
@@ -757,7 +735,7 @@ def indicadores(
     for aviso in avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
     if explicar:
-        chaves = [d[2] for d in definicoes.values()]
+        chaves = [d[2] for d in serie.definicoes.values()]
         _legenda(gl.legenda_indicadores(chaves, mercado_mostrado))
     console.print("Estudo pessoal; não é recomendação de investimento.")
 
@@ -1127,7 +1105,7 @@ def _sugerir_financeira(
 
 def _pl_inicial(p: emp.Padronizada, base: dt.date) -> tuple[float, dt.date]:
     """PL da controladora no último balanço até a data-base (ponto de partida do DDM)."""
-    data = _data_balanco(p.contas, base)
+    data = sind.data_balanco(p.contas, base)
     bal = cast(pd.Series, per.saldos(p.contas).loc[data])
     minoritarios = float(cast(float, bal.get("minoritarios", 0.0)))
     pl = float(cast(float, bal["patrimonio_liquido_total"]))
@@ -1240,15 +1218,6 @@ def _premissas_sugerir_financeira(
 DEFASAGEM_AVISO_DIAS = 140
 
 
-def _data_balanco(contas: pd.DataFrame, base: dt.date) -> pd.Timestamp:
-    """Última data até a data-base com fluxos acumulados e balanço (ponto do LTM)."""
-    comuns = per.acumulado_no_ano(contas).index.intersection(per.saldos(contas).index)
-    comuns = comuns[comuns <= pd.Timestamp(base)]
-    if comuns.empty:
-        raise ErroContabil(f"Nenhuma demonstração até {base}.")
-    return pd.Timestamp(comuns.max())
-
-
 def _tickers_pares(premissas: pm.PremissasEmpresa, proprios: tuple[str, ...]) -> list[str]:
     """Pares do setor + `pares.incluir` - `pares.excluir`, sem as classes da própria empresa."""
     setor = _setor(premissas.pares.setor)
@@ -1288,45 +1257,6 @@ def _acoes_do_papel(empresa: cad.Empresa, cap: prc.MarketCap, ticker: str) -> in
     return round(total / n) if n > 0 else total
 
 
-def _fundamentos(
-    p: emp.Padronizada,
-    cap: prc.MarketCap,
-    settings: Settings,
-    base: dt.date,
-    dolar: float,
-    acoes: int | None = None,
-) -> mt.Fundamentos:
-    """Métricas LTM no último balanço até a data-base e market cap, em BRL.
-
-    `acoes` = quantidade usada no valor por ação (padrão: ON + PN do market cap).
-    """
-    data_bal = _data_balanco(p.contas, base)
-    acoes = sum(c.acoes for c in cap.classes) if acoes is None else acoes
-    if p.plano.tipo == "financeira":
-        return mt.fundamentos_financeira(
-            p.premissas.ticker,
-            fin.metricas_ltm(p.contas, dt_fim=data_bal),
-            acoes=acoes,
-            data_balanco=data_bal.date(),
-            market_cap=cap.valor,
-        )
-    ltm = nf.metricas_ltm(
-        p.contas,
-        aliquota_nominal=settings.impostos.aliquota_nominal,
-        dt_fim=data_bal,
-        ajustes=p.ajustes,
-    )
-    itens = pt.itens_do_balanco(
-        ltm,
-        acoes=acoes,
-        data_balanco=data_bal.date(),
-        coligadas=p.premissas.ajustes.coligadas,
-        minoritarios="contabil",
-    )
-    cambio = 1.0 if p.moeda == "BRL" else dolar
-    return mt.fundamentos(p.premissas.ticker, ltm, itens=itens, market_cap=cap.valor, cambio=cambio)
-
-
 def _mercado_par(
     ticker: str,
     settings: Settings,
@@ -1364,7 +1294,7 @@ def _coletar_pares(
                 continue
             vistos.add(par.empresa.cnpj)
             cap = _mercado_par(t, settings, base, cadastro, m.yf, brapi)
-            f = _fundamentos(par, cap, settings, base, m.macro.cambio.valor)
+            f = sind.fundamentos(par, cap, settings, base, m.macro.cambio.valor)
         except (
             ErroConfiguracao,
             ErroDownload,
@@ -1386,7 +1316,7 @@ def _multiplos(
     if not comps.pares:
         return None
     acoes = _acoes_do_papel(m.empresa, m.cap, p.premissas.ticker)
-    alvo = _fundamentos(p, m.cap, settings, base, m.macro.cambio.valor, acoes)
+    alvo = sind.fundamentos(p, m.cap, settings, base, m.macro.cambio.valor, acoes)
     cfg = settings.multiplos
     financeira = p.plano.tipo == "financeira"
     return mt.avaliar(
@@ -1504,7 +1434,7 @@ def _custo_capital(
     cfg = settings.custo_capital
     aliquota = settings.impostos.aliquota_nominal
     moeda = cast(capm.Moeda, p.moeda)
-    data_bal = _data_balanco(p.contas, base)
+    data_bal = sind.data_balanco(p.contas, base)
     avisos = _aviso_defasagem(data_bal, base)
     ltm = nf.metricas_ltm(p.contas, aliquota_nominal=aliquota, dt_fim=data_bal, ajustes=p.ajustes)
     equity = m.cap.valor if moeda == "BRL" else m.cap.valor / m.macro.cambio.valor
@@ -1634,7 +1564,7 @@ def _medir_para_erp(
             if p.moeda != "BRL":
                 raise ErroContabil(f"reporta em {p.moeda}")
             cap = _cotacoes(empresa, settings, base, yf, brapi)[1]
-            f = _fundamentos(p, cap, settings, base, 1.0)
+            f = sind.fundamentos(p, cap, settings, base, 1.0)
             anual, _ = _metricas_com_ltm(p, settings)
         except (
             ErroConfiguracao,
@@ -1809,7 +1739,7 @@ def _custo_capital_financeira(
     Beta por comparáveis = mediana dos betas dos pares, sem Hamada (dívida de banco é operação).
     """
     moeda = cast(capm.Moeda, p.moeda)
-    data_bal = _data_balanco(p.contas, base)
+    data_bal = sind.data_balanco(p.contas, base)
     avisos = _aviso_defasagem(data_bal, base)
     sem_divida = wc.estrutura(metodo="mercado_atual", divida=0.0, equity=m.cap.valor)
     aliquota = settings.impostos.aliquota_nominal

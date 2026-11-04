@@ -289,7 +289,7 @@ flowchart TD
   G --> H[Tabela histórica]
   H --> I[_mercado: preço, market cap e câmbio na data-base]
   I -->|preço ou composição indisponível| W[Aviso: múltiplos de mercado indisponíveis]
-  I --> J[_fundamentos: LTM no último balanço, em BRL]
+  I --> J[sind.fundamentos: LTM no último balanço, em BRL]
   J --> K[ind.de_mercado: mt.multiplo, a mesma conta do comparar]
   K --> L[Tabela de mercado]
   H --> M{--explicar?}
