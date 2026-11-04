@@ -42,14 +42,13 @@ def _cartoes(series: hm.SeriesMercado, base: dt.date) -> None:
         st.info(f"{TRACO} sem fechamento até {base:%d/%m/%Y} em disco.")
         return
     faixa = c.faixa_52_semanas
-    colunas = st.columns(4)
+    colunas = st.columns(5)
     colunas[0].metric("Preço", fo.brl(c.preco), help=f"Fechamento de {c.data_preco:%d/%m/%Y}.")
-    colunas[1].metric(
-        "Mín./máx. 52 semanas",
-        f"{fo.brl(faixa[0])} / {fo.brl(faixa[1])}".replace("$", r"\$") if faixa else TRACO,
-    )
-    colunas[2].metric("Market cap (R$ mi)", fo.formatar(c.market_cap, "mi", 2))
-    colunas[3].metric(
+    # Um cartão por valor: o st.metric corta texto longo, e "R$ mín / R$ máx" sumia.
+    colunas[1].metric("Mínimo 52 semanas", fo.brl(faixa[0]) if faixa else TRACO)
+    colunas[2].metric("Máximo 52 semanas", fo.brl(faixa[1]) if faixa else TRACO)
+    colunas[3].metric("Market cap (R$ mi)", fo.formatar(c.market_cap, "mi", 2))
+    colunas[4].metric(
         "Dividend yield", fo.formatar(c.dividend_yield, "%", 2), help=_ajuda("dividend_yield")
     )
 
