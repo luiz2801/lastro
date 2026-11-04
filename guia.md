@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.36 — 2026-11-04**
+**Versão 1.37 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -50,11 +50,11 @@
 | Análise | `analise/{cenarios,sensibilidade,indicadores}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade, FCFF e DDM; indicadores por ativo (seção 20) |
 | Saída | `saida/{csv,arquivos,real,graficos,glossario,favoritos}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG, glossário das métricas e favoritos (seção 19) |
 | Carteira | `carteira/{transacoes,arquivo,posicao}.py` | ✅ Etapas C1 e C2 do ADR 0020: transações, histórico validado, importação CSV/XLSX, posição, preço médio e resultado (seção 21); a C3 (indicadores por ativo) está em `analise/indicadores.py` e no comando `indicadores`; proventos e alocação ainda não (seção 12) |
-| Serviços | `servicos/empresa.py` | Em extração de `cli.py` (S1 da Sprint GUI 1, ADR 0022): cadastro e padronização (seção 22) |
+| Serviços | `servicos/{empresa,mercado}.py` | Em extração de `cli.py` (S1 da Sprint GUI 1, ADR 0022): cadastro, padronização, preços, market cap e macro (seção 22) |
 | CLI | `cli.py` | `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 665 testes (654 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 673 testes (662 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -142,10 +142,10 @@ Callback global: `-v/--verbose` → logging DEBUG. Erros: `_erro()` imprime em v
 `_linha_validada(v, formato)` (cor por status).
 `_setor(chave)` (chave ausente de `setores.yaml` ⇒ `ErroConfiguracao`), `_horizonte(premissas,
 settings, hoje, override)` (inteiro do YAML ou horizonte do perfil via `resolver_perfil`).
-`_mercado(ticker, settings, base, agora, forcar) -> _Mercado(empresa, precos, ibov, macro, cap, yf)`
-(coleta comum a `mercado`, `wacc`, `comparar` e `rodar`; `.avisos`), que usa
-`_cotacoes(empresa, settings, base, yf, brapi) -> (precos, MarketCap)` (sem preço ou sem
-composição ⇒ `ErroDadosExternos`). `_acoes_do_papel(empresa, cap, ticker)`: ações em circulação na
+`_mercado(ticker, settings, base, agora, forcar) -> _Mercado`, `_macro(...)` e
+`_cotacoes(empresa, settings, base, yf, brapi) -> (precos, MarketCap)` são invólucros de
+`servicos/mercado.py`, com os avisos da coleta impressos (`_imprimir_avisos`, `_avisos_do_erro`);
+`_Mercado` é apelido de `mer.Mercado` (coleta comum a `mercado`, `wacc`, `comparar` e `rodar`). `_acoes_do_papel(empresa, cap, ticker)`: ações em circulação na
 unidade do papel avaliado (em units quando o ticker é unit com `acoes_por_unit`), usada no valor
 por ação do `rodar` e no alvo dos múltiplos, para comparar com o preço da unit. `_custo_capital(p, m, settings, base, comps=None) ->
 wc.CustoCapital` (seção 19), com `_beta` (precedência YAML > settings, `_metodo_beta`;
@@ -578,6 +578,7 @@ proposto; `docs/backlog.md`).
 | Arquivo | Cobre | Fixtures |
 |---|---|---|
 | `test_servicos_empresa.py` | `carregar_cadastro` nos diretórios recebidos, `padronizar` (sem aviso, individual com aviso no retorno e nada no terminal, sem demonstrações, holding), aviso nas notas quando o erro vem depois dele, CLI imprimindo esse aviso, pacote sem dependência de terminal | `SessaoFalsa`, `zip_cvm`, `dfp_completa` |
+| `test_servicos_mercado.py` | `cotacoes` (classe sem preço, nenhum preço, sem composição), `carregar_macro` (dólar sem segunda fonte), `carregar_mercado` (avisos separados, nada no terminal, ordem das notas no erro), invólucros da CLI imprimindo os avisos | `Falso`, `_composicao`, `provedores_falsos` |
 | `test_favoritos.py` | lista de favoritos (carga, chave inválida, ida e volta), último `resumo.csv` (pasta mais recente, `br`/`intl`, sem avisos, sem rodada), comandos `favoritos`, `adicionar`/`remover` e `atualizar` com `rodar` falso | `tmp_path`, `cli.CAMINHO_FAVORITOS`/`DIR_SAIDA` trocados |
 | `test_http.py` | cache, TTL, 304, retry, fallback | `sessao_falsa` |
 | `test_cvm.py` | parsing, escala, versões, `coletar` | `zip_cvm("dfp_cia_aberta_2025")` etc. |
@@ -945,3 +946,17 @@ diretórios) entra por parâmetro nomeado, com a constante de `config.py` como p
   `.ajustes` = `AjustesContabeis` do YAML (usado por `historico` e `premissas`).
 - Falha depois de um aviso: o aviso segue em `e.__notes__` (`add_note`). `cli._padronizar` o imprime
   antes de repassar o erro, e a saída é a mesma de quando o aviso era impresso na hora.
+
+**`mercado.py`**
+- `cotacoes(empresa, settings, base, yf, brapi, *, dir_processed) -> (precos, MarketCap, avisos)`:
+  preço de cada classe em 2 fontes (classe sem preço vira aviso) e market cap. Nenhum preço ou sem
+  composição ⇒ `ErroDadosExternos`.
+- `carregar_macro(settings, base, agora, forcar, yf, *, sessao, dir_raw) -> (Macro, avisos)`: o dólar
+  do yfinance é a segunda fonte do câmbio; sem ele, aviso.
+- `carregar_mercado(ticker, cadastro, settings, base, agora, forcar, *, sessao, dir_raw,
+  dir_processed) -> Mercado`: junta os dois e o Ibovespa.
+- `Mercado(empresa, precos, ibov, macro, cap, yf, avisos_coleta)`. **Dois conjuntos de avisos:**
+  `.avisos` fala dos dados obtidos (market cap, macro, divergência entre fontes) e a CLI o imprime
+  quando convém a cada comando; `.avisos_coleta` fala do que faltou (classe sem preço, dólar sem
+  segunda fonte) e `cli._mercado` o imprime na hora. `.todos_os_avisos` junta os dois, para a GUI.
+- Falha depois de um aviso: mesma regra de `__notes__`, na ordem em que os avisos surgiram.

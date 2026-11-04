@@ -7,6 +7,8 @@ import json
 import logging
 import platform
 import shlex
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Annotated, cast
@@ -57,7 +59,7 @@ from valuation.data import cvm
 from valuation.data import macro as mac
 from valuation.data import precos as prc
 from valuation.data.http import ErroDownload, SessaoHttp, criar_sessao
-from valuation.data.validacao import ErroDadosExternos, Leitura, Validado
+from valuation.data.validacao import ErroDadosExternos, Validado
 from valuation.modelos import ErroModelo, dcf, ddm
 from valuation.modelos import multiplos as mt
 from valuation.modelos import ponte as pt
@@ -78,6 +80,7 @@ from valuation.saida import graficos as gr
 from valuation.saida import real
 from valuation.saida.csv import INTERNACIONAL, FormatoCsv, gravar_csv, gravar_matriz
 from valuation.servicos import empresa as emp
+from valuation.servicos import mercado as mer
 from valuation.universo import SetorCVM, buscar_setor, carregar_universo, empresas_do_setor
 
 app = typer.Typer(
@@ -228,6 +231,21 @@ def _erro(mensagem: str) -> typer.Exit:
     return typer.Exit(code=1)
 
 
+def _imprimir_avisos(avisos: Iterable[str]) -> None:
+    for aviso in avisos:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
+
+
+@contextmanager
+def _avisos_do_erro() -> Iterator[None]:
+    """Imprime os avisos que um serviço anexou à exceção (`__notes__`) antes de repassá-la."""
+    try:
+        yield
+    except Exception as e:
+        _imprimir_avisos(getattr(e, "__notes__", ()))
+        raise
+
+
 def _carregar_cadastro(settings: Settings, data_base: dt.date, forcar: bool) -> pd.DataFrame:
     return emp.carregar_cadastro(
         settings,
@@ -376,19 +394,7 @@ def _linha_validada(v: Validado, formato: str) -> tuple[str, ...]:
     )
 
 
-@dataclass(frozen=True)
-class _Mercado:
-    empresa: cad.Empresa
-    precos: dict[str, Validado]
-    ibov: Validado
-    macro: mac.Macro
-    cap: prc.MarketCap
-    yf: prc.YFinanceProvider
-
-    @property
-    def avisos(self) -> list[str]:
-        validados = (*self.precos.values(), self.ibov)
-        return [*self.cap.avisos, *self.macro.avisos, *(a for v in validados if (a := v.aviso))]
+_Mercado = mer.Mercado
 
 
 def _macro(
@@ -399,48 +405,35 @@ def _macro(
     yf: prc.PrecosProvider,
     sessao: SessaoHttp,
 ) -> mac.Macro:
-    """Macro na data-base; o dólar do yfinance é a segunda fonte do câmbio."""
-    tol = settings.validacao_cruzada
-    cambio_yf: Leitura | None = None
-    try:
-        d, v = prc.fechamento_ate(yf.historico("BRL=X", base - dt.timedelta(days=15), base), base)
-        cambio_yf = Leitura(v, "yfinance BRL=X", d)
-    except ErroDadosExternos as e:
-        console.print(f"[yellow]Aviso:[/] dólar sem segunda fonte: {e}")
-
-    return mac.carregar_macro(
-        base,
-        tolerancias=tol,
-        rf_override=settings.custo_capital.rf_brl.override,
-        cambio_alternativo=cambio_yf,
-        dir_raw=DIR_RAW,
-        ttl=dt.timedelta(hours=settings.cache_ttl_horas.macro),
-        sessao=sessao,
-        agora=agora,
-        forcar=forcar,
-    )
+    """`mer.carregar_macro` com os avisos impressos."""
+    with _avisos_do_erro():
+        macro, avisos = mer.carregar_macro(
+            settings, base, agora, forcar, yf, sessao=sessao, dir_raw=DIR_RAW
+        )
+    _imprimir_avisos(avisos)
+    return macro
 
 
 def _mercado(
     ticker: str, settings: Settings, base: dt.date, agora: dt.datetime, forcar: bool
 ) -> _Mercado:
-    """Preço por classe, Ibovespa, macro e market cap na data-base, cada um em 2 fontes."""
-    tol = settings.validacao_cruzada
+    """`mer.carregar_mercado` com os avisos da coleta impressos."""
     sessao = criar_sessao()
     cadastro = _carregar_cadastro(settings, base, forcar)
-    empresa = cad.empresa_por_ticker(cadastro, ticker)
-    yf = prc.YFinanceProvider(
-        DIR_RAW / "precos",
-        dt.timedelta(hours=settings.cache_ttl_horas.precos),
-        agora,
-        forcar=forcar,
-    )
-    brapi = prc.BrapiProvider(sessao)
-    precos, cap = _cotacoes(empresa, settings, base, yf, brapi)
-    ibov = prc.preco_validado("^BVSP", base, yf, brapi, tolerancia_rel=tol.preco_rel)
-
-    macro = _macro(settings, base, agora, forcar, yf, sessao)
-    return _Mercado(empresa, precos, ibov, macro, cap, yf)
+    with _avisos_do_erro():
+        m = mer.carregar_mercado(
+            ticker,
+            cadastro,
+            settings,
+            base,
+            agora,
+            forcar,
+            sessao=sessao,
+            dir_raw=DIR_RAW,
+            dir_processed=DIR_PROCESSED,
+        )
+    _imprimir_avisos(m.avisos_coleta)
+    return m
 
 
 def _cotacoes(
@@ -450,26 +443,12 @@ def _cotacoes(
     yf: prc.PrecosProvider,
     brapi: prc.PrecosProvider,
 ) -> tuple[dict[str, Validado], prc.MarketCap]:
-    """Preço de cada classe (2 fontes) e market cap na data-base."""
-    precos: dict[str, Validado] = {}
-    for classe in empresa.classes:
-        try:
-            precos[classe.ticker] = prc.preco_validado(
-                classe.ticker, base, yf, brapi, tolerancia_rel=settings.validacao_cruzada.preco_rel
-            )
-        except ErroDadosExternos as e:
-            console.print(f"[yellow]Aviso:[/] {classe.ticker} sem preço: {e}")
-    if not precos:
-        raise ErroDadosExternos(f"Nenhum preço disponível para {', '.join(empresa.tickers)}.")
-    try:
-        composicao = pd.read_parquet(
-            DIR_PROCESSED / "cvm" / str(empresa.cd_cvm) / "composicao_capital.parquet"
+    """`mer.cotacoes` com os avisos impressos."""
+    with _avisos_do_erro():
+        precos, cap, avisos = mer.cotacoes(
+            empresa, settings, base, yf, brapi, dir_processed=DIR_PROCESSED
         )
-    except FileNotFoundError as e:
-        raise ErroDadosExternos(
-            f"{e.filename} não existe. Rode `valuation atualizar --tickers {empresa.tickers[0]}`."
-        ) from e
-    cap = prc.market_cap(empresa, composicao, {t: p.valor for t, p in precos.items()}, base)
+    _imprimir_avisos(avisos)
     return precos, cap
 
 
@@ -526,14 +505,9 @@ def _padronizar(
     if cadastro is None:
         data_base = settings.resolver_data_base(dt.date.today())
         cadastro = _carregar_cadastro(settings, data_base, False)
-    try:
+    with _avisos_do_erro():
         p = emp.padronizar(ticker, cadastro, dir_processed=DIR_PROCESSED, dir_empresas=DIR_EMPRESAS)
-    except Exception as e:
-        for aviso in getattr(e, "__notes__", ()):
-            console.print(f"[yellow]Aviso:[/] {aviso}")
-        raise
-    for aviso in p.avisos:
-        console.print(f"[yellow]Aviso:[/] {aviso}")
+    _imprimir_avisos(p.avisos)
     return p
 
 

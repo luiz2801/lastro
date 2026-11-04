@@ -12,7 +12,7 @@ Estilo: **camadas em pipeline, com uma fachada de orquestração**. O grafo abai
 flowchart BT
     subgraph ORQ["Orquestração e interface"]
         cli["cli<br/>(typer, rich)"]
-        servicos["servicos<br/>empresa"]
+        servicos["servicos<br/>empresa, mercado"]
     end
 
     subgraph APL["Aplicação (camadas de cálculo e saída)"]
