@@ -22,11 +22,11 @@ from valuation.contabil import padronizacao as pad
 from valuation.contabil import periodos as per
 
 REFERENCIAS = Path(__file__).parent / "golden" / "referencias.yaml"
-CD_CVM = {"PETR4": 9512, "VALE3": 4170, "WEGE3": 5410, "ITUB4": 19348}
-FINANCEIRAS = {"ITUB4"}
+CD_CVM = {"PETR4": 9512, "VALE3": 4170, "WEGE3": 5410, "ITUB4": 19348, "BBAS3": 1023}
+FINANCEIRAS = {"ITUB4", "BBAS3"}
 MILHAO = 1e6
 # R$ mi (arredondamento dos releases)
-TOLERANCIA = {"PETR4": 0.5, "VALE3": 0.5, "WEGE3": 0.002, "ITUB4": 0.5}
+TOLERANCIA = {"PETR4": 0.5, "VALE3": 0.5, "WEGE3": 0.002, "ITUB4": 0.5, "BBAS3": 0.5}
 TOLERANCIA_APROXIMADOS = 50.0
 
 # Chave da referência -> métrica do pipeline. Fluxos: sinal da companhia (IR positivo).

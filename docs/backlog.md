@@ -17,9 +17,8 @@ lucro residual, Ke, cenários e sensibilidade; múltiplos e pares (`bancos`, `se
    `seguradoras`; depois `valuation rodar` em cada um e conferir.
 3. **Seguradoras**: rodar `comparar`/`rodar` de BBSE3, CXSE3, PSSA3, IRBR3 (BBSE3/CXSE3 são
    holdings de seguros; conferir se o DDM faz sentido) e registrar ressalvas (float, sinistralidade).
-4. **Golden das financeiras**: pedir ao usuário a conferência de lucro, PL e ROE de ITUB4 e BBAS3
-   com os releases (`tests/golden/referencias.yaml`). CVM traz IFRS consolidado (Itaú 2025: lucro
-   da controladora 44.857 mi, PL da controladora 204.501 mi).
+4. ✅ **Golden das financeiras**: ITUB4 e BBAS3 feitos (ver Etapa 1). CVM traz IFRS consolidado
+   (Itaú 2025: lucro da controladora 44.857 mi, PL da controladora 204.501 mi).
 5. **Fechamento**: seções 1, 12 e 14 do `guia.md` (contagem de testes: 441, 430 passam), README
    (Estado atual: Fase 10 concluída), ✅ na seção 17 do `CLAUDE.md`, nota do ADR 0014 no README,
    `make cobertura`.
@@ -256,8 +255,8 @@ Pré-requisito para qualquer trabalho posterior em financeiras e para a consist�
 1. ✅ **Units no market cap** (ADR 0015): `e2196ed` e `0bd81df` (valor por unit).
 2. ✅ **YAMLs das financeiras**: `730a9a2`, nove arquivos em `config/empresas/` com o setor.
 3. ✅ **Rodar e conferir seguradoras**: rodadas sem erro; ressalva do setor em `guia.md` (armadilha 38).
-4. **Golden das financeiras** (ITUB4 feito em 2026-11-02; falta o BBAS3, que precisa do IFRS do BB): solicitar ao usuário os números de ITUB4 e BBAS3; codificar em
-   `tests/golden/referencias.yaml`.
+4. ✅ **Golden das financeiras** (ITUB4 em 2026-11-02, BBAS3 em 2026-11-03): lucro, PL e ativo do
+   IFRS em `tests/golden/referencias.yaml`. ROE fica de fora: o do release é gerencial, não IFRS.
 5. ✅ **Fechamento formal**: `16524f8` (`CLAUDE.md`, `README.md`, `guia.md`, CHANGELOG); cobertura de 96%.
 
 *Entrega:* Fase 10 fechada; pipeline de financeiras completo e testado. Falta só o item 4 (com o usuário).

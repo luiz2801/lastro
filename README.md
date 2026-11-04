@@ -134,7 +134,7 @@ Pilotos: PETR4, VALE3 e WEGE3.
   checagem por lucro residual, Ke sem WACC, cenários ponderados pelo perfil, Ke implícito no preço
   e matrizes Ke × g e ROE × Ke; múltiplos P/L, P/VP e DY com regressão P/VP × ROE (setores
   `bancos`, 18 pares, e `seguradoras`); units no market cap; YAMLs de 5 bancos e 4 seguradoras;
-  todos os comandos aceitam financeiras. Golden das financeiras aguardam a conferência do usuário.
+  todos os comandos aceitam financeiras. Golden de ITUB4 e BBAS3 (lucro, PL e ativo do IFRS) conferidos com os documentos das companhias.
 - **Saídas** (Fase 9): `valuation rodar` grava, além dos CSVs, `meta.json`, `premissas_usadas.yaml`,
   `qa.json`, `historico.csv`, `valores_reais.csv` (deflacionado pelo IPCA do Focus) e cinco gráficos
   PNG em PT-BR (football field, cascata da ponte, heatmaps de sensibilidade, histórico × projeção,

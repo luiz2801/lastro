@@ -82,8 +82,8 @@ ITUB4:
   # IFRS consolidado, em R$ milhões (o Itaú publica em R$ milhões). Fonte dos valores: balanço e
   # DRE consolidados condensados. Não é o "lucro recorrente gerencial" (R$ 12,4 bi no 2T26).
   fontes:
-    - "relatorios/Demonstrações contábeis completas em IFRS.pdf (2T26: Balanço e DRE consolidados condensados)"
-    - "relatorios/1T_2026 Demonstrações contábeis completas em IFRS.pdf (1T26)"
+    - "relatorios/ITUB4/Demonstrações contábeis completas em IFRS.pdf (2T26: Balanço e DRE consolidados condensados)"
+    - "relatorios/ITUB4/1T_2026 Demonstrações contábeis completas em IFRS.pdf (1T26)"
   periodos:
     2T26: {lucro_controladora: 11979, lucro_total: 12324}
     1S26: {lucro_controladora: 23615, lucro_total: 24199}
@@ -95,3 +95,30 @@ ITUB4:
     2026-06-30: {patrimonio_liquido_controladora: 217779, patrimonio_liquido_total: 228026, ativo_total: 3202125}
     2026-03-31: {patrimonio_liquido_controladora: 209705}
     2025-12-31: {patrimonio_liquido_controladora: 204501, patrimonio_liquido_total: 215076, ativo_total: 3066169}
+
+BBAS3:
+  # IFRS consolidado, em R$ milhões (o BB publica em R$ mil: valores exatos em milhares). Não é o
+  # "Lucro Líquido Ajustado" nem o ROE do BB (base gerencial/BRGAAP: R$ 20,7 bi em 2025 contra
+  # R$ 13,7 bi de lucro IFRS da controladora). 4T25 = 2025 − 9M25 (o PDF só traz acumulados).
+  # PL total de 31/03, 30/06 e 30/09/2025 = PL da controladora + participação de não controladores.
+  fontes:
+    - "relatorios/BBAS3/2025/Demonstrações Contábeis em IFRS {1T25,2T25,3T25,4T25}.pdf"
+    - "relatorios/BBAS3/Demonstrações Contábeis em IFRS {1T26,2T26}.pdf"
+  periodos:
+    "2025": {lucro_controladora: 13698.124, lucro_total: 16781.938}
+    1T25: {lucro_controladora: 3438.804, lucro_total: 4177.854}
+    2T25: {lucro_controladora: 2782.083, lucro_total: 3582.262}
+    3T25: {lucro_controladora: 2237.301, lucro_total: 3006.743}
+    4T25: {lucro_controladora: 5239.936, lucro_total: 6015.079}
+    1S25: {lucro_controladora: 6220.887, lucro_total: 7760.116}
+    9M25: {lucro_controladora: 8458.188, lucro_total: 10766.859}
+    1T26: {lucro_controladora: 2397.165, lucro_total: 3106.277}
+    2T26: {lucro_controladora: 2397.643, lucro_total: 3256.684}
+    1S26: {lucro_controladora: 4794.808, lucro_total: 6362.961}
+  saldos:
+    2026-06-30: {patrimonio_liquido_controladora: 186079.471, patrimonio_liquido_total: 190767.860, ativo_total: 2588103.740}
+    2026-03-31: {patrimonio_liquido_controladora: 191685.126, patrimonio_liquido_total: 196911.536, ativo_total: 2610200.817}
+    2025-12-31: {patrimonio_liquido_controladora: 189207.675, patrimonio_liquido_total: 193567.416, ativo_total: 2455143.253}
+    2025-09-30: {patrimonio_liquido_controladora: 182119.883, patrimonio_liquido_total: 187149.880, ativo_total: 2540770.431}
+    2025-06-30: {patrimonio_liquido_controladora: 181990.739, patrimonio_liquido_total: 186448.138, ativo_total: 2441421.369}
+    2025-03-31: {patrimonio_liquido_controladora: 181793.664, patrimonio_liquido_total: 187015.211, ativo_total: 2427051.877}

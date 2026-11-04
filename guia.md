@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.33 — 2026-11-03**
+**Versão 1.34 — 2026-11-03**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -53,7 +53,7 @@
 | CLI | `cli.py` | `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.500 linhas de código, 606 testes (595 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.500 linhas de código, 644 testes (633 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -603,7 +603,7 @@ proposto; `docs/backlog.md`).
 | `test_graficos.py` | formatação pt-BR; os cinco gráficos geram PNG válido (inclusive valores negativos) | — |
 | `test_carteira.py` | esquema de cada tipo de transação (valor bruto, fator, tipo com acento, ticker), histórico (venda acima da posição, mesmo dia, eventos, data futura, todos os erros juntos), CSV br/intl e XLSX equivalentes, linha com erro nomeada, cabeçalho, gravação só-acréscimo (BOM uma vez, bytes anteriores intactos, nada gravado em erro, reimportação) e os comandos `carteira` | `caminho_carteira` (troca `cli.CAMINHO_TRANSACOES`) |
 | `test_posicao.py` | preço médio passo a passo à mão (compra, compra, venda parcial, desdobramento, bonificação), realizado/não realizado/proventos e a identidade do resultado total, data-base que ignora o futuro, agrupamento, venda total, provento sem posição, sem cotação e cotação defasada (avisos), e o comando `carteira posicao` (cotação substituída por `cli._cotar_carteira`; `COLUMNS=200` para o Rich não truncar) | `carteira_com_historico` (troca `cli.CAMINHO_TRANSACOES`) |
-| `test_golden.py` | 111 valores de `tests/golden/referencias.yaml` (PETR4, VALE3, WEGE3 e ITUB4, esta pelas `financeiras.metricas`) contra o pipeline | **dados reais** em `data/processed/cvm/`; pulado se ausentes |
+| `test_golden.py` | 149 valores de `tests/golden/referencias.yaml` (PETR4, VALE3, WEGE3, ITUB4 e BBAS3, estas duas pelas `financeiras.metricas`) contra o pipeline | **dados reais** em `data/processed/cvm/`; pulado se ausentes |
 
 `conftest.py`: `SessaoFalsa` (rotas URL → `(status, bytes, headers)`; devolve 304 se
 `If-Modified-Since == Last-Modified`; 404 para rota ausente), `resposta()`, `montar_zip()`,
@@ -616,7 +616,7 @@ com `ano()`, `ytd()`, `saldo()`.
 PL 120 com 20 de não controladores, dividendos à controladora 11), mesma regra de `trocas`.
 `historico_anual(crescimento, margem, *, inicio, da, capex, nwc, arrendamento, aliquota)`:
 métricas anuais mínimas para o sugestor/projetor (razões sobre a receita viram valores).
-`test_golden.py`: chaves da referência → métrica em `FLUXOS`/`SALDOS` (`*_FINANCEIRAS` para `FINANCEIRAS = {ITUB4}`); definições próprias das
+`test_golden.py`: chaves da referência → métrica em `FLUXOS`/`SALDOS` (`*_FINANCEIRAS` para `FINANCEIRAS = {ITUB4, BBAS3}`); definições próprias das
 companhias em `NAO_COMPARAVEIS`; período ainda não publicado na CVM é pulado.
 Fixtures CVM são amostras minúsculas (uma empresa, 2025/2026): ao mudar parsing, atualize-as em
 vez de baixar dados reais. Sem rede nos testes.

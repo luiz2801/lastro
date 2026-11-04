@@ -2,6 +2,17 @@
 
 ## [Não lançado]
 
+### Golden do BBAS3 (seção 19, item 9 do `CLAUDE.md`)
+- `tests/golden/referencias.yaml`: lucro (controladora e total) de 1T25 a 4T25, 1S25, 9M25, 2025,
+  1T26, 2T26 e 1S26 e PL (controladora e total) e ativo total de seis datas (31/03/2025 a
+  30/06/2026), do IFRS consolidado do BB (`relatorios/BBAS3/`). 38 valores, todos batem com o
+  pipeline. O 4T25 é 2025 − 9M25 (o PDF só traz acumulados).
+- ROE e "Lucro Líquido Ajustado" ficam de fora: são da base gerencial/BRGAAP do BB (lucro
+  ajustado de R$ 20,7 bi em 2025 contra R$ 13,7 bi de lucro IFRS da controladora).
+- `tests/test_golden.py`: BBAS3 em `CD_CVM`, `FINANCEIRAS` e `TOLERANCIA`.
+- `relatorios/` reorganizado em `ITUB4/` e `BBAS3/` (fora do git); caminhos do ITUB4 no golden
+  atualizados. `guia.md` 1.34.
+
 ### Carteira pessoal, Etapa C2: posição e preço médio (ADR 0020)
 - `src/valuation/carteira/posicao.py` (puro): `calcular_posicoes` reproduz as transações até a
   data-base (preço médio ponderado com taxas; venda não muda o preço médio; desdobramento e
@@ -53,7 +64,7 @@
   1S26 e PL (controladora e total) e ativo total de 31/12/2025, 31/03/2026 e 30/06/2026, do IFRS
   consolidado do Itaú (`relatorios/`). Todos batem com o pipeline.
 - `tests/test_golden.py` passou a conciliar financeiras (`financeiras.metricas`, plano `financeira`).
-- BBAS3 ficou de fora: os PDFs do BB em `relatorios/` são Cosif (BRGAAP), e a CVM traz o IFRS.
+- BBAS3 ficou de fora neste momento: os PDFs do BB em `relatorios/` eram Cosif (BRGAAP); entrou depois (seção abaixo).
 
 ### Tickers favoritos e cache de resultados (ADR 0020, Etapa 8 do backlog)
 - `config/favoritos.yaml` (lista de tickers) e `saida/favoritos.py`: carga/gravação e leitura do
