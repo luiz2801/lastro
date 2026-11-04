@@ -74,6 +74,7 @@ from valuation.projecao import projetor as pj
 from valuation.projecao import sugestor as sg
 from valuation.saida import arquivos as arq
 from valuation.saida import favoritos as fav
+from valuation.saida import formato as fo
 from valuation.saida import glossario as gl
 from valuation.saida import graficos as gr
 from valuation.saida import real
@@ -597,16 +598,6 @@ _LINHAS_HISTORICO_FINANCEIRA = (
 )
 
 
-def _formatar(valor: float, unidade: str) -> str:
-    if pd.isna(valor):
-        return "—"
-    if unidade == "%":
-        return f"{valor:.1%}".replace(".", ",")
-    if unidade == "x":
-        return f"{valor:.1f}x".replace(".", ",")
-    return f"{valor / 1e6:,.0f}".replace(",", ".")
-
-
 @app.command()
 def historico(
     ticker: str = typer.Argument(..., help="Ex.: PETR4."),
@@ -671,7 +662,7 @@ def historico(
         tabela.add_column(coluna, justify="right")
     for chave, rotulo, unidade in linhas:
         if chave in tabela_m.columns:
-            tabela.add_row(rotulo, *(_formatar(v, unidade) for v in tabela_m[chave]))
+            tabela.add_row(rotulo, *(fo.formatar(v, unidade) for v in tabela_m[chave]))
     console.print(tabela)
 
 
@@ -706,7 +697,7 @@ def indicadores(
     for coluna in serie.colunas:
         tabela.add_column(coluna, justify="right")
     for chave, (rotulo, unidade, _) in serie.definicoes.items():
-        tabela.add_row(rotulo, *(_formatar(v, unidade) for v in serie.tabela[chave]))
+        tabela.add_row(rotulo, *(fo.formatar(v, unidade) for v in serie.tabela[chave]))
     console.print(tabela)
 
     avisos: list[str] = []
@@ -725,12 +716,12 @@ def indicadores(
         mercado = Table(title=f"De mercado em {base.isoformat()}")
         mercado.add_column("Indicador")
         mercado.add_column("Valor", justify="right")
-        mercado.add_row("Preço", _brl(preco))
-        mercado.add_row("Market cap (R$ mi)", _formatar(f.market_cap, "mi"))
+        mercado.add_row("Preço", fo.brl(preco))
+        mercado.add_row("Market cap (R$ mi)", fo.formatar(f.market_cap, "mi"))
         mercado.add_row("LTM até", f.data_balanco.isoformat())
         for nome, valor in multiplos.items():
             unidade = "%" if nome == "dividend_yield" else "x"
-            mercado.add_row(mt.ROTULOS[cast(mt.NomeMultiplo, nome)], _formatar(valor, unidade))
+            mercado.add_row(mt.ROTULOS[cast(mt.NomeMultiplo, nome)], fo.formatar(valor, unidade))
         console.print(mercado)
     for aviso in avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
@@ -1011,7 +1002,7 @@ def _mostrar_projecao(tabela_p: pd.DataFrame, titulo: str) -> None:
     for ano in tabela_p.index:
         tabela.add_column(str(ano), justify="right")
     for chave, rotulo, unidade in _LINHAS_PROJECAO:
-        tabela.add_row(rotulo, *(_formatar(v, unidade) for v in tabela_p[chave]))
+        tabela.add_row(rotulo, *(fo.formatar(v, unidade) for v in tabela_p[chave]))
     console.print(tabela)
 
 
@@ -1177,7 +1168,7 @@ def _mostrar_projecao_financeira(tabela_p: pd.DataFrame, titulo: str) -> None:
     for ano in tabela_p.index:
         tabela.add_column(str(ano), justify="right")
     for chave, rotulo, unidade in _LINHAS_PROJECAO_FINANCEIRA:
-        tabela.add_row(rotulo, *(_formatar(v, unidade) for v in tabela_p[chave]))
+        tabela.add_row(rotulo, *(fo.formatar(v, unidade) for v in tabela_p[chave]))
     console.print(tabela)
 
 
@@ -1523,8 +1514,8 @@ def _erp_efetivo(settings: Settings, base: dt.date, avisos: list[str]) -> float:
             f"{cfg.validade_dias}): rode `valuation erp` de novo."
         )
     avisos.append(
-        f"ERP implícito do Ibovespa de {_taxa(central)} (faixa {_taxa(minimo)} a {_taxa(maximo)}; "
-        f"calculado em {data})."
+        f"ERP implícito do Ibovespa de {fo.taxa(central)} (faixa {fo.taxa(minimo)} a "
+        f"{fo.taxa(maximo)}; calculado em {data})."
     )
     avisos.extend(str(a) for a in gravado.get("avisos", ()))
     return central
@@ -1652,22 +1643,25 @@ def erp(
         *resultado.avisos,
         *macro.avisos,
         f"g perpétuo = CAGR {ano_final - cfg.anos_explicitos}-{ano_final} dos dividendos "
-        f"agregados de {n_cagr} companhias ({_taxa(cagr)})"
-        + (f", limitado a {_taxa(g_perp)}." if g_perp != cagr else "."),
+        f"agregados de {n_cagr} companhias ({fo.taxa(cagr)})"
+        + (f", limitado a {fo.taxa(g_perp)}." if g_perp != cagr else "."),
     ]
     tabela = Table(title=f"ERP implícito do Ibovespa em {base} (BRL nominal)")
     tabela.add_column("Item")
     tabela.add_column("Valor", justify="right")
     linhas = [
         ("Companhias medidas", f"{len(medidas)} de {total}"),
-        ("Valor de mercado agregado (R$ mi)", _formatar(sum(x.market_cap for x in medidas), "mi")),
-        ("Dividendos LTM agregados (R$ mi)", _formatar(sum(x.dividendos for x in medidas), "mi")),
-        ("Crescimento nominal ano 1..N (Focus)", " / ".join(_taxa(g) for g in c.crescimentos)),
-        ("g perpétuo (média histórica)", _taxa(c.g_perpetuo)),
-        ("Rf (NTN-F)", _taxa(c.rf)),
-        ("Ke do mercado", _taxa(c.ke)),
-        ("ERP central", f"[bold]{_taxa(c.erp)}[/]"),
-        ("Faixa do ERP", f"{_taxa(resultado.inferior.erp)} a {_taxa(resultado.superior.erp)}"),
+        (
+            "Valor de mercado agregado (R$ mi)",
+            fo.formatar(sum(x.market_cap for x in medidas), "mi"),
+        ),
+        ("Dividendos LTM agregados (R$ mi)", fo.formatar(sum(x.dividendos for x in medidas), "mi")),
+        ("Crescimento nominal ano 1..N (Focus)", " / ".join(fo.taxa(g) for g in c.crescimentos)),
+        ("g perpétuo (média histórica)", fo.taxa(c.g_perpetuo)),
+        ("Rf (NTN-F)", fo.taxa(c.rf)),
+        ("Ke do mercado", fo.taxa(c.ke)),
+        ("ERP central", f"[bold]{fo.taxa(c.erp)}[/]"),
+        ("Faixa do ERP", f"{fo.taxa(resultado.inferior.erp)} a {fo.taxa(resultado.superior.erp)}"),
     ]
     for item, valor in linhas:
         tabela.add_row(item, valor)
@@ -1752,18 +1746,6 @@ def _custo_capital_financeira(
     )
 
 
-def _formatar_componente(componente: str, valor: float) -> str:
-    if pd.isna(valor):
-        return ""
-    if componente in ("divida_bruta", "market_cap"):
-        return f"{_formatar(valor, 'mi')} mi"
-    if componente == "beta_n_obs":
-        return f"{valor:.0f}"
-    if componente.startswith("beta"):
-        return f"{valor:.3f}".replace(".", ",")
-    return f"{valor:.2%}".replace(".", ",")
-
-
 @app.command()
 def wacc(
     ticker: str = typer.Argument(..., help="Ex.: PETR4."),
@@ -1817,7 +1799,7 @@ def wacc(
         tab["componente"], tab["valor"], tab["detalhe"], strict=True
     ):
         if componente != "aviso":
-            tabela.add_row(str(componente), _formatar_componente(str(componente), valor), detalhe)
+            tabela.add_row(str(componente), fo.componente_wacc(str(componente), valor), detalhe)
     console.print(tabela)
     raiz = Path(saida) if saida else DIR_SAIDA
     caminho = raiz / p.premissas.ticker / base.isoformat() / "wacc.csv"
@@ -1871,14 +1853,6 @@ def _ronic(p: emp.Padronizada, settings: Settings, historico: pd.DataFrame) -> d
     escolha = settings.terminal.ronic if escolha is None else escolha
     roic = historico["roic"].dropna().tail(sg.JANELA_CURTA)
     return dcf.resolver_ronic(escolha, roic_historico=float(roic.median()) if len(roic) else None)
-
-
-def _reais(valor: float) -> str:
-    return "—" if pd.isna(valor) else f"R$ {valor:,.2f}".translate(str.maketrans(",.", ".,"))
-
-
-def _taxa(valor: float | None) -> str:
-    return "sem solução" if valor is None or pd.isna(valor) else f"{valor:.2%}".replace(".", ",")
 
 
 def _resumo(
@@ -1954,43 +1928,36 @@ def _mostrar_valuation(
         linha = [
             c,
             f"{r.pesos[c]:.0%}",
-            _formatar(d.vp_fluxos, "mi"),
-            _formatar(d.vp_terminal, "mi"),
-            _formatar(d.ev, "mi"),
-            _formatar(d.tv_sobre_ev, "%"),
+            fo.formatar(d.vp_fluxos, "mi"),
+            fo.formatar(d.vp_terminal, "mi"),
+            fo.formatar(d.ev, "mi"),
+            fo.formatar(d.tv_sobre_ev, "%"),
         ]
         if settings.terminal.checagem_multiplo_saida:
             x = d.ev_ebitda_terminal
             linha.append("—" if pd.isna(x) else f"{x:.1f}x".replace(".", ","))
-        linha += [_formatar(av.ponte.equity, "mi"), _reais(av.valor_por_acao)]
+        linha += [fo.formatar(av.ponte.equity, "mi"), fo.reais(av.valor_por_acao)]
         tabela.add_row(*linha)
     console.print(tabela)
 
     d = next(iter(r.avaliacoes.values())).dcf
     console.print(
-        f"Checagens: WACC {_taxa(cc.wacc)} > g {_taxa(d.g)} "
-        f"(teto {_taxa(settings.terminal.g_nominal_max)}); RONIC {_taxa(d.ronic)}; "
+        f"Checagens: WACC {fo.taxa(cc.wacc)} > g {fo.taxa(d.g)} "
+        f"(teto {fo.taxa(settings.terminal.g_nominal_max)}); RONIC {fo.taxa(d.ronic)}; "
         f"alerta de VT/EV acima de {settings.dcf.alerta_tv_sobre_ev:.0%}."
     )
     p = r.perfil
     console.print(
-        f"Valor ponderado ({p.perfil}): [bold]{_reais(r.valor_ponderado)}[/]; margem de segurança "
-        f"{p.margem_seguranca:.0%} ⇒ preço máximo de compra [bold]{_reais(r.preco_maximo_compra)}"
-        f"[/]; preço {_reais(r.preco)} (upside {_taxa(r.upside)})."
+        f"Valor ponderado ({p.perfil}): [bold]{fo.reais(r.valor_ponderado)}[/]; margem de "
+        f"segurança {p.margem_seguranca:.0%} ⇒ preço máximo de compra "
+        f"[bold]{fo.reais(r.preco_maximo_compra)}"
+        f"[/]; preço {fo.reais(r.preco)} (upside {fo.taxa(r.upside)})."
     )
     console.print(
-        f"Retorno implícito no preço: Ke {_taxa(r.ke_implicito)} contra hurdle "
-        f"{_taxa(r.hurdle)} (Selic + {sg.pp(p.hurdle_spread_selic)}); "
-        f"WACC {_taxa(r.wacc_implicito)} contra WACC de {_taxa(cc.wacc)}."
+        f"Retorno implícito no preço: Ke {fo.taxa(r.ke_implicito)} contra hurdle "
+        f"{fo.taxa(r.hurdle)} (Selic + {sg.pp(p.hurdle_spread_selic)}); "
+        f"WACC {fo.taxa(r.wacc_implicito)} contra WACC de {fo.taxa(cc.wacc)}."
     )
-
-
-def _multiplo_fmt(nome: mt.NomeMultiplo, valor: float) -> str:
-    if pd.isna(valor):
-        return "—"
-    if nome == "dividend_yield":
-        return f"{valor:.1%}".replace(".", ",")
-    return f"{valor:.1f}x".replace(".", ",")
 
 
 def _mostrar_pares(r: mt.ResultadoMultiplos) -> None:
@@ -2009,9 +1976,9 @@ def _mostrar_pares(r: mt.ResultadoMultiplos) -> None:
         tabela.add_row(
             rotulo,
             str(linha["data_balanco"]),
-            _formatar(float(linha["market_cap"]), "mi"),
-            *([_formatar(float(linha["roe"]), "%")] if com_roe else []),
-            *(_multiplo_fmt(n, float(linha[n])) for n in r.nomes),
+            fo.formatar(float(linha["market_cap"]), "mi"),
+            *([fo.formatar(float(linha["roe"]), "%")] if com_roe else []),
+            *(fo.multiplo(n, float(linha[n])) for n in r.nomes),
         )
     console.print(tabela)
 
@@ -2040,10 +2007,12 @@ def _mostrar_implicitos(r: mt.ResultadoMultiplos, preco: float) -> None:
         tabela.add_row(
             mt.ROTULOS[nome],
             n,
-            *(_multiplo_fmt(nome, x(f"multiplo_{s}")) for s in mt.ESTATISTICAS),
-            _multiplo_fmt(nome, x("multiplo_alvo")),
-            "—" if any(pd.isna(v) for v in faixa) else f"{_reais(faixa[0])} a {_reais(faixa[1])}",
-            _reais(x("valor_mediana")),
+            *(fo.multiplo(nome, x(f"multiplo_{s}")) for s in mt.ESTATISTICAS),
+            fo.multiplo(nome, x("multiplo_alvo")),
+            "—"
+            if any(pd.isna(v) for v in faixa)
+            else f"{fo.reais(faixa[0])} a {fo.reais(faixa[1])}",
+            fo.reais(x("valor_mediana")),
         )
     console.print(tabela)
     if r.regressao is not None:
@@ -2052,10 +2021,10 @@ def _mostrar_implicitos(r: mt.ResultadoMultiplos, preco: float) -> None:
         r2, a, b = (f"{x:.2f}".replace(".", ",") for x in numeros)
         console.print(
             f"Regressão P/VP x ROE dos pares ({reg_pvp.n} pontos, R² {r2}): P/VP = {a} + {b} x "
-            f"ROE; no ROE de {r.alvo.ticker} ({_taxa(r.alvo.roe)}), P/VP "
-            f"{_multiplo_fmt('p_vp', reg_pvp.pvp(r.alvo.roe))} ⇒ {_reais(r.valor_regressao)}."
+            f"ROE; no ROE de {r.alvo.ticker} ({fo.taxa(r.alvo.roe)}), P/VP "
+            f"{fo.multiplo('p_vp', reg_pvp.pvp(r.alvo.roe))} ⇒ {fo.reais(r.valor_regressao)}."
         )
-    console.print(f"Preço de mercado: {_reais(preco)}.")
+    console.print(f"Preço de mercado: {fo.reais(preco)}.")
 
 
 def _gravar_multiplos(
@@ -2273,14 +2242,14 @@ def rodar(
     )
     if settings.terminal.checagem_multiplo_saida and multiplos:
         implicito = (
-            f"g de {_taxa(g_saida)}"
+            f"g de {fo.taxa(g_saida)}"
             if g_saida is not None
             else "nenhum g abaixo do WACC (múltiplo fora do alcance do terminal com esse RONIC)"
         )
         console.print(
             f"Múltiplo de saída: EV/EBITDA mediano dos pares "
-            f"{_multiplo_fmt('ev_ebitda', multiplos.mediana('ev_ebitda'))} implica {implicito} "
-            f"na perpetuidade ({referencia}; g usado {_taxa(av_ref.dcf.g)})."
+            f"{fo.multiplo('ev_ebitda', multiplos.mediana('ev_ebitda'))} implica {implicito} "
+            f"na perpetuidade ({referencia}; g usado {fo.taxa(av_ref.dcf.g)})."
         )
     _mostrar_projecao(
         av_ref.projecao,
@@ -2291,9 +2260,9 @@ def rodar(
     tabela = Table(title=f"Sensibilidade WACC x g — valor por ação ({referencia})")
     tabela.add_column("WACC \\ g")
     for g in wacc_g.columns:
-        tabela.add_column(_taxa(cast(float, g)), justify="right")
+        tabela.add_column(fo.taxa(cast(float, g)), justify="right")
     for w, linha in wacc_g.iterrows():
-        tabela.add_row(_taxa(cast(float, w)), *(_reais(v) for v in linha))
+        tabela.add_row(fo.taxa(cast(float, w)), *(fo.reais(v) for v in linha))
     console.print(tabela)
 
     raiz = (Path(saida) if saida else DIR_SAIDA) / p.premissas.ticker / base.isoformat()
@@ -2700,9 +2669,9 @@ def _rodar_financeira(
     tabela = Table(title=f"Sensibilidade Ke x g — valor por ação ({e.referencia})")
     tabela.add_column("Ke \\ g")
     for g in ke_g.columns:
-        tabela.add_column(_taxa(cast(float, g)), justify="right")
+        tabela.add_column(fo.taxa(cast(float, g)), justify="right")
     for k, linha in ke_g.iterrows():
-        tabela.add_row(_taxa(cast(float, k)), *(_reais(v) for v in linha))
+        tabela.add_row(fo.taxa(cast(float, k)), *(fo.reais(v) for v in linha))
     console.print(tabela)
 
     gravar_csv(wc.tabela_financeira(cc), raiz / "wacc.csv", settings.csv, fmt)
@@ -2783,32 +2752,33 @@ def _mostrar_valuation_ddm(
         tabela.add_row(
             c,
             f"{r.pesos[c]:.0%}",
-            _formatar(d.vp_dividendos, "mi"),
-            _formatar(d.vp_terminal, "mi"),
-            _formatar(d.valor, "mi"),
-            _formatar(d.vt_sobre_valor, "%"),
-            _formatar(d.pvp_justificado, "x"),
-            _formatar(d.valor_lucro_residual, "mi"),
-            _reais(av.valor_por_acao),
+            fo.formatar(d.vp_dividendos, "mi"),
+            fo.formatar(d.vp_terminal, "mi"),
+            fo.formatar(d.valor, "mi"),
+            fo.formatar(d.vt_sobre_valor, "%"),
+            fo.formatar(d.pvp_justificado, "x"),
+            fo.formatar(d.valor_lucro_residual, "mi"),
+            fo.reais(av.valor_por_acao),
         )
     console.print(tabela)
     d = r.avaliacoes[referencia].ddm
     console.print(
-        f"Checagens ({referencia}): Ke {_taxa(cc.ke.ke)} > g {_taxa(d.g)} (teto "
-        f"{_taxa(settings.terminal.g_nominal_max)}); ROE de longo prazo "
-        f"{_taxa(d.roe_longo_prazo)}; lucro residual / DDM - 1 = "
+        f"Checagens ({referencia}): Ke {fo.taxa(cc.ke.ke)} > g {fo.taxa(d.g)} (teto "
+        f"{fo.taxa(settings.terminal.g_nominal_max)}); ROE de longo prazo "
+        f"{fo.taxa(d.roe_longo_prazo)}; lucro residual / DDM - 1 = "
         f"{sg.pct(round(d.divergencia, 8), 4)}; alerta de VT/valor acima de "
         f"{settings.dcf.alerta_tv_sobre_ev:.0%}."
     )
     p = r.perfil
     console.print(
-        f"Valor ponderado ({p.perfil}): [bold]{_reais(r.valor_ponderado)}[/]; margem de segurança "
-        f"{p.margem_seguranca:.0%} ⇒ preço máximo de compra [bold]{_reais(r.preco_maximo_compra)}"
-        f"[/]; preço {_reais(r.preco)} (upside {_taxa(r.upside)})."
+        f"Valor ponderado ({p.perfil}): [bold]{fo.reais(r.valor_ponderado)}[/]; margem de "
+        f"segurança {p.margem_seguranca:.0%} ⇒ preço máximo de compra "
+        f"[bold]{fo.reais(r.preco_maximo_compra)}"
+        f"[/]; preço {fo.reais(r.preco)} (upside {fo.taxa(r.upside)})."
     )
     console.print(
-        f"Retorno implícito no preço: Ke {_taxa(r.ke_implicito)} contra hurdle "
-        f"{_taxa(r.hurdle)} (Selic + {sg.pp(p.hurdle_spread_selic)}) e Ke de {_taxa(cc.ke.ke)}."
+        f"Retorno implícito no preço: Ke {fo.taxa(r.ke_implicito)} contra hurdle "
+        f"{fo.taxa(r.hurdle)} (Selic + {sg.pp(p.hurdle_spread_selic)}) e Ke de {fo.taxa(cc.ke.ke)}."
     )
 
 
@@ -3040,13 +3010,6 @@ def carteira_importar(
     console.print(f"Importadas {gravadas} transações de {arquivo.name} ({CAMINHO_TRANSACOES}).")
 
 
-def _brl(valor: float | None, casas: int = 2) -> str:
-    if valor is None:
-        return "—"
-    texto = f"{valor:,.{casas}f}"
-    return "R$ " + texto.replace(",", "X").replace(".", ",").replace("X", ".")
-
-
 def _cotar_carteira(
     tickers: list[str], settings: Settings, base: dt.date, agora: dt.datetime, forcar: bool
 ) -> tuple[dict[str, carteira_pos.Preco], list[str]]:
@@ -3118,19 +3081,19 @@ def carteira_posicao(
         tabela.add_row(
             p.ticker + (" (encerrada)" if p.encerrada else ""),
             f"{p.quantidade:g}".replace(".", ","),
-            _brl(p.preco_medio),
-            _brl(p.custo),
-            _brl(ln.preco.valor) if ln.preco else "—",
-            _brl(ln.patrimonio),
-            _brl(ln.nao_realizado),
-            _brl(p.proventos),
-            _brl(ln.resultado),
-            _pct(ln.resultado_pct),
+            fo.brl(p.preco_medio),
+            fo.brl(p.custo),
+            fo.brl(ln.preco.valor) if ln.preco else "—",
+            fo.brl(ln.patrimonio),
+            fo.brl(ln.nao_realizado),
+            fo.brl(p.proventos),
+            fo.brl(ln.resultado),
+            fo.pct(ln.resultado_pct),
         )
     tabela.add_section()
     tabela.add_row(
-        "Total", "", "", _brl(resumo.custo), "", _brl(resumo.patrimonio), "",
-        _brl(resumo.proventos), _brl(resumo.resultado), _pct(resumo.resultado_pct),
+        "Total", "", "", fo.brl(resumo.custo), "", fo.brl(resumo.patrimonio), "",
+        fo.brl(resumo.proventos), fo.brl(resumo.resultado), fo.pct(resumo.resultado_pct),
     )  # fmt: skip
     console.print(tabela)
     console.print(
@@ -3139,14 +3102,6 @@ def carteira_posicao(
     )
     for aviso in resumo.avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
-
-
-def _pct(valor: float | None) -> str:
-    return "—" if valor is None else f"{valor * 100:.1f}%".replace(".", ",")
-
-
-def _preco_fav(valor: float | None) -> str:
-    return "—" if valor is None else f"R$ {valor:.2f}".replace(".", ",")
 
 
 @favoritos_app.callback()
@@ -3189,10 +3144,10 @@ def favoritos(ctx: typer.Context) -> None:
             r.data_base.isoformat(),
             str(r.idade_dias(hoje)),
             r.perfil,
-            _preco_fav(r.preco),
-            _preco_fav(r.valor_ponderado),
-            _preco_fav(r.preco_maximo_compra),
-            _pct(r.upside),
+            fo.preco_curto(r.preco),
+            fo.preco_curto(r.valor_ponderado),
+            fo.preco_curto(r.preco_maximo_compra),
+            fo.pct(r.upside),
             str(r.n_avisos),
         )
     console.print(tabela)

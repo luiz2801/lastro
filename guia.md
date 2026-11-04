@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.38 — 2026-11-04**
+**Versão 1.39 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -48,13 +48,13 @@
 | Custo de capital | `custo_capital/{beta,capm,kd,wacc}.py` | ✅ prontos (seção 19), inclusive beta por comparáveis, estrutura do setor e Ke das financeiras |
 | Modelos | `modelos/{dcf,ponte,multiplos,ddm}.py` | ✅ DCF do FCFF, ponte EV → equity, múltiplos dos pares e DDM com lucro residual (seção 20) |
 | Análise | `analise/{cenarios,sensibilidade,indicadores}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade, FCFF e DDM; indicadores por ativo (seção 20) |
-| Saída | `saida/{csv,arquivos,real,graficos,glossario,favoritos}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG, glossário das métricas e favoritos (seção 19) |
+| Saída | `saida/{csv,arquivos,real,graficos,glossario,favoritos,formato}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG, glossário das métricas, favoritos e formatação pt-BR comum à CLI e à GUI (seção 19) |
 | Carteira | `carteira/{transacoes,arquivo,posicao}.py` | ✅ Etapas C1 e C2 do ADR 0020: transações, histórico validado, importação CSV/XLSX, posição, preço médio e resultado (seção 21); a C3 (indicadores por ativo) está em `analise/indicadores.py` e no comando `indicadores`; proventos e alocação ainda não (seção 12) |
 | Serviços | `servicos/{empresa,mercado,indicadores}.py` | Em extração de `cli.py` (S1 da Sprint GUI 1, ADR 0022): cadastro, padronização, preços, market cap, macro e indicadores (seção 22) |
 | CLI | `cli.py` | `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 679 testes (668 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 693 testes (682 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -579,6 +579,7 @@ proposto; `docs/backlog.md`).
 | `test_servicos_empresa.py` | `carregar_cadastro` nos diretórios recebidos, `padronizar` (sem aviso, individual com aviso no retorno e nada no terminal, sem demonstrações, holding), aviso nas notas quando o erro vem depois dele, CLI imprimindo esse aviso, pacote sem dependência de terminal | `SessaoFalsa`, `zip_cvm`, `dfp_completa` |
 | `test_servicos_mercado.py` | `cotacoes` (classe sem preço, nenhum preço, sem composição), `carregar_macro` (dólar sem segunda fonte), `carregar_mercado` (avisos separados, nada no terminal, ordem das notas no erro), invólucros da CLI imprimindo os avisos | `Falso`, `_composicao`, `provedores_falsos` |
 | `test_servicos_indicadores.py` | série não financeira e financeira à mão, corte por data-base e `anos`, `data_balanco`, múltiplos de mercado à mão, conversão só fora de BRL | `_padronizada`, `industria`, `_cap` |
+| `test_formato.py` | texto pt-BR de cada função de `saida/formato.py`, sem dado = "—" | — |
 | `test_favoritos.py` | lista de favoritos (carga, chave inválida, ida e volta), último `resumo.csv` (pasta mais recente, `br`/`intl`, sem avisos, sem rodada), comandos `favoritos`, `adicionar`/`remover` e `atualizar` com `rodar` falso | `tmp_path`, `cli.CAMINHO_FAVORITOS`/`DIR_SAIDA` trocados |
 | `test_http.py` | cache, TTL, 304, retry, fallback | `sessao_falsa` |
 | `test_cvm.py` | parsing, escala, versões, `coletar` | `zip_cvm("dfp_cia_aberta_2025")` etc. |
