@@ -16,6 +16,8 @@ import yaml
 from valuation.config import ConfigCsv, ErroConfiguracao
 from valuation.saida.csv import INTERNACIONAL
 
+SEPARADOR_AVISOS = " | "  # coluna `avisos` do `resumo.csv`
+
 
 def carregar_favoritos(caminho: Path) -> list[str]:
     """Lista de tickers em maiúsculas, sem repetição e na ordem do arquivo. Sem arquivo: vazia."""
@@ -57,7 +59,16 @@ def _numero(linha: pd.Series, coluna: str) -> float | None:
     return None if valor is None or pd.isna(valor) else float(valor)
 
 
-def _ler_resumo(caminho: Path, config: ConfigCsv) -> pd.DataFrame:
+def ler_csv_saida(caminho: Path, config: ConfigCsv) -> pd.DataFrame:
+    """CSV de `saida/` no formato `br` (`config`) ou `intl`: vale o que separa em colunas."""
+    for cfg in (config, INTERNACIONAL):
+        df = pd.read_csv(caminho, sep=cfg.separador, decimal=cfg.decimal, encoding=cfg.encoding)
+        if df.shape[1] > 1:
+            return df
+    raise ValueError(f"{caminho}: nenhuma coluna reconhecida nos formatos br e intl.")
+
+
+def ler_resumo(caminho: Path, config: ConfigCsv) -> pd.DataFrame:
     for cfg in (config, INTERNACIONAL):
         df = pd.read_csv(caminho, sep=cfg.separador, decimal=cfg.decimal, encoding=cfg.encoding)
         if "ticker" in df.columns:
@@ -65,17 +76,23 @@ def _ler_resumo(caminho: Path, config: ConfigCsv) -> pd.DataFrame:
     raise ErroConfiguracao(f"{caminho}: sem a coluna `ticker`; não é um resumo.csv.")
 
 
-def ultimo_resumo(ticker: str, dir_saida: Path, config: ConfigCsv) -> ResumoFavorito | None:
-    """`resumo.csv` da pasta de data mais recente de `saida/{ticker}/`; `None` se não houver."""
+def pasta_mais_recente(ticker: str, dir_saida: Path) -> Path | None:
+    """Pasta de data mais recente de `saida/{ticker}/` com `resumo.csv`; `None` se não houver."""
     pastas = sorted(
         (p for p in (dir_saida / ticker).glob("*") if (p / "resumo.csv").is_file()),
         reverse=True,
     )
-    if not pastas:
+    return pastas[0] if pastas else None
+
+
+def ultimo_resumo(ticker: str, dir_saida: Path, config: ConfigCsv) -> ResumoFavorito | None:
+    """`resumo.csv` da pasta de data mais recente de `saida/{ticker}/`; `None` se não houver."""
+    pasta = pasta_mais_recente(ticker, dir_saida)
+    if pasta is None:
         return None
-    linha = _ler_resumo(pastas[0] / "resumo.csv", config).iloc[0]
+    linha = ler_resumo(pasta / "resumo.csv", config).iloc[0]
     avisos = linha.get("avisos")
-    n_avisos = 0 if avisos is None or pd.isna(avisos) else len(str(avisos).split(" | "))
+    n_avisos = 0 if avisos is None or pd.isna(avisos) else len(str(avisos).split(SEPARADOR_AVISOS))
     return ResumoFavorito(
         ticker=ticker,
         data_base=dt.date.fromisoformat(str(linha["data_base"])),

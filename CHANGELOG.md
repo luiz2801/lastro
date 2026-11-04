@@ -7,6 +7,9 @@
   `cli.py`, sem terminal; o aviso de demonstrações individuais volta em `avisos`. Nenhuma saída muda:
   `cli._carregar_cadastro` e `cli._padronizar` ficam como invólucros e os testes da CLI seguem sem
   edição.
+- Fatia "resultados": `servicos/resultados.py` (`ultimo_resultado`, `Resultado`) lê a última rodada
+  de `saida/`, para a GUI; a leitura `br`/`intl` e a pasta mais recente saem de `saida/favoritos.py`.
+  Com isso a S1 está completa.
 - `saida/formato.py`: a formatação de texto sai de `cli.py` para um módulo único, que a GUI também
   vai usar (GUI-92). Mesmos textos.
 - Fatia "indicadores": `servicos/indicadores.py` (`serie_indicadores`, `indicadores_de_mercado`,
