@@ -89,6 +89,10 @@ dados já baixados; ❌ não há fonte gratuita ou está fora do escopo (CLAUDE.
 
 ### Decisões que bloqueiam (perguntar antes de implementar, regra 7 do `CLAUDE.md`)
 
+> **Respondidas em 2026-11-03 (ADR 0022):** 1 Streamlit; 3 Plotly; 5 lê `saida/` e cache, com
+> botão de atualizar; 2 essencial = métricas e valuation. Tema (4) segue o do navegador.
+> O plano de implementação está em "Sprint GUI 1" abaixo.
+
 1. **Tecnologia** (exige ADR; dependência nova): Streamlit (rápido, aparência limitada, difícil
    copiar o layout das referências), NiceGUI/Dash (mais controle) ou backend local (FastAPI) +
    HTML/JS (fidelidade visual máxima, mais trabalho). Recomendação a discutir: FastAPI + frontend
@@ -260,6 +264,140 @@ produto próprio, "Preço justo Graham/Bazin" como *rótulo* (ver RF-G12).
 4. Aba Contábil: GUI-30, 33, 32.
 5. Edição de premissas e sensibilidade interativa (GUI-44/45).
 6. Comparador, carteira e extras (P2/P3).
+
+## Sprint GUI 1 — plano de implementação (priorizar na próxima sprint)
+
+Decisões já tomadas (ADR 0022, 2026-11-03): **Streamlit + Plotly**, app local, leitura de `saida/` e
+cache ao abrir, botão "atualizar dados" para a rede, escopo inicial = **métricas + valuation** de um
+ativo. Tudo o que não está aqui segue a "Ordem sugerida de entrega" acima.
+
+**Meta da sprint:** `valuation gui` abre uma página por ativo com (a) cotação e séries históricas de
+indicadores (inclui P/L) em gráficos Plotly e (b) o valuation por cenário lido do último `rodar`,
+sem nenhuma conta feita na camada de tela.
+
+### Ordem das tarefas (cada uma termina com `make lint tipos testes` verde e commit próprio)
+
+**S1 — Extrair a camada de serviço de `cli.py`** (sem mudar nenhuma saída; ADR 0022, item 4)
+- Criar `src/valuation/servicos/` (pacote novo; camada acima de `saida/` e `analise/`, importada só
+  por `cli.py` e `gui/`). Regra do pacote: **nenhum** `typer`, `rich` ou `console.print`; avisos
+  voltam como `list[str]` no retorno; erros continuam as exceções de domínio (`ErroContabil`,
+  `ErroDadosExternos`, `ErroConfiguracao`, `ErroDownload`, `ErroModelo`).
+- Mover de `cli.py`, mantendo a assinatura lógica, e fazer a CLI chamar o serviço:
+  - `servicos/empresa.py`: `carregar_cadastro` (hoje `_carregar_cadastro`), `padronizar`
+    (`_padronizar` e o dataclass `_Padronizada`, hoje com `console.print` de aviso de individual →
+    campo `avisos`).
+  - `servicos/mercado.py`: `carregar_mercado` (`_mercado`, `_cotacoes`, `_macro`,
+    `_Mercado`); o aviso "dólar sem segunda fonte" e "sem preço" vira `avisos`.
+  - `servicos/indicadores.py`: `serie_indicadores(p, settings, base, anos) -> TabelaIndicadores`
+    (o miolo do comando `indicadores`: anual + LTM, `_anos_encerrados`, escolha financeira ×
+    não financeira) e `indicadores_de_mercado(p, mk, settings, base)` (`_fundamentos` + `ind.de_mercado`).
+  - `servicos/resultados.py`: `ultimo_resultado(ticker) -> Resultado | None`, lendo `resumo.csv`,
+    `projecao_*.csv`, `wacc.csv`, `ponte_ev_equity.csv`, `sensibilidade_*.csv`, `qa.json`,
+    `meta.json` da pasta de data mais recente (reaproveita `saida/favoritos.py`, ADR 0021, e o
+    leitor que tenta `br` e depois `intl`).
+- A formatação de texto (`_formatar`, `_brl`) **não** vai para o serviço: a CLI e a GUI formatam,
+  ambas por um módulo único `saida/formato.py` (GUI-92; pt-BR, vírgula decimal, mi/bi).
+- Fazer por fatias (uma por commit): empresa → mercado → indicadores → resultados. Os testes
+  existentes (`test_cli.py` etc.) devem passar **sem edição**; se algum precisar mudar, parar e
+  avisar (indica mudança de saída, regra 7).
+- Testes novos: um por função de serviço, com fixtures sintéticas e sem rede (`REGRAS_TESTES.md`).
+
+**S2 — Série histórica de cotação e de múltiplos** (cálculo novo; **depende das respostas abaixo**)
+- `analise/serie_multiplos.py` (puro): `serie_multiplo(nome, precos, fundamentos_por_data) ->
+  pd.Series` indexada por data, reutilizando `mt.multiplo` (mesma conta do `comparar`; GUI-90).
+- `servicos/historico_mercado.py`: monta, para cada data de cálculo, os fundamentos LTM vigentes
+  (usa `periodos.ltm` com dados até aquela data, sem olhar o futuro) e o preço da data.
+- Cobrir P/L, P/VP, dividend yield, EV/EBITDA, EV/EBIT e, para financeiras, P/L, P/VP, dividend
+  yield (conforme `ind.de_mercado`). Denominador ≤ 0 vira NaN (como em `indicadores.py`).
+- Cotação histórica: `precos.YFinanceProvider.historico` já existe; expor via serviço com os
+  períodos de GUI-12 (1 mês, 6 meses, YTD, 1 ano, 5 anos, máximo). Intradiário fica fora.
+- Testes à mão: série sintética com preço e LTM conhecidos; ponto sem LTM disponível = NaN, não zero.
+
+**S3 — Esqueleto Streamlit** (GUI-01, 02, 03, 90, 91, 92, 97)
+- `pyproject.toml`: grupo opcional `gui` (`streamlit`, `plotly`, versões fixadas no ADR/lock);
+  `[project.scripts]` ganha o comando via `valuation gui` (subcomando em `cli.py` que chama
+  `streamlit run src/valuation/gui/app.py --server.address 127.0.0.1` com
+  `browser.gatherUsageStats=false`) e `make gui`. Se `streamlit` não estiver instalado, mensagem
+  clara "instale com `uv sync --group gui`" e saída 1.
+- `src/valuation/gui/`: `app.py` (roteador por `st.navigation`/`query_params`: `?ticker=PETR4`),
+  `estado.py` (barra de estado: data-base, idade do cache por fonte, avisos), `componentes/`
+  (cards, tabela de indicadores com "?" do glossário, gráfico Plotly).
+- Cache: toda leitura passa por `st.cache_data` sobre funções de `servicos/` (chave = ticker +
+  data-base + mtime dos arquivos); nunca recálculo na tela. Botão **"Atualizar dados"** chama o
+  mesmo fluxo de `atualizar` + `rodar` num `st.status`, e invalida o cache ao fim.
+- Estados vazios e de erro explícitos (GUI-91): ticker fora do universo, sem DFP, sem `saida/`
+  ("rode o valuation"), holding/FII fora da v1 — sempre "—" com o motivo, nunca zero.
+- Busca de ticker com lista do universo (`config/universo_ibovespa.csv`) e favoritos
+  (`saida/favoritos.py`); rodapé "estudo pessoal, não é recomendação".
+
+**S4 — Aba Geral** (GUI-10 a 12, 20 a 22; só o necessário)
+- Cabeçalho do ativo (nome, ticker, classe, setor do cadastro), cards de preço, mín./máx. 52
+  semanas, market cap e dividend yield.
+- Gráfico de cotação (Plotly, seletor de período) e gráfico de cada múltiplo da S2 com linhas
+  de "valor atual" e "média da própria empresa" (mediana, a definir), seletor de indicador.
+- Grade de indicadores: os que já existem em `indicadores.py` (margens, ROE, ROIC, dívida
+  líquida/EBITDA, P/L, P/VP, EV/EBITDA, DY) na visão **Hoje | Histórico**. "Média do mercado" e os
+  indicadores novos de GUI-20 ficam para a sprint seguinte.
+
+**S5 — Aba Valuation** (GUI-40 a 43, só leitura de `saida/`)
+- Cenários pessimista/base/otimista, valor ponderado, preço máximo de compra, upside e retorno
+  esperado × hurdle; WACC/Ke com componentes e avisos; checagens (VT/EV, g < WACC, DDM × lucro
+  residual); ponte EV→equity e football field refeitos em Plotly **a partir dos CSVs** (não
+  reabrir os PNGs). Sem `saida/`, a aba mostra o botão "Rodar valuation".
+- Perfil: mostrar o perfil lido de `perfil/perfil_investidor.json` (validade 12 meses); o
+  questionário na tela (GUI-70) fica fora desta sprint.
+
+**S6 — Testes, documentação e fechamento**
+- Testes: serviços (S1/S2) sem rede; GUI com `streamlit.testing.v1.AppTest` sobre fixtures
+  sintéticas em `tests/fixtures/` (página abre, estado vazio, ticker inválido, dados presentes).
+  Cobertura mínima de 80% em `servicos/` e `analise/`; `gui/` fora do piso, mas com o teste de fumaça.
+- Documentos (CONTRIBUTING, "Antes de concluir"): `guia.md` (seção nova `servicos/` e `gui/`, subir
+  versão), `CHANGELOG.md`, `README.md` (como abrir a GUI), `docs/diagrama_arquitetura.md`,
+  `diagrama_atividades.md` e `diagrama_casos_de_uso.md` (fluxo GUI), `docs/decisoes/README.md`,
+  nota no `CLAUDE.md` seção 1 (interface web entrou por ADR 0022) e `docs/contexto_rapido.md`.
+
+### Perguntas a responder **antes** da S2 (regra 7; mudam números exibidos)
+
+1. **Definição do P/L histórico** (e dos demais múltiplos). Opções: (a) *preço no fechamento do
+   exercício ÷ LPA do exercício* (um ponto por ano, simples, sem ITR); (b) *preço de cada data ÷
+   LPA LTM vigente* (série suave, um ponto por mês ou por semana; usa ITR e a regra de LTM do
+   `periodos.py`); (c) *(b) só nas datas de divulgação* (um ponto por trimestre). Recomendação: **(b),
+   com ponto mensal**, para o gráfico acompanhar a cotação.
+2. **Defasagem de publicação**: usar o LTM só a partir da data em que o ITR/DFP foi divulgado
+   (evita olhar o futuro) ou do fim do período? Recomendação: a partir da divulgação, se a data
+   existir na CVM (`DT_RECEB`/ `dt_receb`, **[VALIDAR]** no arquivo real); senão, fim do período + 45 dias
+   (ITR) ou + 90 dias (DFP), registrado no `docs/fontes.md`.
+3. **Ações no tempo**: a composição de capital da CVM traz a quantidade vigente. Para o LPA ou
+   o market cap histórico, usar a quantidade atual com preço **ajustado por desdobramentos**, ou as
+   quantidades de cada data? Recomendação: preço ajustado por desdobramentos/grupamentos e ações
+   atuais, com aviso. **[VALIDAR]** que o yfinance com `auto_adjust=False` traz `Stock Splits` e
+   quais datas (ADR 0003 trata a escala das ações).
+4. **"Média" de referência no gráfico**: mediana ou média da própria empresa; janela (5 anos ou
+   toda a série); remover anomalias (GUI-23) por qual critério (ex.: P/L < 0 ou > 100)?
+5. **Média do setor/mercado** (GUI-22): confirmada como média dos pares de `setores.yaml`, não da
+   B3 inteira? Entra na sprint seguinte.
+6. **Janela do histórico**: 10 anos (CLAUDE.md) ou o que o yfinance entregar? Preço ≥ 10 anos é
+   confiável para todas as empresas do universo? **[VALIDAR]** por amostra.
+
+### Critério de pronto da sprint
+
+- `uv sync --group gui && valuation gui` abre `http://127.0.0.1:8501` sem rede e sem erro, mostra
+  PETR4, VALE3 e WEGE3 a partir do cache e dos últimos `saida/`.
+- A aba Geral exibe cotação e pelo menos P/L, P/VP, EV/EBITDA e dividend yield em série, com o
+  valor atual marcado; a aba Valuation exibe os três cenários, o ponderado e o preço máximo de compra
+  iguais ao `resumo.csv`.
+- `grep -R "rich\|typer" src/valuation/servicos src/valuation/gui` vazio; nenhuma conta financeira em
+  `gui/`; `make lint tipos testes` verde; testes da CLI inalterados.
+- Documentos da S6 atualizados e dito no resumo quais foram.
+
+### Riscos
+
+- `cli.py` (3,4 mil linhas) mistura apresentação e orquestração: extrair em fatias, rodando os testes
+  a cada uma, para a mudança de saída não passar despercebida.
+- Série de múltiplos depende de LTM em muitas datas: custo de CPU (cachear por ticker) e de
+  qualidade (trimestres faltando na CVM viram lacuna visível, não interpolação).
+- Streamlit reexecuta o script a cada clique: sem `st.cache_data` a página passa de 2 s (GUI-93).
+- yfinance é não oficial: o botão de atualizar precisa mostrar a falha sem derrubar a tela.
 
 ## Métrica de preço teto
 

@@ -2,6 +2,12 @@
 
 ## [Não lançado]
 
+### GUI: decisão de tecnologia e plano da sprint (ADR 0022)
+- `docs/decisoes/0022-gui-streamlit-plotly.md`: Streamlit + Plotly (grupo opcional `gui`), camada
+  `servicos/` compartilhada com a CLI, leitura de `saida/` e cache com botão de atualizar.
+- `docs/backlog.md`: seção "Sprint GUI 1" (tarefas S1 a S6, perguntas abertas sobre a série
+  histórica de múltiplos, critério de pronto e riscos). Nada implementado ainda.
+
 ### Política: perguntar antes de decidir o que muda a saída
 - `CLAUDE.md` (regra 7 da seção 0) e `CONTRIBUTING.md` (seção "Dúvidas"): toda decisão que possa
   mudar a saída (valor, arquivo gravado, o que a CLI mostra, aviso, padrão de opção, definição de
