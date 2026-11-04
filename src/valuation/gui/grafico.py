@@ -280,20 +280,28 @@ def football(faixas: Sequence[Faixa], preco: float, preco_maximo: float) -> go.F
                 hovertemplate="%{y}<br>%{text}<extra></extra>",
             )
         )
-    for valor, rotulo, traco, ancora in (
-        (preco, "Preço", "solid", "top right"),
-        (preco_maximo, "Preço máx. de compra", "dash", "bottom right"),
+    # Rótulos acima do gráfico, em alturas diferentes: dentro dele ficavam sobre as barras, e os
+    # dois preços costumam estar próximos.
+    for valor, rotulo, traco, altura in (
+        (preco, "Preço", "solid", 1.0),
+        (preco_maximo, "Preço máx. de compra", "dash", 1.07),
     ):
         if pd.notna(valor):
-            figura.add_vline(
+            figura.add_vline(x=valor, line={"color": TINTA, "width": 1, "dash": traco})
+            figura.add_annotation(
                 x=valor,
-                line={"color": TINTA, "width": 1, "dash": traco},
-                annotation_text=f"{rotulo}: {fo.reais(valor)}",
-                annotation_position=ancora,
+                y=altura,
+                yref="paper",
+                yanchor="bottom",
+                xanchor="left",
+                showarrow=False,
+                text=f"{rotulo}: {fo.reais(valor)}",
             )
     figura = _layout(figura, "")
     figura.update_layout(
-        height=max(280, 46 * len(faixas) + 90),
+        height=max(280, 46 * len(faixas) + 130),
+        margin={"l": 8, "r": 8, "t": 76, "b": 8},
+        legend={"orientation": "h", "y": 1.2, "x": 0},
         xaxis={"title": "R$ por ação", "showgrid": True},
         yaxis={"autorange": "reversed", "title": ""},
     )

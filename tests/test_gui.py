@@ -557,3 +557,8 @@ def test_override_nao_toca_o_json_e_oferece_rodar(
     at.button(key="rodar_com_perfil").click().run()
     assert chamados
     assert [c[3:] for c in chamados[0]] == [("rodar", "WEGE3", "--perfil", "arrojado")]
+
+
+def test_cartoes_quebram_a_linha_em_vez_de_cortar_o_numero(ambiente: Path) -> None:
+    at = _abrir()
+    assert any("stMetricValue" in m.value and "white-space: normal" in m.value for m in at.markdown)

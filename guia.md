@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.52 — 2026-11-04**
+**Versão 1.53 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -55,7 +55,7 @@
 | CLI | `cli.py` | `gui`, `series`, `series-varios`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 827 testes (816 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 828 testes (817 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -1098,7 +1098,8 @@ apresenta:** nenhuma conta financeira, texto por `saida/formato.py`, e o mesmo v
 bibliotecas de terminal (`test_gui_sem_dependencia_de_terminal`). Como `cli.py`, é camada de topo: pode
 usar o relógio e passa `agora`/`base` para baixo.
 
-- `app.py`: entrada do `streamlit run`. Rota por `?ticker=PETR4`; sem ele, o início. Rodapé "estudo
+- `app.py`: entrada do `streamlit run`. `CSS_CARTOES` faz o texto do `st.metric` quebrar a linha, porque por padrão ele
+  corta com reticências. Rota por `?ticker=PETR4`; sem ele, o início. Rodapé "estudo
   pessoal". Não é importável sem efeito: reexecuta a cada clique.
 - `dados.py`: `st.cache_data` sobre `servicos/` (séries e medidas pelas versões com cache em disco), com o **mtime dos arquivos na chave**. Lê os caminhos
   de `config` na hora da chamada (os testes trocam `cfg.DIR_*`). `invalidar()` limpa tudo.

@@ -114,7 +114,8 @@ def _custo_capital(r: res.Resultado) -> None:
         linhas.append(
             {"Componente": nome, "Valor": texto, "Detalhe": "" if pd.isna(valor) else detalhe}
         )
-    st.dataframe(pd.DataFrame(linhas), hide_index=True, width="stretch")
+    # `st.table`, não `st.dataframe`: o texto quebra a linha, e nenhuma linha fica atrás de rolagem.
+    st.table(pd.DataFrame(linhas).set_index("Componente"))
     for aviso in tabela.loc[tabela["componente"] == "aviso", "detalhe"].dropna():
         st.warning(str(aviso))
 
@@ -181,11 +182,8 @@ def mostrar(ticker: str, hoje: dt.date, base: dt.date, padronizada: emp.Padroniz
     _cenarios(r)
     for aviso in [*r.avisos_rodada, *r.avisos]:
         st.warning(aviso)
-    esquerda, direita = st.columns(2)
-    with esquerda:
-        _custo_capital(r)
-    with direita:
-        _checagens(r)
+    _custo_capital(r)
+    _checagens(r)
     _football(ticker, r, base, padronizada)
     _ponte(r)
     if st.button("Rodar valuation de novo", key="rodar_valuation"):

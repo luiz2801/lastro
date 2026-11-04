@@ -4,6 +4,9 @@
 
 ### Sprint GUI 2: fechamento (ADR 0024)
 - Cartão de 52 semanas dividido em mínimo e máximo: o `st.metric` cortava "R$ mín / R$ máx".
+- Aba Valuation: cartões quebram a linha em vez de cortar (o hurdle sumia em "19,93% x 20,…"), em toda a GUI; custo de capital
+  em tabela de largura total, com o texto inteiro e sem rolagem interna; rótulos de preço do football field acima do gráfico,
+  fora das barras e da legenda.
 - Tooltips dos gráficos de múltiplos e indicadores com 2 casas. Início sem o aviso do `fillna` em coluna numérica.
 - Conferência sem rede em PETR4, VALE3, WEGE3 e BBAS3: cenários, ponderado e preço máximo iguais ao `resumo.csv`; abertura
   de 0,7 a 1,0 s de cálculo e Ibovespa em até 1,5 s, com o cache em disco. IF.data sem validar (`docs/fontes.md`).
