@@ -2,6 +2,12 @@
 
 ## [Não lançado]
 
+### Sprint GUI 1, S1: camada de serviço, fatia "empresa" (ADR 0022)
+- `src/valuation/servicos/empresa.py`: `carregar_cadastro`, `padronizar` e `Padronizada` saem de
+  `cli.py`, sem terminal; o aviso de demonstrações individuais volta em `avisos`. Nenhuma saída muda:
+  `cli._carregar_cadastro` e `cli._padronizar` ficam como invólucros e os testes da CLI seguem sem
+  edição.
+
 ### GUI: decisão de tecnologia e plano da sprint (ADR 0022)
 - `docs/decisoes/0022-gui-streamlit-plotly.md`: Streamlit + Plotly (grupo opcional `gui`), camada
   `servicos/` compartilhada com a CLI, leitura de `saida/` e cache com botão de atualizar.

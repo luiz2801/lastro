@@ -12,6 +12,7 @@ Estilo: **camadas em pipeline, com uma fachada de orquestração**. O grafo abai
 flowchart BT
     subgraph ORQ["Orquestração e interface"]
         cli["cli<br/>(typer, rich)"]
+        servicos["servicos<br/>empresa"]
     end
 
     subgraph APL["Aplicação (camadas de cálculo e saída)"]
@@ -32,6 +33,8 @@ flowchart BT
 
     config["config<br/>Settings, Setor, ler_yaml"]
 
+    cli --> servicos
+    servicos --> contabil & data & projecao & config
     cli --> saida & analise & modelos & projecao & custo & contabil & perfil & data & carteira & universo & config
     analise --> modelos & projecao & custo & perfil
     saida --> modelos & config
@@ -48,7 +51,7 @@ flowchart BT
     classDef topo fill:#fff8e1,stroke:#f08c00,color:#1a1a1a
     class saida,analise,modelos,projecao,custo,contabil,perfil,data,carteira,universo pacote
     class config base
-    class cli topo
+    class cli,servicos topo
     style ORQ fill:#fafafa,stroke:#adb5bd,color:#1a1a1a
     style APL fill:#fafafa,stroke:#adb5bd,color:#1a1a1a
     style DOM fill:#fafafa,stroke:#adb5bd,color:#1a1a1a
@@ -58,7 +61,7 @@ flowchart BT
 
 | Regra | Como o grafo mostra |
 |---|---|
-| Camada superior nunca é importada por inferior | Todas as setas apontam para baixo; **só `cli` conhece todo mundo**. |
+| Camada superior nunca é importada por inferior | Todas as setas apontam para baixo; **só `cli` conhece todo mundo**, e `servicos` fica logo abaixo dela. |
 | Trocar de fonte não toca nos modelos (regra 3 do `CLAUDE.md`) | `data` só depende de `config`; nenhum pacote de cálculo importa `data`. A `cli` entrega preços, macro e balanços por parâmetro. |
 | O motor é de funções puras | `contabil`, `projecao`, `custo_capital`, `modelos` e `analise` não importam `data`: nada ali faz I/O de rede, e `data_base` e `agora` são parâmetros. |
 | Perfil não altera fatos contábeis | `perfil` só depende de `config`; `analise` o consome para ponderar cenários, e `contabil`, `custo_capital` e `modelos` nem o conhecem. |
@@ -86,6 +89,7 @@ Notas sobre desvios da imagem "em linha" do `CLAUDE.md` (seção 3, `data → co
 | `saida` | CSV, `meta.json`, valores reais, gráficos, glossário, favoritos | — |
 | `carteira` | Transações da carteira pessoal: validação e importação CSV/XLSX | `ErroCarteira` |
 | `universo` | Setores da CVM e empresas do Ibovespa por setor | — |
+| `servicos` | Orquestração sem apresentação, comum à CLI e à GUI (ADR 0022); avisos no retorno | exceções de domínio das camadas abaixo |
 | `cli` | Comandos `typer`, orquestração, tabelas `rich`, códigos de saída | captura todas as anteriores |
 
 ## 2. Arquitetura física — diagrama de componentes

@@ -47,7 +47,6 @@ from valuation.contabil import nao_financeiras as nf
 from valuation.contabil import padronizacao as pad
 from valuation.contabil import periodos as per
 from valuation.contabil import qa as qa_mod
-from valuation.contabil.moeda import detectar_moeda
 from valuation.custo_capital import ErroCustoCapital, capm
 from valuation.custo_capital import beta as bt
 from valuation.custo_capital import erp_implicito as erp_mod
@@ -78,6 +77,7 @@ from valuation.saida import glossario as gl
 from valuation.saida import graficos as gr
 from valuation.saida import real
 from valuation.saida.csv import INTERNACIONAL, FormatoCsv, gravar_csv, gravar_matriz
+from valuation.servicos import empresa as emp
 from valuation.universo import SetorCVM, buscar_setor, carregar_universo, empresas_do_setor
 
 app = typer.Typer(
@@ -229,16 +229,15 @@ def _erro(mensagem: str) -> typer.Exit:
 
 
 def _carregar_cadastro(settings: Settings, data_base: dt.date, forcar: bool) -> pd.DataFrame:
-    return cad.atualizar_cadastro(
-        ano=data_base.year,
-        data_ref=data_base,
+    return emp.carregar_cadastro(
+        settings,
+        data_base,
+        forcar,
+        sessao=criar_sessao(),
+        agora=dt.datetime.now(dt.UTC),
         dir_raw=DIR_RAW,
         dir_processed=DIR_PROCESSED,
         caminho_manual=CAMINHO_CADASTRO_MANUAL,
-        ttl=dt.timedelta(hours=settings.cache_ttl_horas.cvm),
-        sessao=criar_sessao(),
-        agora=dt.datetime.now(dt.UTC),
-        forcar=forcar,
     )
 
 
@@ -520,65 +519,22 @@ def mercado(
         console.print(f"[yellow]Aviso:[/] {aviso}")
 
 
-@dataclass(frozen=True)
-class _Padronizada:
-    empresa: cad.Empresa
-    plano: pad.PlanoContas
-    selecionadas: pd.DataFrame
-    contas: pd.DataFrame
-    moeda: str
-    premissas: pm.PremissasEmpresa
-    caminho_premissas: Path
-
-    @property
-    def ajustes(self) -> nf.AjustesContabeis:
-        return pm.ajustes_contabeis(self.premissas.ajustes)
-
-
 def _padronizar(
     ticker: str, settings: Settings, cadastro: pd.DataFrame | None = None
-) -> _Padronizada:
-    """Padroniza as demonstrações de `ticker` e grava `contas_padronizadas.parquet`.
-
-    Usa `config/empresas/{TICKER}.yaml` se existir (mapeamento extra, consolidado, moeda); senão,
-    as premissas padrão. `cadastro` evita remontar o cadastro (pares).
-    """
+) -> emp.Padronizada:
+    """`emp.padronizar` com os avisos impressos; `cadastro` evita remontá-lo (pares)."""
     if cadastro is None:
         data_base = settings.resolver_data_base(dt.date.today())
         cadastro = _carregar_cadastro(settings, data_base, False)
-    empresa = cad.empresa_por_ticker(cadastro, ticker)
-    tipo = empresa.tipo_modelo
-    if tipo not in ("nao_financeira", "financeira"):
-        raise ErroContabil(
-            f"{', '.join(empresa.tickers)} é {tipo}: a v1 não avalia esse tipo "
-            "(holdings exigem NAV/SOTP; ver seção 1 do CLAUDE.md)."
-        )
-    normalizado = cad.normalizar_ticker(ticker)
-    caminho = pm.caminho_premissas(normalizado, DIR_EMPRESAS)
-    if caminho.is_file():
-        premissas = pm.carregar_premissas(caminho)
-        pm.conferir_cadastro(premissas, empresa.tickers, tipo)
-    else:
-        premissas = pm.premissas_padrao(normalizado, tipo, empresa.tickers)
-    plano = pad.carregar_mapeamento(tipo=tipo, extra=premissas.ajustes.mapeamento_extra)
     try:
-        demonstracoes = pad.ler_demonstracoes(DIR_PROCESSED, empresa.cd_cvm)
-    except FileNotFoundError as e:
-        raise ErroContabil(
-            f"{e.filename} não existe. Rode `valuation atualizar --tickers {ticker}`."
-        ) from e
-    consolidado = premissas.ajustes.consolidado
-    if consolidado and not demonstracoes["consolidado"].any():
-        console.print(
-            f"[yellow]Aviso:[/] {normalizado} só publica demonstrações individuais: usadas no "
-            "lugar das consolidadas."
-        )
-        consolidado = False
-    selecionadas = pad.selecionar_reapresentacoes(demonstracoes, consolidado=consolidado)
-    moeda = detectar_moeda(selecionadas, premissas.moeda_relatorio)
-    contas = pad.padronizar(selecionadas, plano, ticker=normalizado)
-    contas.to_parquet(pad.caminho_padronizadas(DIR_PROCESSED, empresa.cd_cvm), index=False)
-    return _Padronizada(empresa, plano, selecionadas, contas, moeda, premissas, caminho)
+        p = emp.padronizar(ticker, cadastro, dir_processed=DIR_PROCESSED, dir_empresas=DIR_EMPRESAS)
+    except Exception as e:
+        for aviso in getattr(e, "__notes__", ()):
+            console.print(f"[yellow]Aviso:[/] {aviso}")
+        raise
+    for aviso in p.avisos:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
+    return p
 
 
 _COR_SEVERIDADE = {"erro": "red", "aviso": "yellow", "info": "cyan"}
@@ -987,13 +943,13 @@ def _horizonte(
     return anos, f"perfil {efetivo.perfil} ({efetivo.origem})"
 
 
-def _limite_aliquota(p: _Padronizada, settings: Settings) -> float:
+def _limite_aliquota(p: emp.Padronizada, settings: Settings) -> float:
     limite = p.premissas.projecao_dcf.aliquota_imposto.limite_superior
     return settings.impostos.aliquota_nominal if limite is None else limite
 
 
 def _sugerir(
-    p: _Padronizada, settings: Settings, base: dt.date
+    p: emp.Padronizada, settings: Settings, base: dt.date
 ) -> tuple[pd.DataFrame, Setor | None, sg.Sugestoes]:
     """Métricas dos exercícios encerrados antes da data-base, setor e premissas sugeridas."""
     aliquota = settings.impostos.aliquota_nominal
@@ -1011,7 +967,7 @@ def _sugerir(
 
 
 def _resolver(
-    p: _Padronizada, settings: Settings, sugestoes: sg.Sugestoes, base: dt.date, horizonte: int
+    p: emp.Padronizada, settings: Settings, sugestoes: sg.Sugestoes, base: dt.date, horizonte: int
 ) -> pj.PremissasResolvidas:
     """Premissas numéricas do cenário base."""
     ajustes = p.premissas.ajustes
@@ -1051,7 +1007,7 @@ def _no_yaml(config: pm.ConfigProjecao, coluna: str) -> str:
     return str(valor) if valor == pm.SUGERIDO else sg.pct(float(str(valor)))
 
 
-def _mostrar_sugestoes(p: _Padronizada, s: sg.Sugestoes) -> None:
+def _mostrar_sugestoes(p: emp.Padronizada, s: sg.Sugestoes) -> None:
     def e(linha: str, coluna: str) -> str:
         return sg.pct(cast(float, s.estatisticas.at[linha, coluna]))
 
@@ -1172,7 +1128,7 @@ def premissas_sugerir(
     _escrever_premissas(p, esc.renderizar(p.premissas, sugestoes, data_base=base), escrever)
 
 
-def _escrever_premissas(p: _Padronizada, texto: str, escrever: bool) -> None:
+def _escrever_premissas(p: emp.Padronizada, texto: str, escrever: bool) -> None:
     """Grava o YAML da empresa (o anterior vira .bak) ou avisa que ele não existe."""
     if escrever:
         caminho = p.caminho_premissas
@@ -1186,7 +1142,7 @@ def _escrever_premissas(p: _Padronizada, texto: str, escrever: bool) -> None:
 
 
 def _sugerir_financeira(
-    p: _Padronizada, settings: Settings, base: dt.date
+    p: emp.Padronizada, settings: Settings, base: dt.date
 ) -> tuple[pd.DataFrame, pf.SugestoesFinanceira]:
     """Métricas dos exercícios encerrados antes da data-base e premissas do DDM sugeridas."""
     historico = fin.metricas(per.anual(p.contas))
@@ -1195,7 +1151,7 @@ def _sugerir_financeira(
     return historico, pf.sugerir(historico, g_terminal=g)
 
 
-def _pl_inicial(p: _Padronizada, base: dt.date) -> tuple[float, dt.date]:
+def _pl_inicial(p: emp.Padronizada, base: dt.date) -> tuple[float, dt.date]:
     """PL da controladora no último balanço até a data-base (ponto de partida do DDM)."""
     data = _data_balanco(p.contas, base)
     bal = cast(pd.Series, per.saldos(p.contas).loc[data])
@@ -1204,7 +1160,7 @@ def _pl_inicial(p: _Padronizada, base: dt.date) -> tuple[float, dt.date]:
     return pl - (0.0 if pd.isna(minoritarios) else minoritarios), data.date()
 
 
-def _mostrar_sugestoes_financeira(p: _Padronizada, s: pf.SugestoesFinanceira) -> None:
+def _mostrar_sugestoes_financeira(p: emp.Padronizada, s: pf.SugestoesFinanceira) -> None:
     def e(linha: str, coluna: str) -> str:
         return sg.pct(cast(float, s.estatisticas.at[linha, coluna]))
 
@@ -1274,7 +1230,7 @@ def _mostrar_projecao_financeira(tabela_p: pd.DataFrame, titulo: str) -> None:
 
 
 def _premissas_sugerir_financeira(
-    p: _Padronizada,
+    p: emp.Padronizada,
     settings: Settings,
     base: dt.date,
     hoje: dt.date,
@@ -1339,7 +1295,7 @@ def _pares_do_yaml(ticker: str) -> list[str]:
 
 @dataclass(frozen=True)
 class _Par:
-    padronizada: _Padronizada
+    padronizada: emp.Padronizada
     cap: prc.MarketCap
     fundamentos: mt.Fundamentos
 
@@ -1359,7 +1315,7 @@ def _acoes_do_papel(empresa: cad.Empresa, cap: prc.MarketCap, ticker: str) -> in
 
 
 def _fundamentos(
-    p: _Padronizada,
+    p: emp.Padronizada,
     cap: prc.MarketCap,
     settings: Settings,
     base: dt.date,
@@ -1409,7 +1365,9 @@ def _mercado_par(
     return _cotacoes(cad.empresa_por_ticker(cadastro, ticker), settings, base, yf, brapi)[1]
 
 
-def _coletar_pares(p: _Padronizada, m: _Mercado, settings: Settings, base: dt.date) -> _Comparaveis:
+def _coletar_pares(
+    p: emp.Padronizada, m: _Mercado, settings: Settings, base: dt.date
+) -> _Comparaveis:
     """Padroniza cada par e mede-o como o alvo; par sem dados vira aviso, não erro."""
     tickers = _tickers_pares(p.premissas, p.empresa.tickers)
     if not tickers:
@@ -1448,7 +1406,7 @@ def _coletar_pares(p: _Padronizada, m: _Mercado, settings: Settings, base: dt.da
 
 
 def _multiplos(
-    p: _Padronizada, m: _Mercado, comps: _Comparaveis, settings: Settings, base: dt.date
+    p: emp.Padronizada, m: _Mercado, comps: _Comparaveis, settings: Settings, base: dt.date
 ) -> mt.ResultadoMultiplos | None:
     """Múltiplos dos pares e valores implícitos do alvo; None se nenhum par foi medido."""
     if not comps.pares:
@@ -1467,7 +1425,7 @@ def _multiplos(
     )
 
 
-def _metodo_beta(p: _Padronizada, settings: Settings) -> str:
+def _metodo_beta(p: emp.Padronizada, settings: Settings) -> str:
     empresa = p.premissas.custo_capital
     return (
         empresa.beta.metodo
@@ -1476,7 +1434,7 @@ def _metodo_beta(p: _Padronizada, settings: Settings) -> str:
     )
 
 
-def _precisa_pares(p: _Padronizada, settings: Settings) -> bool:
+def _precisa_pares(p: emp.Padronizada, settings: Settings) -> bool:
     """Custo de capital ou ponte dependem dos pares (beta, estrutura ou minoritários)?"""
     return (
         _metodo_beta(p, settings) == "comparaveis"
@@ -1506,7 +1464,7 @@ def _regressao(
 
 
 def _beta(
-    p: _Padronizada,
+    p: emp.Padronizada,
     m: _Mercado,
     settings: Settings,
     base: dt.date,
@@ -1559,7 +1517,7 @@ def _divida_sobre_capital_setor(pares: tuple[_Par, ...]) -> float:
 
 
 def _custo_capital(
-    p: _Padronizada,
+    p: emp.Padronizada,
     m: _Mercado,
     settings: Settings,
     base: dt.date,
@@ -1866,7 +1824,7 @@ def _ke(
 
 
 def _custo_capital_financeira(
-    p: _Padronizada,
+    p: emp.Padronizada,
     m: _Mercado,
     settings: Settings,
     base: dt.date,
@@ -1970,7 +1928,7 @@ def wacc(
 
 
 def _dados_avaliacao(
-    p: _Padronizada,
+    p: emp.Padronizada,
     m: _Mercado,
     cc: wc.CustoCapital,
     settings: Settings,
@@ -2003,7 +1961,7 @@ def _dados_avaliacao(
     )
 
 
-def _ronic(p: _Padronizada, settings: Settings, historico: pd.DataFrame) -> dcf.Ronic:
+def _ronic(p: emp.Padronizada, settings: Settings, historico: pd.DataFrame) -> dcf.Ronic:
     """RONIC do YAML da empresa ou do settings; `roic_historico` = mediana dos 5 últimos anos."""
     escolha = p.premissas.projecao_dcf.terminal.ronic
     escolha = settings.terminal.ronic if escolha is None else escolha
@@ -2496,7 +2454,7 @@ def rodar(
     console.print(f"Gravado em {raiz}")
 
 
-def _metricas_com_ltm(p: _Padronizada, settings: Settings) -> tuple[pd.DataFrame, pd.Series]:
+def _metricas_com_ltm(p: emp.Padronizada, settings: Settings) -> tuple[pd.DataFrame, pd.Series]:
     """Métricas anuais e a linha LTM do plano da empresa (como no comando `historico`)."""
     anual = per.anual(p.contas)
     if p.plano.tipo == "financeira":
@@ -2576,7 +2534,7 @@ def _gravar_complementos(
     fmt: FormatoCsv,
     settings: Settings,
     e: _Execucao,
-    p: _Padronizada,
+    p: emp.Padronizada,
     m: _Mercado,
     *,
     modelo: str,
@@ -2754,7 +2712,7 @@ class _Execucao:
 
 
 def _rodar_financeira(
-    p: _Padronizada, settings: Settings, e: _Execucao, raiz: Path, fmt: FormatoCsv
+    p: emp.Padronizada, settings: Settings, e: _Execucao, raiz: Path, fmt: FormatoCsv
 ) -> None:
     """`rodar` de uma financeira: DDM por cenário, Ke implícito e sensibilidades (seção 11.3)."""
     ticker = p.premissas.ticker

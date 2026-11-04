@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.35 — 2026-11-03**
+**Versão 1.36 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -50,10 +50,11 @@
 | Análise | `analise/{cenarios,sensibilidade,indicadores}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade, FCFF e DDM; indicadores por ativo (seção 20) |
 | Saída | `saida/{csv,arquivos,real,graficos,glossario,favoritos}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG, glossário das métricas e favoritos (seção 19) |
 | Carteira | `carteira/{transacoes,arquivo,posicao}.py` | ✅ Etapas C1 e C2 do ADR 0020: transações, histórico validado, importação CSV/XLSX, posição, preço médio e resultado (seção 21); a C3 (indicadores por ativo) está em `analise/indicadores.py` e no comando `indicadores`; proventos e alocação ainda não (seção 12) |
+| Serviços | `servicos/empresa.py` | Em extração de `cli.py` (S1 da Sprint GUI 1, ADR 0022): cadastro e padronização (seção 22) |
 | CLI | `cli.py` | `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 657 testes (646 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 665 testes (654 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -134,23 +135,17 @@ Todo download passa por `http.baixar` (cache em `data/raw/` + `.meta.json`). Cam
 ## 3. Comandos da CLI (`cli.py`)
 
 Callback global: `-v/--verbose` → logging DEBUG. Erros: `_erro()` imprime em vermelho e devolve
-`typer.Exit(1)`. Funções auxiliares: `_carregar_cadastro(settings, data_base, forcar)` (chama
-`cad.atualizar_cadastro` com TTL de `cache_ttl_horas.cvm`), `_tickers_do_universo(caminho)`,
-`_linha_validada(v, formato)` (cor por status), `_padronizar(ticker, settings) -> _Padronizada`
-(cadastro → YAML da empresa em `DIR_EMPRESAS`, se existir, conferido contra o cadastro; senão
-`premissas_padrao` → `carregar_mapeamento(tipo=tipo_modelo, extra=mapeamento_extra)` →
-`ler_demonstracoes` → `selecionar_reapresentacoes(consolidado=…)` → `detectar_moeda(…,
-moeda_relatorio)` → `padronizar` → grava `contas_padronizadas.parquet`; `nao_financeira` ou
-`financeira` (plano conforme o tipo), `holding`/`nao_suportada` ⇒ `ErroContabil`. Companhia sem
-nenhuma demonstração consolidada usa as individuais, com aviso).
-`_Padronizada.ajustes` = `AjustesContabeis` do YAML (usado por `historico` e `premissas`).
+`typer.Exit(1)`. Funções auxiliares: `_carregar_cadastro(settings, data_base, forcar)` e
+`_padronizar(ticker, settings, cadastro=None) -> emp.Padronizada` são invólucros de
+`servicos/empresa.py` (seção 22): passam as constantes de caminho e `criar_sessao()` de `cli`
+(os testes as trocam aqui) e imprimem os avisos; `_tickers_do_universo(caminho)`,
+`_linha_validada(v, formato)` (cor por status).
 `_setor(chave)` (chave ausente de `setores.yaml` ⇒ `ErroConfiguracao`), `_horizonte(premissas,
 settings, hoje, override)` (inteiro do YAML ou horizonte do perfil via `resolver_perfil`).
 `_mercado(ticker, settings, base, agora, forcar) -> _Mercado(empresa, precos, ibov, macro, cap, yf)`
 (coleta comum a `mercado`, `wacc`, `comparar` e `rodar`; `.avisos`), que usa
 `_cotacoes(empresa, settings, base, yf, brapi) -> (precos, MarketCap)` (sem preço ou sem
-composição ⇒ `ErroDadosExternos`). `_padronizar(ticker, settings, cadastro=None)` aceita o
-cadastro já carregado (pares). `_acoes_do_papel(empresa, cap, ticker)`: ações em circulação na
+composição ⇒ `ErroDadosExternos`). `_acoes_do_papel(empresa, cap, ticker)`: ações em circulação na
 unidade do papel avaliado (em units quando o ticker é unit com `acoes_por_unit`), usada no valor
 por ação do `rodar` e no alvo dos múltiplos, para comparar com o preço da unit. `_custo_capital(p, m, settings, base, comps=None) ->
 wc.CustoCapital` (seção 19), com `_beta` (precedência YAML > settings, `_metodo_beta`;
@@ -582,6 +577,7 @@ proposto; `docs/backlog.md`).
 
 | Arquivo | Cobre | Fixtures |
 |---|---|---|
+| `test_servicos_empresa.py` | `carregar_cadastro` nos diretórios recebidos, `padronizar` (sem aviso, individual com aviso no retorno e nada no terminal, sem demonstrações, holding), aviso nas notas quando o erro vem depois dele, CLI imprimindo esse aviso, pacote sem dependência de terminal | `SessaoFalsa`, `zip_cvm`, `dfp_completa` |
 | `test_favoritos.py` | lista de favoritos (carga, chave inválida, ida e volta), último `resumo.csv` (pasta mais recente, `br`/`intl`, sem avisos, sem rodada), comandos `favoritos`, `adicionar`/`remover` e `atualizar` com `rodar` falso | `tmp_path`, `cli.CAMINHO_FAVORITOS`/`DIR_SAIDA` trocados |
 | `test_http.py` | cache, TTL, 304, retry, fallback | `sessao_falsa` |
 | `test_cvm.py` | parsing, escala, versões, `coletar` | `zip_cvm("dfp_cia_aberta_2025")` etc. |
@@ -925,3 +921,27 @@ resultado (C2). Ainda sem indicadores, proventos nem alocação (Etapas C3 a C5 
 acima da posição, agrupamento/desdobramento/bonificação sem posição do ticker e, com `hoje`, data
 futura. O `hoje` vem da CLI: nenhum cálculo lê o relógio. Proventos não alteram a quantidade e
 não exigem posição na data (o direito pode ter nascido antes de uma venda).
+
+## 22. `servicos/` — orquestração comum à CLI e à GUI (ADR 0022)
+
+Camada acima de `saida` e `analise`, importada só por `cli.py` (e pela `gui/`, quando existir).
+Devolve objetos e DataFrames. **Sem terminal:** nenhuma biblioteca de CLI nem `console.print`, e
+`tests/test_servicos_empresa.py` barra essas palavras no pacote inteiro (inclusive em comentários,
+porque o critério da sprint é o `grep` vazio). Avisos voltam no retorno (`avisos: list[str]`); erros
+são as exceções de domínio. Sem `date.today()`: `data_base` e `agora` são parâmetros, e I/O (sessão,
+diretórios) entra por parâmetro nomeado, com a constante de `config.py` como padrão.
+
+**`empresa.py`**
+- `carregar_cadastro(settings, data_base, forcar, *, sessao, agora, dir_raw, dir_processed,
+  caminho_manual) -> DataFrame`: `cad.atualizar_cadastro` com o TTL de `cache_ttl_horas.cvm`.
+- `padronizar(ticker, cadastro, *, dir_processed, dir_empresas) -> Padronizada`: YAML da empresa em
+  `dir_empresas`, se existir, conferido contra o cadastro (senão `premissas_padrao`) →
+  `carregar_mapeamento(tipo=tipo_modelo, extra=mapeamento_extra)` → `ler_demonstracoes` →
+  `selecionar_reapresentacoes(consolidado=…)` → `detectar_moeda(…, moeda_relatorio)` →
+  `pad.padronizar` → grava `contas_padronizadas.parquet`. `nao_financeira` ou `financeira` (plano
+  conforme o tipo); `holding`/`nao_suportada` ⇒ `ErroContabil`. Companhia sem nenhuma demonstração
+  consolidada usa as individuais, com aviso em `avisos`.
+- `Padronizada(empresa, plano, selecionadas, contas, moeda, premissas, caminho_premissas, avisos)`;
+  `.ajustes` = `AjustesContabeis` do YAML (usado por `historico` e `premissas`).
+- Falha depois de um aviso: o aviso segue em `e.__notes__` (`add_note`). `cli._padronizar` o imprime
+  antes de repassar o erro, e a saída é a mesma de quando o aviso era impresso na hora.

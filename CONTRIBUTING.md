@@ -55,7 +55,7 @@ Um commit é **atômico**: uma única mudança lógica, completa e que funciona 
 
 A mensagem diz **o quê** mudou (e por quê, se não for óbvio), em português, começando pela área
 em minúsculas: a camada (`data`, `contabil`, `projecao`, `custo_capital`, `modelos`, `analise`,
-`saida`, `perfil`), `cli`, `config`, `docs` ou `fix`.
+`saida`, `perfil`, `servicos`, `gui`), `cli`, `config`, `docs` ou `fix`.
 
 | Bom | Ruim |
 |---|---|
