@@ -122,6 +122,17 @@ Outras observações:
 - Vale 2019: "Aplicações financeiras de curto prazo" dentro de `1.01.08` (outros ativos), fora do caixa
   padronizado.
 
+### Armadilhas das contas (ADR 0024, conferido em 2026-11-04 nas 65 não financeiras do universo)
+
+- **Conta 2 (Passivo Total) inclui o PL:** é igual à conta 1. Passivos de terceiros = 2.01 + 2.02.
+- **3.06.02 zerada com 3.06 preenchida:** MOTV3 e USIM5 desde 2023, SBSP3 desde 2024. Esses DRE não abrem as despesas
+  financeiras; 3.06 é líquido, não substitui a despesa.
+- **Consolidado zerado ou ausente:** TIMS3 (zerado em 2024–2025, entre outros), ASAI3 (só individual desde 2021), SBSP3
+  (consolidado só desde 2022). A DRE individual não tem 3.11.01.
+- **ALOS3:** 2.01.04 e 2.02.01 zerados, com as debêntures em Outras Obrigações (2.02.02: R$ 5,9 bi em 2025) e R$ 1 bi de
+  despesa financeira. A dívida mapeada é só o arrendamento.
+- **Juros pagos na DFC:** 60 de 65 têm a linha, com descrições variadas; não mapeada.
+
 ### Plano de contas das financeiras (Fase 10, 2026-10-30)
 
 Seção `financeira:` de `config/mapeamento_contas.yaml` conferida contra 25 financeiras (DFP

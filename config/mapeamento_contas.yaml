@@ -52,8 +52,10 @@ nao_financeira:
     - {dem: DRE, cd: "3.09"}
   lucro_liquido:
     - {dem: DRE, cd: "3.11"}
+  # Na DRE individual não há atribuição: o lucro é todo da controladora (ASAI3, TIMS3; ADR 0024).
   lucro_liquido_controladora:
     - {dem: DRE, cd: "3.11.01"}
+    - {dem: DRE, cd: "3.11", ds_regex: "^lucro(/| ou )prejuizo (liquido )?do periodo"}
   lucro_liquido_minoritarios:
     - {dem: DRE, cd: "3.11.02"}
 
@@ -94,6 +96,9 @@ nao_financeira:
     - {dem: BPA, cd: "1.01.04"}
   ativo_nao_circulante:
     - {dem: BPA, cd: "1.02"}
+  # Realizável a longo prazo: base da liquidez geral (ADR 0024).
+  realizavel_lp:
+    - {dem: BPA, cd: "1.02.01"}
   aplicacoes_financeiras_lp:
     - {dem: BPA, cd_prefixo: "1.02.01", ds_regex: "^aplicacoes financeiras"}
   investimentos:

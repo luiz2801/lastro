@@ -14,6 +14,7 @@ import plotly.graph_objects as go
 from valuation.saida import formato as fo
 from valuation.saida.arquivos import Faixa
 from valuation.servicos.historico_mercado import AnaliseMultiplo
+from valuation.servicos.indicadores import AnaliseIndicador
 
 AZUL = "#2a78d6"
 CINZA = "#898781"
@@ -130,6 +131,60 @@ def multiplo(a: AnaliseMultiplo, rotulo: str, rotulo_referencia: str) -> go.Figu
         )
     figura = _layout(figura, rotulo, formato_y)
     figura.update_yaxes(range=[0, teto])
+    return figura
+
+
+def indicador(a: AnaliseIndicador, rotulo: str, unidade: str, nome_referencia: str) -> go.Figure:
+    """Indicador por período (anual + LTM). Fora da referência em cinza; marcado com contorno."""
+    y = a.serie / 1e6 if unidade == "mi" else a.serie
+    formato = {"%": ".1%", "x": ".2f", "mi": ",.0f"}[unidade]
+    fora = a.serie.index.isin(a.descartados.index)
+    figura = go.Figure(
+        go.Scatter(
+            x=a.serie.index,
+            y=y.where(~fora),
+            mode="lines+markers",
+            name=rotulo,
+            connectgaps=False,
+            line={"color": AZUL, "width": 2},
+            marker={"color": AZUL, "size": 6},
+            hovertemplate=f"%{{x}}<br>%{{y:{formato}}}<extra></extra>",
+        )
+    )
+    if fora.any():
+        figura.add_trace(
+            go.Scatter(
+                x=a.serie.index[fora],
+                y=y[fora],
+                mode="markers",
+                name=f"Fora da referência ({int(fora.sum())})",
+                marker={"color": CINZA, "size": 9, "symbol": "x"},
+                text=[str(a.descartados[i]) for i in a.serie.index[fora]],
+                hovertemplate=f"%{{x}}<br>%{{y:{formato}}}<br>%{{text}}<extra></extra>",
+            )
+        )
+    if len(a.marcados):
+        figura.add_trace(
+            go.Scatter(
+                x=a.marcados.index,
+                y=a.marcados,
+                mode="markers",
+                name=f"Fora de 1,5·IQR, mantido ({len(a.marcados)})",
+                marker={"color": "rgba(0,0,0,0)", "size": 11, "line": {"color": TINTA, "width": 2}},
+                hovertemplate=f"%{{x}}<br>%{{y:{formato}}}<extra></extra>",
+            )
+        )
+    if pd.notna(a.referencia):
+        figura.add_hline(
+            y=a.referencia,
+            line={"color": TINTA, "width": 1, "dash": "dash"},
+            annotation_text=f"{nome_referencia}: {fo.formatar(a.referencia, unidade, 2)}",
+            annotation_position="top left",
+        )
+    figura = _layout(
+        figura, "R$ mi" if unidade == "mi" else rotulo, ".0%" if unidade == "%" else None
+    )
+    figura.update_xaxes(type="category")
     return figura
 
 

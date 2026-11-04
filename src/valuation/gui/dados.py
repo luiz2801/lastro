@@ -173,6 +173,20 @@ def serie_indicadores(
 
 
 @st.cache_data(show_spinner=False)
+def _serie_balanco(
+    _p: emp.Padronizada, ticker: str, base: dt.date, _mt: float, anos: int
+) -> sind.TabelaBalanco | None:
+    return sind.serie_balanco(_p, settings(), base, anos)
+
+
+def serie_balanco(
+    p: emp.Padronizada, ticker: str, base: dt.date, anos: int
+) -> sind.TabelaBalanco | None:
+    mt_dem = _mtime(sc.caminho_demonstracoes(p.empresa.cd_cvm, cfg.DIR_PROCESSED))
+    return _serie_balanco(p, ticker, base, mt_dem, anos)
+
+
+@st.cache_data(show_spinner=False)
 def _medidas(
     tickers: tuple[str, ...],
     _cadastro_atual: pd.DataFrame,

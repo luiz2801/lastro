@@ -9,6 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from valuation.analise import anomalias as an
+from valuation.analise import indicadores as ind
 from valuation.analise import serie_multiplos as sm
 from valuation.contabil import ErroContabil
 from valuation.gui import dados, grafico
@@ -18,9 +19,12 @@ from valuation.saida import glossario as gl
 from valuation.servicos import comparacao as scmp
 from valuation.servicos import empresa as emp
 from valuation.servicos import historico_mercado as hm
+from valuation.servicos import indicadores as sind
 
 JANELAS = {"10 anos": 10, "5 anos": 5}
 TRACO = "—"
+COLUNAS_POR_LINHA = 4
+MOTIVO_BASILEIA = "índice regulatório não consta na DFP (fonte IF.data ainda não validada)"
 
 
 def _ajuda(chave: str) -> str | None:
@@ -109,14 +113,14 @@ def _grafico_multiplos(series: hm.SeriesMercado, base: dt.date) -> None:
         st.caption(f"{len(a.filtro.marcados)} ponto(s) fora de 1,5·IQR, mantidos no cálculo.")
 
 
-def _indicadores(p: emp.Padronizada, ticker: str, base: dt.date) -> None:
+def _indicadores(p: emp.Padronizada, ticker: str, base: dt.date) -> str:
     st.subheader("Indicadores")
     visao = st.radio("Visão", ["Hoje", "Histórico"], horizontal=True, key="visao_indicadores")
     try:
         serie = dados.serie_indicadores(p, ticker, base, 10 if visao == "Histórico" else 1)
     except ErroContabil as e:
         st.error(f"Indicadores indisponíveis: {e}")
-        return
+        return visao
     if visao == "Histórico":
         linhas = {
             rotulo: [fo.formatar(v, unidade, 2) for v in serie.tabela[chave]]
@@ -125,7 +129,7 @@ def _indicadores(p: emp.Padronizada, ticker: str, base: dt.date) -> None:
         st.dataframe(
             pd.DataFrame.from_dict(linhas, orient="index", columns=serie.colunas), width="stretch"
         )
-        return
+        return visao
     st.caption(serie.colunas[-1])
     colunas = st.columns(len(serie.definicoes))
     for coluna, (chave, (rotulo, unidade, termo)) in zip(
@@ -134,6 +138,97 @@ def _indicadores(p: emp.Padronizada, ticker: str, base: dt.date) -> None:
         coluna.metric(
             rotulo, fo.formatar(float(serie.tabela[chave].iloc[-1]), unidade, 2), help=_ajuda(termo)
         )
+    return visao
+
+
+def _grade_balanco(t: sind.TabelaBalanco) -> None:
+    st.caption(t.colunas[-1])
+    for grupo, indicadores in ind.BALANCO.items():
+        st.markdown(f"**{grupo}**")
+        itens = list(indicadores.items())
+        for inicio in range(0, len(itens), COLUNAS_POR_LINHA):
+            colunas = st.columns(COLUNAS_POR_LINHA)
+            for coluna, (chave, (rotulo, unidade, termo)) in zip(
+                colunas, itens[inicio : inicio + COLUNAS_POR_LINHA], strict=False
+            ):
+                valor = float(t.tabela[chave].iloc[-1])
+                coluna.metric(rotulo, fo.formatar(valor, unidade, 2), help=_ajuda(termo))
+                if pd.isna(valor):
+                    coluna.caption(str(t.motivos[chave].iloc[-1]))
+
+
+def _tabela_balanco(t: sind.TabelaBalanco) -> None:
+    for grupo, indicadores in ind.BALANCO.items():
+        st.markdown(f"**{grupo}**")
+        linhas = {
+            rotulo: [fo.formatar(float(v), unidade, 2) for v in t.tabela[chave]]
+            for chave, (rotulo, unidade, _) in indicadores.items()
+        }
+        st.dataframe(
+            pd.DataFrame.from_dict(linhas, orient="index", columns=t.colunas), width="stretch"
+        )
+    motivos = {
+        rotulo: sorted({str(m) for m in t.motivos[chave].dropna()})
+        for indicadores in ind.BALANCO.values()
+        for chave, (rotulo, _, _) in indicadores.items()
+        if t.motivos[chave].notna().any()
+    }
+    if motivos:
+        with st.expander(f"Por que há {TRACO} ({len(motivos)} indicador(es))"):
+            for rotulo, textos in motivos.items():
+                st.write(f"{rotulo}: {'; '.join(textos)}.")
+
+
+def _grafico_balanco(t: sind.TabelaBalanco) -> None:
+    definicoes = {c: d for grupo in ind.BALANCO.values() for c, d in grupo.items()}
+    chave = st.selectbox(
+        "Indicador no gráfico",
+        list(definicoes),
+        format_func=lambda c: definicoes[c][0],
+        key="indicador_balanco",
+    )
+    rotulo, unidade, _ = definicoes[chave]
+    tipo = cast(an.Referencia, st.session_state.get("referencia_serie", "mediana"))
+    serie = pd.Series(t.tabela[chave].to_numpy(dtype="float64"), index=t.colunas, name=chave)
+    motivos = pd.Series(t.motivos[chave].to_numpy(dtype="object"), index=t.colunas)
+    a = sind.analisar_indicador(serie, motivos, chave, tipo)
+    if a.aviso_referencia:
+        st.warning(a.aviso_referencia)
+    if serie.notna().sum() == 0:
+        st.info(f"{TRACO} sem valor deste indicador: {'; '.join(sorted(set(a.motivos)))}.")
+        return
+    nome_referencia = an.ROTULOS_REFERENCIA[tipo]
+    st.plotly_chart(grafico.indicador(a, rotulo, unidade, nome_referencia), key="grafico_balanco")
+    partes = [f"Hoje: {fo.formatar(a.atual, unidade, 2)}"]
+    if a.filtro is None:
+        partes.append("valor em R$, sem referência")
+    else:
+        partes += [
+            f"{nome_referencia}: {fo.formatar(a.referencia, unidade, 2)}",
+            f"{len(a.descartados)} ponto(s) fora da referência",
+            f"{len(a.marcados)} marcado(s) fora de 1,5·IQR, mantidos",
+        ]
+    partes.append(f"{len(a.motivos)} período(s) sem dado")
+    st.caption(" · ".join(partes))
+
+
+def _balanco(p: emp.Padronizada, ticker: str, base: dt.date, visao: str) -> None:
+    st.subheader("Endividamento, liquidez e caixa")
+    try:
+        t = dados.serie_balanco(p, ticker, base, 10 if visao == "Histórico" else 1)
+    except ErroContabil as e:
+        st.error(f"Indicadores indisponíveis: {e}")
+        return
+    if t is None:
+        st.metric("Índice de Basileia", TRACO, help=_ajuda("alavancagem"))
+        st.caption(MOTIVO_BASILEIA)
+        st.caption("Dívida, liquidez e caixa não se aplicam ao plano de contas das financeiras.")
+        return
+    if visao == "Histórico":
+        _tabela_balanco(t)
+        _grafico_balanco(t)
+    else:
+        _grade_balanco(t)
 
 
 def _medidas_validas(medidas: list[scmp.Medida]) -> int:
@@ -213,7 +308,7 @@ def mostrar(
     series = dados.series(p, ticker, base)
     if series is None:
         st.info(f"{TRACO} sem cotação de {ticker} em disco. Clique em **Atualizar** para baixá-la.")
-        _indicadores(p, ticker, base)
+        _balanco(p, ticker, base, _indicadores(p, ticker, base))
         return
     _cartoes(series, base)
     if series.avisos:
@@ -222,5 +317,5 @@ def mostrar(
                 st.warning(aviso)
     _grafico_cotacao(series, base)
     _grafico_multiplos(series, base)
-    _indicadores(p, ticker, base)
+    _balanco(p, ticker, base, _indicadores(p, ticker, base))
     _comparacao(series, p, cadastro, base)

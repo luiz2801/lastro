@@ -14,6 +14,9 @@ líquida/EBITDA com EBITDA ≤ 0, ROE com PL inicial ≤ 0). A margem líquida e
 PL da **controladora**; o ROE usa o PL do início do período (como o das financeiras, LL_t =
 ROE_t x PL_{t-1}). Dívida líquida/EBITDA usa o EBITDA ajustado (o mesmo do EV/EBITDA) e a dívida
 líquida conforme `ajustes.ifrs16` (arrendamento incluído por padrão).
+
+**Balanço e caixa** (`balanco_e_caixa`, ADR 0024; só na GUI): endividamento, liquidez e caixa das
+não financeiras. Cada valor ausente vem com o motivo, porque falta de dado não pode virar zero.
 """
 
 from __future__ import annotations
@@ -40,6 +43,39 @@ HISTORICOS_FINANCEIRA: dict[str, tuple[str, str, str]] = {
 # Múltiplos de mercado exibidos (todos existem em `modelos.multiplos`).
 MERCADO: tuple[mt.NomeMultiplo, ...] = ("p_l", "p_vp", "dividend_yield", "ev_ebitda", "ev_ebit")
 MERCADO_FINANCEIRA: tuple[mt.NomeMultiplo, ...] = mt.MULTIPLOS_FINANCEIRA
+
+
+# Grupo -> indicador -> (rótulo, unidade, chave do glossário). "mi" = R$ milhões.
+BALANCO: dict[str, dict[str, tuple[str, str, str]]] = {
+    "Endividamento": {
+        "divida_bruta_pl": ("Dívida bruta / PL", "x", "divida_bruta_pl"),
+        "divida_liquida_pl": ("Dívida líquida / PL", "x", "divida_liquida_pl"),
+        "divida_bruta_ebitda": ("Dívida bruta / EBITDA", "x", "divida_bruta_ebitda"),
+        "divida_liquida_ebit": ("Dívida líquida / EBIT", "x", "divida_liquida_ebit"),
+        "cobertura_juros": ("Cobertura de juros", "x", "cobertura_juros"),
+        "passivos_ativos": ("Passivos / Ativos", "%", "passivos_ativos"),
+        "pl_ativos": ("PL / Ativos", "%", "pl_ativos"),
+        "perfil_divida": ("Dívida CP / Dívida bruta", "%", "perfil_divida"),
+    },
+    "Liquidez": {
+        "liquidez_corrente": ("Liquidez corrente", "x", "liquidez_corrente"),
+        "liquidez_seca": ("Liquidez seca", "x", "liquidez_seca"),
+        "liquidez_imediata": ("Liquidez imediata", "x", "liquidez_imediata"),
+        "liquidez_geral": ("Liquidez geral", "x", "liquidez_geral"),
+    },
+    "Caixa": {
+        "caixa_aplicacoes": ("Caixa e aplicações (R$ mi)", "mi", "caixa_aplicacoes"),
+        "caixa_divida_cp": ("Caixa / Dívida CP", "x", "caixa_divida_cp"),
+        "caixa_ativo": ("Caixa / Ativos", "%", "caixa_ativo"),
+        "conversao_cfo_ebitda": ("CFO / EBITDA", "%", "conversao_cfo_ebitda"),
+        "conversao_fcf_lucro": ("FCF / Lucro", "%", "conversao_fcf_lucro"),
+    },
+}
+MOTIVO_CONTA_AUSENTE = "conta ausente na demonstração"
+MOTIVO_DIVIDA_FORA = (
+    "empréstimos zerados, com despesa financeira na DRE: a dívida deve estar em outra linha "
+    "(debêntures em Outras Obrigações, por exemplo)"
+)
 
 
 def _razao(numerador: pd.Series, denominador: pd.Series) -> pd.Series:
@@ -70,3 +106,94 @@ def de_mercado(f: mt.Fundamentos, *, financeira: bool = False) -> dict[str, floa
     """Múltiplos de mercado do ativo (NaN quando indefinidos, como no `comparar`)."""
     nomes = MERCADO_FINANCEIRA if financeira else MERCADO
     return {nome: mt.multiplo(f, nome) for nome in nomes}
+
+
+def _conta(largo: pd.DataFrame, nome: str, opcional: bool = False) -> pd.Series:
+    if nome in largo.columns:
+        serie = largo[nome].astype(float)
+    else:
+        serie = pd.Series(np.nan, index=largo.index, dtype="float64")
+    return serie.fillna(0.0) if opcional else serie
+
+
+def balanco_e_caixa(
+    largo: pd.DataFrame, m: pd.DataFrame, *, ifrs16: str = "divida"
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Indicadores de `BALANCO` e o motivo de cada valor ausente, por período.
+
+    `largo` = contas por período (`periodos.anual` ou LTM), `m` = `nao_financeiras.metricas` das
+    mesmas linhas. Dívida com arrendamento conforme `ifrs16`, a mesma base da ponte. Base = PL
+    total, porque a dívida é consolidada. Passivos = PC + PNC: a conta 2 da CVM inclui o PL e é
+    igual ao ativo.
+    """
+    ativo = _conta(largo, "ativo_total")
+    pc = _conta(largo, "passivo_circulante")
+    pnc = _conta(largo, "passivo_nao_circulante")
+    ac = _conta(largo, "ativo_circulante")
+    pl = m["patrimonio_liquido_total"].astype(float)
+    caixa = m["caixa_e_aplicacoes"].astype(float)
+    bruta = m["divida_bruta"].astype(float)
+    liquida = m["divida_liquida"].astype(float)
+    despesa = -_conta(largo, "despesas_financeiras")
+    em_emprestimos = _conta(largo, "arrendamento_cp_em_emprestimos", opcional=True)
+    divida_cp = _conta(largo, "emprestimos_cp") - em_emprestimos
+    if ifrs16 == "divida":
+        divida_cp = (
+            divida_cp + em_emprestimos + _conta(largo, "arrendamento_cp_outros", opcional=True)
+        )
+    divida_fora = (m["divida_financeira"].astype(float) == 0) & (despesa > 0)
+    sem_pl = "PL não positivo"
+    # Indicador -> (numerador, denominador, motivo quando o denominador não é positivo).
+    razoes: dict[str, tuple[pd.Series, pd.Series, str]] = {
+        "divida_bruta_pl": (bruta, pl, sem_pl),
+        "divida_liquida_pl": (liquida, pl, sem_pl),
+        "divida_bruta_ebitda": (bruta, m["ebitda_ajustado"], "EBITDA não positivo"),
+        "divida_liquida_ebit": (liquida, m["ebit_ajustado"], "EBIT não positivo"),
+        "cobertura_juros": (
+            m["ebit_ajustado"],
+            despesa,
+            "a DRE não abre as despesas financeiras (conta zerada)",
+        ),
+        "passivos_ativos": (pc + pnc, ativo, "ativo não positivo"),
+        "pl_ativos": (pl, ativo, "ativo não positivo"),
+        "perfil_divida": (divida_cp, bruta, "sem dívida"),
+        "liquidez_corrente": (ac, pc, "sem passivo circulante"),
+        "liquidez_seca": (ac - _conta(largo, "estoques"), pc, "sem passivo circulante"),
+        "liquidez_imediata": (caixa, pc, "sem passivo circulante"),
+        "liquidez_geral": (ac + _conta(largo, "realizavel_lp"), pc + pnc, "sem passivo"),
+        "caixa_divida_cp": (caixa, divida_cp, "sem dívida de curto prazo"),
+        "caixa_ativo": (caixa, ativo, "ativo não positivo"),
+        "conversao_cfo_ebitda": (m["cfo"], m["ebitda_ajustado"], "EBITDA não positivo"),
+        "conversao_fcf_lucro": (
+            m["fcf_caixa"],
+            m["lucro_liquido_controladora"],
+            "lucro não positivo",
+        ),
+    }
+    baseadas_na_divida = {
+        "divida_bruta_pl",
+        "divida_liquida_pl",
+        "divida_bruta_ebitda",
+        "divida_liquida_ebit",
+        "perfil_divida",
+        "caixa_divida_cp",
+    }
+    valores = pd.DataFrame(index=m.index)
+    motivos = pd.DataFrame(index=m.index, dtype="object")
+    for nome, (numerador, denominador, motivo) in razoes.items():
+        den = denominador.astype(float)
+        num = numerador.astype(float)
+        valor = _razao(num, den)
+        texto = pd.Series(None, index=m.index, dtype="object")
+        texto[den <= 0] = motivo
+        texto[num.isna() | den.isna()] = MOTIVO_CONTA_AUSENTE
+        if nome in baseadas_na_divida:
+            valor = valor.where(~divida_fora)
+            texto[divida_fora] = MOTIVO_DIVIDA_FORA
+        valores[nome] = valor
+        motivos[nome] = texto
+    valores["caixa_aplicacoes"] = caixa
+    motivos["caixa_aplicacoes"] = pd.Series(None, index=m.index, dtype="object").where(
+        caixa.notna(), MOTIVO_CONTA_AUSENTE
+    )
+    return valores, motivos

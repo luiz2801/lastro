@@ -401,3 +401,26 @@ def test_data_de_hoje_nao_entra_nos_servicos() -> None:
     pasta = Path(APP).parent.parent / "servicos"
     for arquivo in pasta.rglob("*.py"):
         assert ".today(" not in arquivo.read_text(encoding="utf-8"), arquivo.name
+
+
+def test_grade_de_balanco_com_o_motivo_de_cada_lacuna(ambiente: Path) -> None:
+    _com_dados(ambiente)
+    at = _abrir("WEGE3")
+    assert not at.exception
+    rotulos = {m.label for m in at.metric}
+    assert {
+        "Dívida bruta / PL",
+        "Cobertura de juros",
+        "Liquidez corrente",
+        "Caixa / Ativos",
+    } <= rotulos
+
+
+def test_historico_do_balanco_troca_o_indicador_sem_rede(ambiente: Path) -> None:
+    _com_dados(ambiente)
+    at = _abrir("WEGE3")
+    at.radio(key="visao_indicadores").set_value("Histórico").run()
+    assert not at.exception
+    at.selectbox(key="indicador_balanco").set_value("caixa_aplicacoes").run()
+    assert not at.exception
+    assert any("sem referência" in c.value for c in at.caption)

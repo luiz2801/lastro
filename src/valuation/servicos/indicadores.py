@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from valuation.analise import anomalias as an
 from valuation.analise import indicadores as ind
 from valuation.config import Settings
 from valuation.contabil import ErroContabil
@@ -78,6 +79,71 @@ def serie_indicadores(
     tabela = calcular(pd.concat([anual, ltm.to_frame().T]))
     colunas = [*map(str, anual.index), f"LTM {data_bal:%m/%Y}"]
     return TabelaIndicadores(tabela, colunas, definicoes, financeira)
+
+
+@dataclass(frozen=True)
+class TabelaBalanco:
+    """Endividamento, liquidez e caixa: uma linha por período, a última é o LTM."""
+
+    tabela: pd.DataFrame
+    motivos: pd.DataFrame  # mesma forma de `tabela`; texto onde o valor é NaN
+    colunas: list[str]
+
+
+@dataclass(frozen=True)
+class AnaliseIndicador:
+    """Um indicador no histórico anual + LTM: o que saiu da referência, e por quê."""
+
+    nome: str
+    serie: pd.Series  # índice = rótulo do período
+    filtro: an.Filtro | None  # `None` = sem tratamento (valor em R$)
+    atual: float
+    referencia: float
+    descartados: pd.Series
+    marcados: pd.Series
+    motivos: pd.Series  # período -> por que falta
+    aviso_referencia: str | None
+
+
+def serie_balanco(
+    p: Padronizada, settings: Settings, base: dt.date, anos: int
+) -> TabelaBalanco | None:
+    """Indicadores de `ind.BALANCO`; `None` para financeiras, cujo plano de contas não os tem."""
+    if p.plano.tipo == "financeira":
+        return None
+    data_bal = data_balanco(p.contas, base)
+    aliquota = settings.impostos.aliquota_nominal
+    largo = per.anual(p.contas)
+    anual = nf.metricas(largo, aliquota_nominal=aliquota, ajustes=p.ajustes)
+    encerrados = _anos_encerrados(anual.index, base)[-anos:]
+    ltm_largo = per.ltm(p.contas, data_bal)
+    ltm = nf.metricas_ltm(p.contas, aliquota_nominal=aliquota, dt_fim=data_bal, ajustes=p.ajustes)
+    tabela, motivos = ind.balanco_e_caixa(
+        pd.concat([largo.loc[encerrados], ltm_largo.to_frame().T]),
+        pd.concat([anual.loc[encerrados], ltm.to_frame().T]),
+        ifrs16=p.ajustes.ifrs16,
+    )
+    return TabelaBalanco(tabela, motivos, [*map(str, encerrados), f"LTM {data_bal:%m/%Y}"])
+
+
+def analisar_indicador(
+    serie: pd.Series, motivos: pd.Series | None, nome: str, tipo: an.Referencia
+) -> AnaliseIndicador:
+    """Mesma regra dos múltiplos, com a classe do indicador. Sem classe (R$), nada é filtrado."""
+    classe = an.CLASSES.get(nome)
+    vazio = pd.Series(dtype="object")
+    filtro = None if classe is None else an.filtrar(serie, classe)
+    return AnaliseIndicador(
+        nome=nome,
+        serie=serie,
+        filtro=filtro,
+        atual=float(serie.iloc[-1]) if len(serie) else float("nan"),
+        referencia=float("nan") if filtro is None else an.referencia(filtro, tipo),
+        descartados=vazio if filtro is None else filtro.descartados,
+        marcados=pd.Series(dtype="float64") if filtro is None else filtro.marcados,
+        motivos=vazio if motivos is None else motivos.dropna(),
+        aviso_referencia=an.AVISO_MEDIA_SIMPLES if tipo == "media_simples" else None,
+    )
 
 
 def fundamentos(

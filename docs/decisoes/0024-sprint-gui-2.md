@@ -74,6 +74,7 @@ e o horizonte muda o valor de cada cenário: a tela avisa e oferece "Rodar com p
 
 **F. Dados com defeito.** Família e período com o consolidado zerado ou ausente usam o individual, com aviso. **Muda
 os números também no `rodar`** de TIMS3, ASAI3 e SBSP3; comparadas as contas de todo o universo, as outras 71 não mudam.
+Na DRE individual não há atribuição, então o lucro da controladora cai no 3.11 (a mesma regra das financeiras).
 A proposta original para a ASAI3 era só investigar. A investigação mostrou a mesma causa: desde 2021 a Sendas só publica
 o individual, e os dados dela paravam em 2020. A mesma regra resolve os dois casos.
 
@@ -82,4 +83,6 @@ o individual, e os dados dela paravam em 2020. A mesma regra resolve os dois cas
 - Pasta nova `derivados/`, apagável a qualquer momento. Conta nova `realizavel_lp` em `contas_padronizadas.parquet`.
 - Parâmetro novo `multiplos.defasagem_max_meses`.
 - O Kd histórico das companhias com despesa zerada não foi conferido nem alterado.
+- ALOS3 guarda as debêntures em Outras Obrigações: a dívida mapeada é só arrendamento. Os indicadores novos mostram "—";
+  o `rodar` e a Dívida líquida/EBITDA seguem como estavam, porque corrigir mudaria o valuation e pede decisão.
 - Basileia depende de o IF.data voltar a responder; sem isso, nenhum adaptador.

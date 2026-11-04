@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.47 — 2026-11-04**
+**Versão 1.48 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -55,7 +55,7 @@
 | CLI | `cli.py` | `gui`, `series`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 794 testes (783 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 805 testes (794 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -583,6 +583,7 @@ proposto; `docs/backlog.md`).
 | `test_servicos_empresa.py` | `carregar_cadastro` nos diretórios recebidos, `padronizar` (sem aviso, individual com aviso no retorno e nada no terminal, sem demonstrações, holding), aviso nas notas quando o erro vem depois dele, CLI imprimindo esse aviso, pacote sem dependência de terminal | `SessaoFalsa`, `zip_cvm`, `dfp_completa` |
 | `test_servicos_mercado.py` | `cotacoes` (classe sem preço, nenhum preço, sem composição), `carregar_macro` (dólar sem segunda fonte), `carregar_mercado` (avisos separados, nada no terminal, ordem das notas no erro), invólucros da CLI imprimindo os avisos | `Falso`, `_composicao`, `provedores_falsos` |
 | `test_servicos_indicadores.py` | série não financeira e financeira à mão, corte por data-base e `anos`, `data_balanco`, múltiplos de mercado à mão, conversão só fora de BRL | `_padronizada`, `industria`, `_cap` |
+| `test_indicadores.py` | históricos à mão, `balanco_e_caixa` à mão (cada razão, sem arrendamento, denominador ≤ 0 e conta ausente com o motivo, dívida fora dos empréstimos) | `M`, `_balanco` |
 | `test_formato.py` | texto pt-BR de cada função de `saida/formato.py`, sem dado = "—" | — |
 | `test_servicos_resultados.py` | sem rodada, pasta só com `wacc.csv`, rodada completa em `br` e `intl` com os gravadores reais, pasta mais recente, rodada incompleta, DDM sem ponte, arquivo corrompido | `_rodada`, `_completa` |
 | `test_gui.py` | `AppTest` sem rede: início (vazio, favoritas do cache), fora do universo, holding, ativo com cache, ativo sem cache (erro visível e uma tentativa, ou baixa e abre), botão Atualizar; `valuation gui` sem Streamlit e só em 127.0.0.1 | `ambiente`, `_com_dados`, `atu.executar` trocado (falha o teste se chamado sem pedido) |
@@ -988,6 +989,10 @@ diretórios) entra por parâmetro nomeado, com a constante de `config.py` como p
 - `indicadores_de_mercado(p, mk, settings, base) -> IndicadoresMercado(fundamentos, multiplos)`:
   a mesma conta do `comparar`.
 
+Na mesma entrada: `serie_balanco(p, settings, base, anos) -> TabelaBalanco(tabela, motivos, colunas) | None` (`None` =
+financeira) e `analisar_indicador(serie, motivos, nome, tipo) -> AnaliseIndicador`. Indicador sem classe em `an.CLASSES`
+(caixa em R$) não tem filtro nem referência. Só a GUI usa: o comando `indicadores` segue com `HISTORICOS`.
+
 **`resultados.py`**
 - `ultimo_resultado(ticker, config, *, dir_saida) -> Resultado | None`: lê a pasta de data mais recente
   com `resumo.csv` (`fav.pasta_mais_recente`, a mesma do `favoritos`), nos formatos `br` ou `intl`.
@@ -1048,6 +1053,10 @@ se o cache não servir: é o que torna barato ler dezenas de pares. A GUI usa as
   `serie_multiplo` (`mt.multiplo`, a conta do `comparar`), `cortar_periodo` (GUI-12).
 - `analise/anomalias.py`: `Classe`, `CLASSES`, `filtrar(serie, classe, corte_fixo) -> Filtro` e
   `referencia(filtro, tipo)`. Só a GUI usa.
+- `analise/indicadores.py`: `BALANCO` (grupo -> indicador -> rótulo, unidade, glossário) e `balanco_e_caixa(largo,
+  m, *, ifrs16) -> (valores, motivos)`, com as fórmulas do ADR 0024. Passivos = PC + PNC, porque a conta 2 inclui o
+  PL. Empréstimos zerados com despesa financeira na DRE (ALOS3, debêntures em Outras Obrigações) viram lacuna com
+  `MOTIVO_DIVIDA_FORA` nos indicadores de dívida, em vez de um zero falso.
 - `data/cvm.py`: `coletar_series`, `ler_divulgacoes`, `ler_composicao_serie`, `ler_series_itr`,
   `ler_datas_divulgacao`, com arquivos à parte (`series_itr.parquet`, `series_composicao.parquet`,
   `divulgacoes.parquet`).
@@ -1073,13 +1082,16 @@ usar o relógio e passa `agora`/`base` para baixo.
   na tela (`mostrar_falha`) e o cache é invalidado ao fim.
 - `inicio.py`: busca no universo, tabela das favoritas (último `resumo.csv`) e "Atualizar favoritas".
 - `geral.py`: aba Geral: cartões, cotação (GUI-12), múltiplo em série (seletor de indicador, de
-  referência e janela de 10 ou 5 anos), indicadores Hoje | Histórico e médias de comparação. Pares
+  referência e janela de 10 ou 5 anos), indicadores Hoje | Histórico, endividamento, liquidez e caixa
+  (grade com o motivo de cada "—"; no Histórico, tabela e gráfico anual + LTM com seletor), Basileia em "—" nas
+  financeiras e médias de comparação. Pares
   aparecem ao abrir; o Ibovespa só no botão, porque mede dezenas de empresas (40 s na primeira vez, com 63 empresas).
 - `aba_valuation.py`: só lê `saida/`: cenários, ponderado, preço máximo, upside, Ke implícito × hurdle,
   custo de capital, checagens, football field e ponte (Plotly, a partir dos CSVs), perfil lido do JSON.
   Sem rodada, botão "Rodar valuation". **Não se chama `valuation.py`:** o Streamlit põe a pasta do script
   no `sys.path`, e o arquivo esconderia o pacote (`test_nenhum_modulo_da_gui_esconde_um_pacote`).
-- `grafico.py`: figuras Plotly. Um eixo; azul = série, cinza = fora da referência, tinta = referência e
+- `grafico.py`: figuras Plotly. `indicador` desenha o histórico anual + LTM: fora da referência com ✕ cinza,
+  marcado com contorno. Um eixo; azul = série, cinza = fora da referência, tinta = referência e
   hoje. A escala segue os pontos válidos; descartado acima dela fica preso à borda com ▲, e o valor
   verdadeiro no tooltip. Métrica ≤ 0 (sem valor de múltiplo) aparece em 0 com ✕.
 - `ativo.py`: estados de erro (fora do universo, holding/FII, sem dados contábeis), cabeçalho, barra de

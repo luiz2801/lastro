@@ -137,3 +137,34 @@ def test_fundamentos_converte_so_o_que_nao_e_brl(
         dolar=5.0,
     )
     assert em_dolar.receita_liquida == pytest.approx(5 * em_real.receita_liquida)
+
+
+def test_serie_balanco_a_mao(industria: emp.Padronizada, settings: Settings) -> None:
+    r = sind.serie_balanco(industria, settings, BASE, anos=5)
+    assert r is not None
+    assert r.colunas == ["2024", "2025", "LTM 12/2025"]
+    ultimo = r.tabela.iloc[-1]
+    assert ultimo["liquidez_corrente"] == pytest.approx(
+        industria.contas.query("conta_padrao == 'ativo_circulante'")["valor"].iloc[-1]
+        / industria.contas.query("conta_padrao == 'passivo_circulante'")["valor"].iloc[-1]
+    )
+    assert list(r.motivos.columns) == list(r.tabela.columns)
+
+
+def test_serie_balanco_de_financeira_e_none(settings: Settings) -> None:
+    banco = _padronizada(juntar(dfp_banco(2024), dfp_banco(2025)), "financeira")
+    assert sind.serie_balanco(banco, settings, BASE, anos=5) is None
+
+
+def test_analisar_indicador_a_mao() -> None:
+    serie = pd.Series([1.0, 1.0, 1.0, 1.0, 9.0], index=list("abcde"))
+    a = sind.analisar_indicador(serie, None, "cobertura_juros", "mediana")
+    assert a.atual == 9.0
+    assert a.referencia == 1.0  # o 9 está acima do limite de Tukey e sai da referência
+    assert list(a.descartados.index) == ["e"]
+    marcado = sind.analisar_indicador(serie, None, "liquidez_corrente", "mediana")
+    assert marcado.referencia == 1.0 and list(marcado.marcados.index) == ["e"]
+    assert marcado.descartados.empty  # só marca, não tira
+    em_reais = sind.analisar_indicador(serie, None, "caixa_aplicacoes", "mediana")
+    assert em_reais.filtro is None and pd.isna(em_reais.referencia)
+    assert sind.analisar_indicador(serie, None, "roe", "media_simples").aviso_referencia

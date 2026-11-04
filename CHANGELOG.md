@@ -2,6 +2,14 @@
 
 ## [Não lançado]
 
+### Sprint GUI 2, A: endividamento, liquidez e caixa (ADR 0024)
+- Aba Geral: 17 indicadores novos em grade (Hoje) e tabela com gráfico (Histórico), cada "—" com o motivo, 2 casas.
+  Classes de anomalia em `an.CLASSES`. Financeiras: Basileia em "—" com o motivo. A CLI não muda.
+- `analise/indicadores.py` (`BALANCO`, `balanco_e_caixa`), `sind.serie_balanco`, `sind.analisar_indicador`, 17 verbetes no
+  glossário (aparecem também em `valuation glossario` e no `meta.json`).
+- `mapeamento_contas.yaml`: conta nova `realizavel_lp`, e o lucro da controladora cai no 3.11 na DRE individual, que não
+  tem a atribuição. Só ASAI3, TIMS3 e SBSP3 mudam, nos períodos individuais.
+
 ### Consolidado zerado ou ausente usa o individual (ADR 0024)
 - `pad.selecionar_reapresentacoes`: família e período sem consolidado com valor passam a usar o individual, com
   aviso. **Muda números** de ASAI3 (demonstrações paravam em 2020; agora vão até 2026), TIMS3 (consolidado zerado
