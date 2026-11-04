@@ -2,6 +2,12 @@
 
 ## [Não lançado]
 
+### Política: perguntar antes de decidir o que muda a saída
+- `CLAUDE.md` (regra 7 da seção 0) e `CONTRIBUTING.md` (seção "Dúvidas"): toda decisão que possa
+  mudar a saída (valor, arquivo gravado, o que a CLI mostra, aviso, padrão de opção, definição de
+  métrica, fonte) é perguntada ao usuário antes de implementar, com as opções e a recomendação.
+  Pedido do usuário em 2026-11-03.
+
 ### Carteira pessoal, Etapa C3: indicadores por ativo (ADR 0020, RF-004)
 - `src/valuation/analise/indicadores.py` (puro): `historicos` (margem líquida, margem EBITDA,
   dívida líquida/EBITDA, ROE sobre o PL inicial e ROIC), `historicos_financeira` (ROE, payout, ROA,

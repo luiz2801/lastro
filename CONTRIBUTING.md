@@ -151,6 +151,10 @@ Resumo; a lista completa e os exemplos estão na seção 13 do [`guia.md`](guia.
 ## Dúvidas
 
 Dúvida de **negócio** (premissa, fórmula, tratamento contábil, parâmetro de mercado) se pergunta
-ao usuário em vez de decidir sozinho, e entra na seção 19 do `CLAUDE.md` se ficar pendente. Faça
+ao usuário em vez de decidir sozinho, e entra na seção 19 do `CLAUDE.md` se ficar pendente.
+**Qualquer decisão que possa mudar a saída** (valor calculado, coluna ou arquivo gravado, o que a
+CLI mostra, aviso, padrão de uma opção, definição de métrica, fonte) também se pergunta antes de
+implementar, mesmo com um padrão razoável à mão; só o que não altera a saída (nome interno,
+organização, refatoração com testes idênticos) se decide sozinho, dizendo a escolha no resumo. Faça
 perguntas objetivas, com as opções e a sua recomendação; se a dúvida não bloquear o resto, avance
 no que for inequívoco enquanto espera. Dúvida de **código** se resolve pelo `guia.md` e pelo código.
