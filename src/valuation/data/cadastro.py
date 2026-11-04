@@ -340,6 +340,12 @@ def empresa_por_ticker(cadastro: pd.DataFrame, ticker: str) -> Empresa:
     )
 
 
+def ler_cadastro_processado(dir_processed: Path) -> pd.DataFrame | None:
+    """Último `cadastro.parquet` gravado, sem rede; `None` se nunca foi montado."""
+    caminho = dir_processed / "cadastro.parquet"
+    return pd.read_parquet(caminho) if caminho.is_file() else None
+
+
 def atualizar_cadastro(
     *,
     ano: int,

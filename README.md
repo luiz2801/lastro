@@ -31,6 +31,7 @@ make setup                                   # cria .venv e instala dependência
 make lint tipos testes                       # ruff, mypy strict e pytest (sem rede)
 make cobertura                               # testes com cobertura por linha
 
+make gui                                     # GUI local em 127.0.0.1 (grupo opcional `gui`)
 uv run valuation versao
 uv run valuation erp                         # ERP implícito do Ibovespa (grava e informa)
 uv run valuation glossario wacc             # explica uma métrica (sem argumento, lista todas)

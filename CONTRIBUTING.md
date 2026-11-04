@@ -18,7 +18,8 @@ decisão a alterou.
 
 - Linux, [`uv`](https://docs.astral.sh/uv/) e Python 3.12 (fixado em `.python-version`; o `uv`
   baixa). `requires-python` aceita 3.11 a 3.13 (ADR 0001).
-- `make setup` cria a `.venv` e instala tudo, inclusive as ferramentas de desenvolvimento.
+- `make setup` cria a `.venv` e instala tudo, inclusive as ferramentas de desenvolvimento e o grupo
+  `gui`. Só a CLI: `uv sync`.
 - Nenhuma chave é necessária. `BRAPI_TOKEN` (opcional, gratuito em brapi.dev) habilita a segunda
   fonte de preço para tickers além de PETR4, VALE3, MGLU3 e ITUB4.
 - `data/`, `saida/`, `perfil/perfil_investidor.json` e o conteúdo de `referencias/` ficam fora do
@@ -137,7 +138,7 @@ Resumo; a lista completa e os exemplos estão na seção 13 do [`guia.md`](guia.
 - **Camadas de baixo para cima** (`data` → `contabil` → `projecao` → `custo_capital` → `modelos` →
   `analise` → `saida`): camada inferior nunca importa superior. Todo dado externo entra por um
   adaptador em `data/` com cache em `data/raw/`.
-- **Funções puras** no cálculo: `data_base` e `agora` são parâmetros; `date.today()` só no `cli.py`.
+- **Funções puras** no cálculo: `data_base` e `agora` são parâmetros; `date.today()` só no `cli.py` e em `gui/`.
   I/O (sessão HTTP, diretórios) entra por parâmetro nomeado.
 - **Dinheiro em unidades da moeda** (escala aplicada na ingestão), taxas em decimal.
 - **Nunca invente dado financeiro**: faltou, falhe com mensagem clara ou use o `settings.yaml`.

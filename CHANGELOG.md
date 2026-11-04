@@ -2,6 +2,14 @@
 
 ## [Não lançado]
 
+### Sprint GUI 1, S3: esqueleto Streamlit (ADR 0022)
+- Grupo opcional `gui` (`streamlit==1.66.0`, `plotly==7.1.0`), comando `valuation gui` e `make gui`;
+  sem o grupo, a CLI segue funcionando e `valuation gui` explica como instalar.
+- `src/valuation/gui/`: início (busca, favoritas), página de ativo (estados de erro, cabeçalho, barra
+  de estado, abas ainda vazias), atualização a pedido com progresso e falha visível.
+- `servicos/atualizacao.py` (fluxos da CLI em outro processo, via `python -m valuation`),
+  `servicos/cache.py` (idade por fonte) e `cad.ler_cadastro_processado` (cadastro sem rede).
+
 ### Sprint GUI 1, S1: camada de serviço, fatia "empresa" (ADR 0022)
 - `src/valuation/servicos/empresa.py`: `carregar_cadastro`, `padronizar` e `Padronizada` saem de
   `cli.py`, sem terminal; o aviso de demonstrações individuais volta em `avisos`. Nenhuma saída muda:

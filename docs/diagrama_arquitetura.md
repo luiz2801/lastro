@@ -12,7 +12,8 @@ Estilo: **camadas em pipeline, com uma fachada de orquestração**. O grafo abai
 flowchart BT
     subgraph ORQ["Orquestração e interface"]
         cli["cli<br/>(typer, rich)"]
-        servicos["servicos<br/>empresa, mercado,<br/>indicadores, resultados"]
+        gui["gui<br/>(streamlit, plotly)"]
+        servicos["servicos<br/>empresa, mercado, indicadores,<br/>resultados, atualizacao, cache"]
     end
 
     subgraph APL["Aplicação (camadas de cálculo e saída)"]
@@ -34,6 +35,7 @@ flowchart BT
     config["config<br/>Settings, Setor, ler_yaml"]
 
     cli --> servicos
+    gui --> servicos & saida & data & universo & config
     servicos --> saida & analise & modelos & contabil & data & projecao & config
     cli --> saida & analise & modelos & projecao & custo & contabil & perfil & data & carteira & universo & config
     analise --> modelos & projecao & custo & perfil
@@ -51,7 +53,7 @@ flowchart BT
     classDef topo fill:#fff8e1,stroke:#f08c00,color:#1a1a1a
     class saida,analise,modelos,projecao,custo,contabil,perfil,data,carteira,universo pacote
     class config base
-    class cli,servicos topo
+    class cli,gui,servicos topo
     style ORQ fill:#fafafa,stroke:#adb5bd,color:#1a1a1a
     style APL fill:#fafafa,stroke:#adb5bd,color:#1a1a1a
     style DOM fill:#fafafa,stroke:#adb5bd,color:#1a1a1a
@@ -90,6 +92,7 @@ Notas sobre desvios da imagem "em linha" do `CLAUDE.md` (seção 3, `data → co
 | `carteira` | Transações da carteira pessoal: validação e importação CSV/XLSX | `ErroCarteira` |
 | `universo` | Setores da CVM e empresas do Ibovespa por setor | — |
 | `servicos` | Orquestração sem apresentação, comum à CLI e à GUI (ADR 0022); avisos no retorno | exceções de domínio das camadas abaixo |
+| `gui` | Telas Streamlit + Plotly; só apresenta, lê o cache e aciona os fluxos da CLI a pedido (ADR 0022) | mostra na tela as exceções de domínio |
 | `cli` | Comandos `typer`, orquestração, tabelas `rich`, códigos de saída | captura todas as anteriores |
 
 ## 2. Arquitetura física — diagrama de componentes

@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.40 — 2026-11-04**
+**Versão 1.41 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -50,11 +50,12 @@
 | Análise | `analise/{cenarios,sensibilidade,indicadores}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade, FCFF e DDM; indicadores por ativo (seção 20) |
 | Saída | `saida/{csv,arquivos,real,graficos,glossario,favoritos,formato}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG, glossário das métricas, favoritos e formatação pt-BR comum à CLI e à GUI (seção 19) |
 | Carteira | `carteira/{transacoes,arquivo,posicao}.py` | ✅ Etapas C1 e C2 do ADR 0020: transações, histórico validado, importação CSV/XLSX, posição, preço médio e resultado (seção 21); a C3 (indicadores por ativo) está em `analise/indicadores.py` e no comando `indicadores`; proventos e alocação ainda não (seção 12) |
-| Serviços | `servicos/{empresa,mercado,indicadores,resultados}.py` | Extraídos de `cli.py` (S1 da Sprint GUI 1, ADR 0022): cadastro, padronização, preços, market cap, macro, indicadores e leitura da última rodada (seção 22) |
-| CLI | `cli.py` | `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
+| Serviços | `servicos/{empresa,mercado,indicadores,resultados,atualizacao,cache}.py` | Cadastro, padronização, preços, market cap, macro, indicadores e leitura da última rodada (extraídos de `cli.py`), mais fluxos da CLI em outro processo e estado do cache (seção 22) |
+| GUI | `gui/{app,dados,estado,acoes,inicio,ativo}.py` | Esqueleto da Sprint GUI 1: início, página de ativo, barra de estado, atualização a pedido (seção 23); abas Geral e Valuation ainda vazias |
+| CLI | `cli.py` | `gui`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 701 testes (690 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 719 testes (708 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -173,6 +174,7 @@ mediana de 5a), `_resumo` (linha do `resumo.csv`), `_mostrar_valuation`. Finance
 
 | Comando | Parâmetros | O que faz | Efeito de cada parâmetro |
 |---|---|---|---|
+| `gui` | `--porta N` (8501) | Abre a GUI em `127.0.0.1`, sem telemetria e sem a pergunta de e-mail do Streamlit (seção 23) | Sem o grupo `gui` instalado ⇒ mensagem pedindo `uv sync --group gui` e saída 1. A CLI não importa `streamlit` |
 | `versao` | — | Imprime versão e Python | — |
 | `cadastro buscar TEXTO` | `--forcar` | Busca por ticker/razão/nome/CNPJ no cadastro | `--forcar` ignora TTL e rebaixa cadastro+FCA |
 | `atualizar` | `--tickers A,B` ou `--tudo`; `--com-pares`; `--forcar` | Baixa DFP/ITR/composição e grava parquets por companhia | exatamente um de `--tickers`/`--tudo`. `--tudo` lê `config/universo_ibovespa.csv` (76 ativos da carteira de 30/10/26; só a coluna `ticker` é usada; linhas `#` são comentário; ausente ⇒ `ErroConfiguracao`; ~1 min com os zips em cache). `--com-pares` acrescenta os pares de cada ticker que tem YAML em `config/empresas/` (par fora do cadastro só avisa). Holding/não suportada: só avisa e baixa |
@@ -548,7 +550,7 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 |---|---|---|
 | 11 | `rodar-setor` (lote por setor) já existe (ADR 0019); falta screening e resumo consolidado entre empresas. Só entra se o usuário pedir: modo em lote/screening, SOTP/NAV para holdings, Monte Carlo, deck de commodities, tratamento de JCP, diluição | `rodar` é uma empresa por vez; o motor (funções puras) já aceita qualquer `PremissasEmpresa` |
 
-Também fora do código hoje: legendas nos gráficos PNG, GUI, ERP implícito do Ibovespa (ADR 0018,
+Também fora do código hoje: legendas nos gráficos PNG, abas da GUI (S4 e S5 da Sprint GUI 1), ERP implícito do Ibovespa (ADR 0018,
 proposto; `docs/backlog.md`).
 
 | Carteira C4–C6 | Proventos e agenda (fonte a validar), alocação e alvos (`alvos.yaml`), tela. Falta também o golden dos indicadores novos (margem líquida, dívida líquida/EBITDA, ROE de PETR4 ou WEGE3: depende da conferência do usuário) | `docs/backlog.md`, "Carteira pessoal"; ADR 0020. `posicao.calcular_posicoes` já reproduz a carteira (reusa `transacoes.ordenar` e `aplicar_quantidade`) |
@@ -556,7 +558,7 @@ proposto; `docs/backlog.md`).
 ## 13. Convenções que o código já segue (siga também)
 
 - **Funções puras** recebem `agora`/`data_base` por parâmetro; `date.today()`/`datetime.now()` só na
-  CLI (`cli.py`).
+  CLI (`cli.py`) e na GUI (`gui/`).
 - **I/O por injeção**: sessão HTTP (`SessaoHttp`), diretórios (`dir_raw`, `dir_processed`) e
   `espera` são parâmetros nomeados (keyword-only `*`), o que torna tudo testável offline.
 - **Dinheiro em unidades da moeda** (escala aplicada na ingestão). Ações em unidades (escala
@@ -581,6 +583,8 @@ proposto; `docs/backlog.md`).
 | `test_servicos_indicadores.py` | série não financeira e financeira à mão, corte por data-base e `anos`, `data_balanco`, múltiplos de mercado à mão, conversão só fora de BRL | `_padronizada`, `industria`, `_cap` |
 | `test_formato.py` | texto pt-BR de cada função de `saida/formato.py`, sem dado = "—" | — |
 | `test_servicos_resultados.py` | sem rodada, pasta só com `wacc.csv`, rodada completa em `br` e `intl` com os gravadores reais, pasta mais recente, rodada incompleta, DDM sem ponte, arquivo corrompido | `_rodada`, `_completa` |
+| `test_gui.py` | `AppTest` sem rede: início (vazio, favoritas do cache), fora do universo, holding, ativo com cache, ativo sem cache (erro visível e uma tentativa, ou baixa e abre), botão Atualizar; `valuation gui` sem Streamlit e só em 127.0.0.1 | `ambiente`, `_com_dados`, `atu.executar` trocado (falha o teste se chamado sem pedido) |
+| `test_servicos_atualizacao.py` | comandos da CLI, `executar` (linhas ao vivo, para na falha, comando inexistente) e `estado_fontes` | subprocessos triviais |
 | `test_favoritos.py` | lista de favoritos (carga, chave inválida, ida e volta), último `resumo.csv` (pasta mais recente, `br`/`intl`, sem avisos, sem rodada), comandos `favoritos`, `adicionar`/`remover` e `atualizar` com `rodar` falso | `tmp_path`, `cli.CAMINHO_FAVORITOS`/`DIR_SAIDA` trocados |
 | `test_http.py` | cache, TTL, 304, retry, fallback | `sessao_falsa` |
 | `test_cvm.py` | parsing, escala, versões, `coletar` | `zip_cvm("dfp_cia_aberta_2025")` etc. |
@@ -987,4 +991,39 @@ diretórios) entra por parâmetro nomeado, com a constante de `config.py` como p
 - Arquivo ausente ou corrompido: campo `None` e motivo em `avisos`, nunca zero. Sem aviso quando a
   ausência é normal: múltiplos (rodada sem pares) e ponte no DDM. `avisos_rodada` é a coluna `avisos`
   do `resumo.csv`.
+
+**`atualizacao.py`**: a atualização a pedido roda os fluxos da CLI em outro processo (`python -m
+valuation`, entrada em `valuation/__main__.py`), para valer exatamente o mesmo `atualizar`/`rodar`.
+`baixar_dados`, `rodar_valuation`, `atualizar_ativo` e `atualizar_favoritas` montam os comandos;
+`executar(comandos, ao_ler) -> Execucao(ok, saida, falhou_em)` para no primeiro que falhar e nunca
+levanta por falha do comando.
+
+**`cache.py`**: `estado_fontes(ticker, cd_cvm, ...) -> [FonteCache(nome, atualizado_em)]` para CVM
+(mtime de `demonstracoes.parquet`), Preços e Macro (`baixado_em` dos `.meta.json`) e Valuation (mtime
+do `resumo.csv`); `None` = nada em disco. `caminho_demonstracoes(cd_cvm, dir_processed)`.
+
+## 23. `gui/` — GUI local (ADR 0022)
+
+Streamlit + Plotly, grupo opcional `gui` (`uv sync --group gui`, `make gui`, `valuation gui`). `make
+setup`, `tipos`, `testes` e `cobertura` já usam o grupo; sem ele, `tests/test_gui.py` é pulado. **Só
+apresenta:** nenhuma conta financeira, texto por `saida/formato.py`, e o mesmo veto de `servicos/` a
+bibliotecas de terminal (`test_gui_sem_dependencia_de_terminal`). Como `cli.py`, é camada de topo: pode
+usar o relógio e passa `agora`/`base` para baixo.
+
+- `app.py`: entrada do `streamlit run`. Rota por `?ticker=PETR4`; sem ele, o início. Rodapé "estudo
+  pessoal". Não é importável sem efeito: reexecuta a cada clique.
+- `dados.py`: `st.cache_data` sobre `servicos/`, com o **mtime dos arquivos na chave**. Lê os caminhos
+  de `config` na hora da chamada (os testes trocam `cfg.DIR_*`). `invalidar()` limpa tudo.
+- `estado.py`: barra de estado (data-base, idade de cada fonte, expansor de avisos).
+- `acoes.py`: `executar(rotulo, comandos)` num `st.status`, com as últimas linhas ao vivo; falha fica
+  na tela (`mostrar_falha`) e o cache é invalidado ao fim.
+- `inicio.py`: busca no universo, tabela das favoritas (último `resumo.csv`) e "Atualizar favoritas".
+- `ativo.py`: estados de erro (fora do universo, holding/FII, sem dados contábeis), cabeçalho, barra de
+  estado, "Atualizar" (`atualizar` + `rodar`) e as abas.
+
+**Rede.** Abrir lê só o cache: o cadastro vem de `cad.ler_cadastro_processado`, **não** de
+`carregar_cadastro`, que iria à rede com o TTL vencido. Rede automática só para ativo sem nenhum cache
+(sem cadastro ou sem `demonstracoes.parquet`), uma tentativa por sessão: a falha fica guardada em
+`st.session_state` e só o botão "Tentar de novo" repete, porque o Streamlit reexecuta a página a cada
+clique. O resto da rede é o clique do usuário.
 

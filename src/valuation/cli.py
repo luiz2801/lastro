@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import datetime as dt
+import importlib.util
 import json
 import logging
 import platform
 import shlex
+import subprocess
+import sys
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -3246,6 +3249,31 @@ def favoritos_atualizar(
     falhas = [t for t, res in resultados if res == "falhou"]
     if falhas:
         raise _erro(f"{len(falhas)} favorito(s) falharam: {', '.join(falhas)}.")
+
+
+@app.command("gui")
+def abrir_gui(
+    porta: int = typer.Option(8501, "--porta", help="Porta local (só em 127.0.0.1)."),
+) -> None:
+    """Abre a GUI local no navegador (exige o grupo `gui`)."""
+    if importlib.util.find_spec("streamlit") is None:
+        raise _erro("A GUI precisa do Streamlit: instale com `uv sync --group gui`.")
+    app_gui = Path(__file__).parent / "gui" / "app.py"
+    codigo = subprocess.call(
+        [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            str(app_gui),
+            "--server.address=127.0.0.1",
+            f"--server.port={porta}",
+            "--server.showEmailPrompt=false",
+            "--browser.gatherUsageStats=false",
+        ]
+    )
+    if codigo != 0:
+        raise typer.Exit(code=codigo)
 
 
 if __name__ == "__main__":  # pragma: no cover

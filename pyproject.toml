@@ -36,6 +36,10 @@ dev = [
     "pandas-stubs",
     "types-openpyxl>=3.1.5.20261017",
 ]
+gui = [
+    "plotly==7.1.0",
+    "streamlit==1.66.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -61,7 +65,7 @@ packages = ["valuation"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["yfinance.*", "bcb.*", "statsmodels.*", "scipy.*"]
+module = ["yfinance.*", "bcb.*", "statsmodels.*", "scipy.*", "plotly.*", "streamlit.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

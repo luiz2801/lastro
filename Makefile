@@ -2,10 +2,10 @@ UV ?= uv
 TICKER ?= PETR4
 TICKERS ?= PETR4,VALE3,WEGE3
 
-.PHONY: setup lint formatar tipos testes cobertura atualizar rodar
+.PHONY: setup lint formatar tipos testes cobertura atualizar rodar gui
 
 setup:
-	$(UV) sync
+	$(UV) sync --group gui
 
 lint:
 	$(UV) run ruff check src tests
@@ -16,16 +16,19 @@ formatar:
 	$(UV) run ruff format src tests
 
 tipos:
-	$(UV) run mypy
+	$(UV) run --group gui mypy
 
 testes:
-	$(UV) run pytest
+	$(UV) run --group gui pytest
 
 cobertura:
-	$(UV) run pytest --cov=valuation --cov-report=term-missing
+	$(UV) run --group gui pytest --cov=valuation --cov-report=term-missing
 
 atualizar:
 	$(UV) run valuation atualizar --tickers $(TICKERS)
 
 rodar:
 	$(UV) run valuation rodar $(TICKER)
+
+gui:
+	$(UV) run --group gui valuation gui
