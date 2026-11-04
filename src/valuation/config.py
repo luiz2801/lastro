@@ -152,6 +152,11 @@ class Winsorizacao(_Modelo):
 class ConfigMultiplos(_Modelo):
     min_pares: int = Field(ge=1)
     winsorizar: Winsorizacao
+    # Tratamento de anomalias da GUI com n < 15 (`analise/anomalias.py`); o `comparar` não os lê.
+    corte_pl: float = Field(gt=0)
+    corte_p_vp: float = Field(gt=0)
+    corte_ev_ebitda: float = Field(gt=0)
+    corte_ev_ebit: float = Field(gt=0)
 
 
 class ValidacaoCruzada(_Modelo):

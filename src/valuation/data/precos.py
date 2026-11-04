@@ -64,6 +64,13 @@ def simbolo_yahoo(ticker: str) -> str:
     return ticker if ticker.startswith("^") or "=" in ticker or "." in ticker else f"{ticker}.SA"
 
 
+TOLERANCIA_JUNCAO = 0.03  # o fechamento do mesmo dia muda pouco entre o pregão e o final
+
+
+def _nome_arquivo(simbolo: str) -> str:
+    return simbolo.replace("^", "_").replace("=", "_")
+
+
 class YFinanceProvider:
     nome = "yfinance"
 
@@ -116,7 +123,7 @@ class YFinanceProvider:
         raise ErroPrecos(f"yfinance não devolveu dados de {simbolo}: {ultimo}")
 
     def historico(self, simbolo: str, inicio: dt.date, fim: dt.date) -> pd.DataFrame:
-        base = f"{simbolo.replace('^', '_').replace('=', '_')}_{inicio:%Y%m%d}_{fim:%Y%m%d}"
+        base = f"{_nome_arquivo(simbolo)}_{inicio:%Y%m%d}_{fim:%Y%m%d}"
         parquet = self._dir / f"yf_{base}.parquet"
         meta = parquet.with_suffix(".meta.json")
         if parquet.is_file() and meta.is_file() and not self._forcar:
@@ -143,6 +150,95 @@ class YFinanceProvider:
             simbolo, (self._agora - dt.timedelta(days=10)).date(), self._agora.date()
         )
         return Cotacao(simbolo, float(df["close"].iloc[-1]), df.index[-1].date(), None, self.nome)
+
+    def splits(self, simbolo: str) -> pd.Series:
+        """Desdobramentos, grupamentos e bonificações (`Ticker.splits`): fator por data.
+
+        O yfinance não é exaustivo: confira com a composição do capital (`conferir_splits`).
+        """
+        parquet = _caminho_splits(simbolo, self._dir)
+        meta = parquet.with_suffix(".meta.json")
+        if parquet.is_file() and meta.is_file() and not self._forcar:
+            baixado = dt.datetime.fromisoformat(json.loads(meta.read_text())["baixado_em"])
+            if self._agora - baixado < self._ttl:
+                return _ler_splits(parquet)
+        try:
+            bruto = self._baixar_splits(simbolo)
+        except ErroPrecos:
+            if parquet.is_file() and not self._forcar:
+                logger.warning("yfinance falhou para %s; usando splits vencidos do cache", simbolo)
+                return _ler_splits(parquet)
+            raise
+        self._dir.mkdir(parents=True, exist_ok=True)
+        bruto.to_frame("fator").to_parquet(parquet)
+        meta.write_text(
+            json.dumps({"simbolo": simbolo, "baixado_em": self._agora.isoformat()}),
+            encoding="utf-8",
+        )
+        return bruto
+
+    def _baixar_splits(self, simbolo: str) -> pd.Series:
+        import yfinance as yf
+
+        try:
+            bruto = yf.Ticker(simbolo).splits
+        except Exception as e:  # yfinance levanta tipos variados
+            raise ErroPrecos(f"yfinance não devolveu os splits de {simbolo}: {e}") from e
+        indice = pd.DatetimeIndex(bruto.index)
+        if indice.tz is not None:
+            indice = indice.tz_localize(None)
+        return pd.Series(
+            bruto.to_numpy(dtype="float64"), index=indice.normalize().rename("data"), name="fator"
+        )
+
+
+def _caminho_splits(simbolo: str, dir_cache: Path) -> Path:
+    return dir_cache / f"splits_{_nome_arquivo(simbolo)}.parquet"
+
+
+def _ler_splits(caminho: Path) -> pd.Series:
+    return pd.read_parquet(caminho)["fator"]
+
+
+def splits_em_cache(simbolo: str, dir_cache: Path) -> pd.Series | None:
+    """Splits já gravados, sem rede e sem olhar o TTL; `None` se nunca foram baixados."""
+    caminho = _caminho_splits(simbolo, dir_cache)
+    return _ler_splits(caminho) if caminho.is_file() else None
+
+
+def historico_em_cache(simbolo: str, dir_cache: Path) -> pd.DataFrame | None:
+    """Maior janela já gravada de `simbolo`, sem rede e sem TTL; `None` se não houver nenhuma.
+
+    Janela maior não garante os dias mais recentes (a data do nome do arquivo é a pedida, não a do
+    último pregão devolvido): eles vêm do arquivo que chega mais longe, só se o fechamento coincidir
+    no último dia comum. Se não coincidir, as bases de split podem ser diferentes, e ficam de fora.
+    """
+    janelas: list[tuple[int, str, pd.DataFrame]] = []
+    for caminho in dir_cache.glob(f"yf_{_nome_arquivo(simbolo)}_*.parquet"):
+        partes = caminho.stem.rsplit("_", 2)
+        try:
+            inicio = dt.datetime.strptime(partes[1], "%Y%m%d")
+            fim = dt.datetime.strptime(partes[2], "%Y%m%d")
+        except (IndexError, ValueError):
+            continue
+        df = pd.read_parquet(caminho)
+        if not df.empty:
+            janelas.append(((fim - inicio).days, partes[2], df))
+    if not janelas:
+        return None
+    maior = max(janelas, key=lambda j: j[:2])[2]
+    recente = max(janelas, key=lambda j: (j[2].index[-1], j[1]))[2]
+    novos = recente[recente.index > maior.index[-1]]
+    comuns = maior.index.intersection(recente.index)
+    if novos.empty or comuns.empty:
+        return maior
+    dia = comuns[-1]
+    variacao = float(recente.loc[dia, "close"]) / float(maior.loc[dia, "close"]) - 1
+    if abs(variacao) > TOLERANCIA_JUNCAO:
+        logger.warning("%s: janelas em cache divergem em %s; dias novos ignorados", simbolo, dia)
+        return maior
+    juntos: pd.DataFrame = pd.concat([maior, novos])
+    return juntos
 
 
 class BrapiProvider:

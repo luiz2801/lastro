@@ -62,6 +62,12 @@ sensibilidade:
 multiplos:
   min_pares: 3
   winsorizar: {inferior: 0.10, superior: 0.90}
+  # Corte fixo das anomalias da GUI quando n < 15 (ADR 0023). P/L decidido pelo usuário; os demais,
+  # escolhidos por ele a partir de uma proposta. Julgamento, não dado de mercado. `comparar` não usa.
+  corte_pl: 80
+  corte_p_vp: 15
+  corte_ev_ebitda: 40
+  corte_ev_ebit: 60
 
 # Tolerância para aceitar que duas fontes "concordam" (ver docs/decisoes/0004).
 # Preço, câmbio e market cap: diferença relativa. Taxas: diferença absoluta em decimal.

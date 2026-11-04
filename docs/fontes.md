@@ -40,7 +40,8 @@ Legenda: ✅ confirmado · ⚠️ diferente do guia · ⏳ pendente
 
 ### Composição do capital
 
-- Existe na DFP a partir de 2020 (DFP 2010–2019 não trazem o arquivo) e em todos os ITR.
+- Existe na DFP e no ITR a partir de 2020 (primeira data: 31/03/2020). **Antes não há:** conferido em
+  2026-11-04 no ITR 2017 e no ITR 2019, sem o arquivo, e no ITR 2020 e no 2021, com ele (ADR 0023).
 - ⚠️ **Sem coluna de escala.** A Vale informa em milhares em todas as datas (4.262.534 em 2026-03-31);
   a Petrobras informou em milhares só na DFP 2020 (13.044.497). Ver [ADR 0003](decisoes/0003-escala-das-acoes.md).
   Escala da Vale confirmada pela composição acionária publicada pela companhia (31/08/2026).
@@ -83,6 +84,16 @@ Valores em `tests/golden/referencias.yaml`; documentos em `referencias/` (ver o 
   (`2.01.05.02.07` / `2.02.02.02.05`) e `2.01.04.03`/`2.02.01.03` existem com valor zero. Na Petrobras
   e na Vale ficam dentro de empréstimos (`2.01.04.03`/`2.02.01.03`). O mapeamento precisa somar os
   dois lugares sem contar duas vezes.
+
+### Data de divulgação (`DT_RECEB`, 2026-11-04)
+
+- No CSV-índice de cada zip (`dfp_cia_aberta_{ano}.csv`, `itr_cia_aberta_{ano}.csv`), colunas
+  `CNPJ_CIA;DT_REFER;VERSAO;DENOM_CIA;CD_CVM;CATEG_DOC;ID_DOC;DT_RECEB;LINK_DOC`, uma linha por versão.
+  Sem vazios nos arquivos conferidos (DFP 2016, DFP 2025, DFP 2026, ITR 2026). Petrobras, DFP 2016:
+  versão 1 em 2017-03-21 e versão 2 em 2017-03-24. A série usa a 1ª (ADR 0023).
+- ITR de 2019 a 2021 têm de 24 a 31 MB cada. Só FRE (`CIA_ABERTA/DOC/FRE/DADOS/fre_cia_aberta_{ano}.zip`,
+  7,6 MB em 2017) traz quantidade de ações antes de 2020, sem tesouraria e por versão de formulário;
+  não é usado.
 
 ### Plano de contas padronizado (Fase 2, 2026-10-30)
 
@@ -229,6 +240,13 @@ Cada preço é conferido em duas fontes (`yfinance` e `brapi`); ver ADR 0004. Va
 
 O `marketCap` da brapi não bate com ações × preço da CVM (PETR4: 716,8 bi contra 672,8 bi pelo
 preço do PN sobre todas as ações), então não é usado como checagem.
+
+### Splits (`Ticker.splits`, 2026-11-03)
+
+Lista desdobramentos, grupamentos e bonificações (fator < 1 = grupamento). O `Close` já vem ajustado por
+eles mesmo com `auto_adjust=False`; a quantidade de ações da CVM vem na base de cada data. Não é
+exaustivo: `conferir_splits` cruza com a composição do capital. WEGE3: 1,3 em 2018-04-25 e 2 em
+2021-04-28. Levantamento do universo no `docs/backlog.md`.
 
 ## Macro (BCB / Tesouro)
 

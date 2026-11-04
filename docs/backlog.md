@@ -562,6 +562,12 @@ sem nenhuma conta feita na camada de tela.
    Rede automática apenas para ativo sem nenhum cache: o favorito sem cache ou o não favorito
    aberto pela primeira vez, com progresso e erro visível.
 
+### Decisões da quarta rodada (2026-11-04, ADR 0023)
+
+A fonte real desmentiu parte da terceira rodada: a CVM só tem a quantidade de ações desde 31/03/2020.
+Decidido: múltiplos em lacuna antes disso; market cap com F na data da composição (substitui F(t)); 1ª
+divulgação; corte fixo P/VP 15x, EV/EBITDA 40x, EV/EBIT 60x.
+
 ### Métricas pedidas além do GUI-20
 
 Pedido do usuário (2026-11-03): "o máximo de métricas possíveis", inclusive Basileia, endividamento

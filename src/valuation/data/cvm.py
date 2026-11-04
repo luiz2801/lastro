@@ -368,3 +368,119 @@ def coletar(
             {d.date() for d in pd.to_datetime(dem["dt_refer"])}
         )
     return resumo
+
+
+# Séries longas da GUI (ADR 0023). Arquivos à parte: `rodar` não os lê e nada muda nas saídas.
+# A composição só existe desde 03/2020, e o LTM exige o balanço de 12 meses antes.
+PRIMEIRO_ANO_ITR_SERIES = 2019
+ARQUIVO_SERIES_ITR = "series_itr.parquet"
+ARQUIVO_SERIES_COMPOSICAO = "series_composicao.parquet"
+ARQUIVO_DIVULGACOES = "divulgacoes.parquet"
+
+
+def nome_csv_indice(tipo: TipoDocumento, ano: int) -> str:
+    return f"{tipo.lower()}_cia_aberta_{ano}.csv"
+
+
+def ler_divulgacoes(caminho_zip: Path, tipo: TipoDocumento, ano: int, cnpj: str) -> pd.DataFrame:
+    """1ª divulgação (`DT_RECEB` mais antigo, em geral a versão 1) de cada `DT_REFER` no arquivo."""
+    colunas = ["fonte", "dt_refer", "dt_receb"]
+    with zipfile.ZipFile(caminho_zip) as zf:
+        bruto = ler_csv(zf, nome_csv_indice(tipo, ano))
+    if bruto is None:
+        return pd.DataFrame(columns=colunas)
+    bruto = bruto.loc[bruto["CNPJ_CIA"] == cnpj]
+    df = pd.DataFrame(
+        {
+            "fonte": tipo,
+            "dt_refer": pd.to_datetime(bruto["DT_REFER"], format="%Y-%m-%d"),
+            "dt_receb": pd.to_datetime(bruto["DT_RECEB"], format="%Y-%m-%d", errors="coerce"),
+        }
+    )
+    df = df.dropna(subset=["dt_receb"])
+    primeira = df.groupby(["fonte", "dt_refer"])["dt_receb"].min()
+    return primeira.reset_index()[colunas]
+
+
+def coletar_series(
+    alvo: AlvoCVM,
+    ano_base: int,
+    historico_anos: int,
+    *,
+    dir_raw: Path,
+    dir_processed: Path,
+    ttl: dt.timedelta,
+    sessao: SessaoHttp,
+    agora: dt.datetime,
+    forcar: bool = False,
+) -> None:
+    """Grava o que a série histórica de múltiplos precisa além da coleta normal.
+
+    ITR de `PRIMEIRO_ANO_ITR_SERIES` a `ano_base - 2` (os 2 últimos anos já vêm no `coletar`), a
+    composição do capital deles e as datas de divulgação de toda DFP e ITR.
+    """
+    anos: dict[TipoDocumento, list[int]] = {
+        "DFP": list(range(ano_base - historico_anos, ano_base + 1)),
+        "ITR": list(range(PRIMEIRO_ANO_ITR_SERIES, ano_base + 1)),
+    }
+    pasta = dir_processed / "cvm" / str(alvo.cd_cvm)
+    pasta.mkdir(parents=True, exist_ok=True)
+    demonstracoes: list[pd.DataFrame] = []
+    acoes: list[pd.DataFrame] = []
+    divulgacoes: list[pd.DataFrame] = []
+    for tipo, lista in anos.items():
+        for ano in lista:
+            url = url_documento(tipo, ano)
+            try:
+                arquivo = baixar(
+                    url,
+                    dir_raw / "cvm" / tipo / url.rsplit("/", 1)[1],
+                    ttl=ttl,
+                    sessao=sessao,
+                    agora=agora,
+                    forcar=forcar,
+                    validar=validar_zip,
+                )
+            except ArquivoNaoEncontrado:
+                if ano != max(lista):
+                    raise
+                logger.info("%s %d ainda não publicado", tipo, ano)
+                continue
+            divulgacoes.append(ler_divulgacoes(arquivo.caminho, tipo, ano, alvo.cnpj))
+            if tipo == "ITR" and ano <= ano_base - 2:
+                demonstracoes.append(ler_demonstracoes(arquivo.caminho, tipo, ano, [alvo.cnpj]))
+                acoes.append(ler_composicao_capital(arquivo.caminho, tipo, ano, [alvo.cnpj]))
+    vazio_dem = pd.DataFrame(columns=COLUNAS_DEMONSTRACOES)
+    vazio_ac = pd.DataFrame(columns=["cnpj", "fonte", "dt_refer", "versao", *COLUNAS_ACOES])
+    dem = pd.concat([d for d in demonstracoes if not d.empty] or [vazio_dem], ignore_index=True)
+    dem.to_parquet(pasta / ARQUIVO_SERIES_ITR, index=False)
+    ac = pd.concat([a for a in acoes if not a.empty] or [vazio_ac], ignore_index=True)
+    corrigir_escala_acoes(ac, alvo.escala_acoes).to_parquet(
+        pasta / ARQUIVO_SERIES_COMPOSICAO, index=False
+    )
+    pd.concat(divulgacoes, ignore_index=True).to_parquet(pasta / ARQUIVO_DIVULGACOES, index=False)
+
+
+def ler_composicao_serie(dir_processed: Path, cd_cvm: int) -> pd.DataFrame | None:
+    """Composição normal + a das séries longas (a normal vence na mesma data); `None` sem elas."""
+    pasta = dir_processed / "cvm" / str(cd_cvm)
+    partes = [
+        pd.read_parquet(c)
+        for c in (pasta / ARQUIVO_SERIES_COMPOSICAO, pasta / "composicao_capital.parquet")
+        if c.is_file()
+    ]
+    partes = [p for p in partes if not p.empty]
+    if not partes:
+        return None
+    junto = pd.concat(partes, ignore_index=True)
+    return junto.drop_duplicates("dt_refer", keep="last").sort_values("dt_refer")
+
+
+def ler_series_itr(dir_processed: Path, cd_cvm: int) -> pd.DataFrame | None:
+    caminho = dir_processed / "cvm" / str(cd_cvm) / ARQUIVO_SERIES_ITR
+    return pd.read_parquet(caminho) if caminho.is_file() else None
+
+
+def ler_datas_divulgacao(dir_processed: Path, cd_cvm: int) -> pd.DataFrame | None:
+    caminho = dir_processed / "cvm" / str(cd_cvm) / ARQUIVO_DIVULGACOES
+    return pd.read_parquet(caminho) if caminho.is_file() else None

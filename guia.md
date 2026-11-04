@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.41 — 2026-11-04**
+**Versão 1.42 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -47,15 +47,15 @@
 | Projeção | `projecao/{premissas,sugestor,projetor,escrita,financeira}.py` + `config/empresas/*.yaml` + `config/setores.yaml` | ✅ prontos (seção 18), FCFF e DDM |
 | Custo de capital | `custo_capital/{beta,capm,kd,wacc}.py` | ✅ prontos (seção 19), inclusive beta por comparáveis, estrutura do setor e Ke das financeiras |
 | Modelos | `modelos/{dcf,ponte,multiplos,ddm}.py` | ✅ DCF do FCFF, ponte EV → equity, múltiplos dos pares e DDM com lucro residual (seção 20) |
-| Análise | `analise/{cenarios,sensibilidade,indicadores}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade, FCFF e DDM; indicadores por ativo (seção 20) |
+| Análise | `analise/{cenarios,sensibilidade,indicadores,serie_multiplos,anomalias}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade, FCFF e DDM; indicadores por ativo (seção 20); série histórica de múltiplos e anomalias da GUI (seção 22) |
 | Saída | `saida/{csv,arquivos,real,graficos,glossario,favoritos,formato}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG, glossário das métricas, favoritos e formatação pt-BR comum à CLI e à GUI (seção 19) |
 | Carteira | `carteira/{transacoes,arquivo,posicao}.py` | ✅ Etapas C1 e C2 do ADR 0020: transações, histórico validado, importação CSV/XLSX, posição, preço médio e resultado (seção 21); a C3 (indicadores por ativo) está em `analise/indicadores.py` e no comando `indicadores`; proventos e alocação ainda não (seção 12) |
-| Serviços | `servicos/{empresa,mercado,indicadores,resultados,atualizacao,cache}.py` | Cadastro, padronização, preços, market cap, macro, indicadores e leitura da última rodada (extraídos de `cli.py`), mais fluxos da CLI em outro processo e estado do cache (seção 22) |
+| Serviços | `servicos/{empresa,mercado,indicadores,resultados,atualizacao,cache,historico_mercado}.py` | Cadastro, padronização, preços, market cap, macro, indicadores e leitura da última rodada (extraídos de `cli.py`), mais fluxos da CLI em outro processo, estado do cache e série histórica (seção 22) |
 | GUI | `gui/{app,dados,estado,acoes,inicio,ativo}.py` | Esqueleto da Sprint GUI 1: início, página de ativo, barra de estado, atualização a pedido (seção 23); abas Geral e Valuation ainda vazias |
 | CLI | `cli.py` | `gui`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 719 testes (708 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 761 testes (750 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -245,6 +245,7 @@ validados.
 | `custo_capital.metodo` | brl_direto | Método do Ke; empresa que reporta em USD usa `usd_crp` de qualquer forma (aviso) |
 | `custo_capital.erp.{fonte,valor}` | `manual` / 0.05 (premissa do usuário, sem fonte externa; `docs/fontes.md`) | Prêmio de risco de mercado no Ke (os dois métodos). Em `brl_direto` é sobre a NTN-F em BRL; em `usd_crp`, ERP de mercado maduro. ±1 p.p. mexe de 4% a 6,5% no valor ponderado dos pilotos. `fonte: implicito_ibovespa` lê o ERP central de `data/processed/erp_implicito.json` (comando `erp`, ADR 0018); um número solto no YAML vale `manual`. **Hoje o implícito dá −4,2% e o comando recusa gravar: o padrão fica `manual`** |
 | `custo_capital.erp.{anos_explicitos,faixa_g,validade_dias}` | 5 / 0.01 / 30 | Só `implicito_ibovespa`: anos de crescimento pelo Focus, ± sobre o g perpétuo na faixa do ERP, idade máxima do JSON em dias (`_erp_efetivo` falha acima dela) |
+| `multiplos.corte_pl`, `corte_p_vp`, `corte_ev_ebitda`, `corte_ev_ebit` | 80 / 15 / 40 / 60 | Corte fixo das anomalias da GUI com n < 15 (ADR 0023). Julgamento, não dado de mercado. `comparar` não lê |
 | `custo_capital.crp`, `rf_usd`, `inflacao_usd_lp` | 0 / 0.04 / 0.02 | Só `usd_crp`: Ke_USD = rf_usd + β × ERP + CRP; Fisher com `inflacao_usd_lp`. `rf_usd` também é a Rf do limite do Kd de quem reporta em USD |
 | `custo_capital.beta.metodo` | regressao | Método quando o YAML da empresa **não** declara `custo_capital.beta` |
 | `custo_capital.beta.janela_semanas` | 260 | Semanas da regressão e da escolha da classe mais líquida; < 52 disponíveis ⇒ erro |
@@ -585,6 +586,9 @@ proposto; `docs/backlog.md`).
 | `test_servicos_resultados.py` | sem rodada, pasta só com `wacc.csv`, rodada completa em `br` e `intl` com os gravadores reais, pasta mais recente, rodada incompleta, DDM sem ponte, arquivo corrompido | `_rodada`, `_completa` |
 | `test_gui.py` | `AppTest` sem rede: início (vazio, favoritas do cache), fora do universo, holding, ativo com cache, ativo sem cache (erro visível e uma tentativa, ou baixa e abre), botão Atualizar; `valuation gui` sem Streamlit e só em 127.0.0.1 | `ambiente`, `_com_dados`, `atu.executar` trocado (falha o teste se chamado sem pedido) |
 | `test_servicos_atualizacao.py` | comandos da CLI, `executar` (linhas ao vivo, para na falha, comando inexistente) e `estado_fontes` | subprocessos triviais |
+| `test_serie_multiplos.py` | F(c), base de hoje, `conferir_splits`, pontos mensais, divulgação e fallback, vigência sem olhar o futuro, múltiplos à mão com lacunas, Log-IQR, corte fixo, Tukey, marcação e referências à mão | `_composicao`, `_fund`, `_serie` |
+| `test_servicos_historico_mercado.py` | série de ponta a ponta à mão: P/L com data de divulgação, lacuna antes da composição, split sem degrau, avisos, ITR só em memória, `baixar_series` | `p`, `_cotacao`, `_composicao`, `_splits`, `_divulgacoes` |
+| `test_series_dados.py` | `coletar_series`, `ler_divulgacoes` (1ª versão), composição combinada, `splits` e caches sem rede | `SessaoFalsa`, `yfinance` falso em `sys.modules` |
 | `test_favoritos.py` | lista de favoritos (carga, chave inválida, ida e volta), último `resumo.csv` (pasta mais recente, `br`/`intl`, sem avisos, sem rodada), comandos `favoritos`, `adicionar`/`remover` e `atualizar` com `rodar` falso | `tmp_path`, `cli.CAMINHO_FAVORITOS`/`DIR_SAIDA` trocados |
 | `test_http.py` | cache, TTL, 304, retry, fallback | `sessao_falsa` |
 | `test_cvm.py` | parsing, escala, versões, `coletar` | `zip_cvm("dfp_cia_aberta_2025")` etc. |
@@ -1001,6 +1005,28 @@ levanta por falha do comando.
 **`cache.py`**: `estado_fontes(ticker, cd_cvm, ...) -> [FonteCache(nome, atualizado_em)]` para CVM
 (mtime de `demonstracoes.parquet`), Preços e Macro (`baixado_em` dos `.meta.json`) e Valuation (mtime
 do `resumo.csv`); `None` = nada em disco. `caminho_demonstracoes(cd_cvm, dir_processed)`.
+
+**`historico_mercado.py`** (ADR 0023): `carregar_series(p, ticker, settings, base, *, dir_raw,
+dir_processed) -> SeriesMercado | None` lê só o disco; `None` = sem cotação do papel. `SeriesMercado`:
+`cotacao`, `multiplos` (último pregão do mês; NaN = lacuna), `market_cap`, `vigencia` (data → fim do
+LTM vigente), `inicio_composicao`, `avisos`. `baixar_series(empresa, ticker, settings, base, agora, *,
+sessao, forcar, ...)` é quem usa a rede: cotação de cada classe, splits e `cvm.coletar_series`. Os ITR
+antigos entram só em memória (`_contas_da_serie`); `contas_padronizadas.parquet` não é regravado.
+
+**Puros de apoio:**
+- `analise/serie_multiplos.py`: `fator_splits`, `acoes_na_base_atual` (quantidade × F(dt_refer), a data
+  da **composição**, não a do preço), `conferir_splits` (tolerância 5%), `pontos_mensais`,
+  `datas_de_entrada` (1ª divulgação; sem ela, + 45 dias no ITR ou + 90 na DFP), `vigencia`,
+  `serie_multiplo` (`mt.multiplo`, a conta do `comparar`), `cortar_periodo` (GUI-12).
+- `analise/anomalias.py`: `Classe`, `CLASSES`, `filtrar(serie, classe, corte_fixo) -> Filtro` e
+  `referencia(filtro, tipo)`. Só a GUI usa.
+- `data/cvm.py`: `coletar_series`, `ler_divulgacoes`, `ler_composicao_serie`, `ler_series_itr`,
+  `ler_datas_divulgacao`, com arquivos à parte (`series_itr.parquet`, `series_composicao.parquet`,
+  `divulgacoes.parquet`).
+- `data/precos.py`: `YFinanceProvider.splits`, `splits_em_cache` e `historico_em_cache` (a maior janela
+  gravada mais os dias novos da janela de fim mais recente, só se o fechamento coincidir em até 3% no
+  último dia comum, porque janelas de datas diferentes podem estar em bases de split diferentes). As
+  duas `_em_cache` não usam rede nem olham o TTL.
 
 ## 23. `gui/` — GUI local (ADR 0022)
 

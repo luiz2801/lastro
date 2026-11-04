@@ -2,6 +2,15 @@
 
 ## [Não lançado]
 
+### Sprint GUI 1, S2: série histórica de cotação e múltiplos (ADR 0023)
+- `analise/serie_multiplos.py` e `analise/anomalias.py` (puros), `servicos/historico_mercado.py`:
+  preço de cada data sobre o LTM vigente, em ponto mensal, a partir da 1ª divulgação. A conta é a do
+  `comparar`. Anomalias só na GUI; `comparar` e `multiplos.py` não mudam.
+- `data/cvm.py`: ITR de 2019 em diante, composição antiga e datas de divulgação em arquivos à parte,
+  que o `rodar` não lê. `data/precos.py`: splits e leitura do cache sem rede.
+- Múltiplos só desde 31/03/2020: a CVM não publica a quantidade de ações antes disso. `docs/fontes.md`
+  corrigido, porque dizia "em todos os ITR". Corte fixo em `multiplos.corte_*`.
+
 ### Sprint GUI 1, S3: esqueleto Streamlit (ADR 0022)
 - Grupo opcional `gui` (`streamlit==1.66.0`, `plotly==7.1.0`), comando `valuation gui` e `make gui`;
   sem o grupo, a CLI segue funcionando e `valuation gui` explica como instalar.

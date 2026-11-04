@@ -13,12 +13,12 @@ flowchart BT
     subgraph ORQ["Orquestração e interface"]
         cli["cli<br/>(typer, rich)"]
         gui["gui<br/>(streamlit, plotly)"]
-        servicos["servicos<br/>empresa, mercado, indicadores,<br/>resultados, atualizacao, cache"]
+        servicos["servicos<br/>empresa, mercado, indicadores, resultados,<br/>atualizacao, cache, historico_mercado"]
     end
 
     subgraph APL["Aplicação (camadas de cálculo e saída)"]
         saida["saida<br/>csv, graficos, arquivos,<br/>real, glossario, favoritos"]
-        analise["analise<br/>cenarios, sensibilidade,<br/>indicadores"]
+        analise["analise<br/>cenarios, sensibilidade, indicadores,<br/>serie_multiplos, anomalias"]
         modelos["modelos<br/>dcf, ddm, ponte, multiplos"]
         projecao["projecao<br/>premissas, sugestor,<br/>projetor, financeira, escrita"]
         custo["custo_capital<br/>beta, capm, kd, wacc,<br/>erp_implicito"]

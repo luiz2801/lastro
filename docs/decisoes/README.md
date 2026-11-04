@@ -32,6 +32,7 @@ Itens `[DECIDIDO]` não mudam por ADR sem o aval do usuário (regra 7 do `CLAUDE
 | [0020](0020-modulo-carteira-pessoal.md) | Módulo de carteira pessoal (RF-004, 007–012): camada `carteira/` no topo, transações em CSV local, preço médio, proventos com fonte a validar, alocação-alvo, `openpyxl` para XLSX; tela visual fica para decisão própria | 1 (escopo), 4 (dependência), 5, 14 | aceito (planejamento) |
 | [0021](0021-tickers-favoritos.md) | Tickers favoritos em `config/favoritos.yaml`; o último `resumo.csv` de `saida/` é o cache de resultados; `valuation favoritos` (tabela, `adicionar`, `remover`, `atualizar`) | 13, 14 | aceito |
 | [0022](0022-gui-streamlit-plotly.md) | GUI local em Streamlit + Plotly (grupo opcional `gui`), camada `servicos/` compartilhada com a CLI, leitura de `saida/` e cache com botão de atualizar | 1 (escopo), 4 (dependência), 5, 14 | aceito |
+| [0023](0023-serie-historica-de-multiplos.md) | Série de múltiplos da GUI: lacuna antes de 31/03/2020 (sem quantidade de ações na CVM), market cap com F na data da composição, 1ª divulgação, ITR de 2019 em diante em arquivos à parte, cortes fixos e anomalias só na GUI | 6.1, 11.4 | aceito |
 | [0018](0018-erp-implicito-do-ibovespa.md) | ERP implícito do Ibovespa: dividendos agregados, Focus (PIB + IPCA) em 5 anos e g perpétuo pelo CAGR histórico (teto 5%), sem convergência, faixa ±1 p.p., erro fora de [0%, 15%], `valuation erp` grava o JSON lido pelo Ke; em 30/10/2026 o ERP deu −4,2% (padrão segue manual) | 10.2 | aceito |
 
 ## Quando escrever um ADR

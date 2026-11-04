@@ -36,9 +36,14 @@ class IndicadoresMercado:
     multiplos: dict[str, float]
 
 
+def datas_com_ltm(contas: pd.DataFrame) -> pd.Index:
+    """Datas com fluxos acumulados e balanço: os pontos em que o LTM pode ser calculado."""
+    return per.acumulado_no_ano(contas).index.intersection(per.saldos(contas).index)
+
+
 def data_balanco(contas: pd.DataFrame, base: dt.date) -> pd.Timestamp:
     """Última data até a data-base com fluxos acumulados e balanço (ponto do LTM)."""
-    comuns = per.acumulado_no_ano(contas).index.intersection(per.saldos(contas).index)
+    comuns = datas_com_ltm(contas)
     comuns = comuns[comuns <= pd.Timestamp(base)]
     if comuns.empty:
         raise ErroContabil(f"Nenhuma demonstração até {base}.")
