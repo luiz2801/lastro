@@ -464,3 +464,35 @@ def test_grafico_com_linhas_de_grupo_sem_rede() -> None:
     nomes = [t.name for t in figura.data]
     assert "Pares" in nomes
     assert figura.layout.yaxis.range[1] == pytest.approx(55.0)  # a linha entra na escala
+
+
+def test_busca_na_barra_lateral_abre_o_ativo_e_nao_prende_o_usuario(ambiente: Path) -> None:
+    _com_dados(ambiente)
+    at = _abrir()
+    at.sidebar.selectbox(key="busca_ativo").select("WEGE3").run()
+    assert not at.exception
+    assert at.query_params["ticker"] == "WEGE3"
+    assert at.sidebar.selectbox(key="busca_ativo").value is None
+    at.sidebar.button(key="ir_inicio").click().run()
+    assert not at.exception
+    assert "ticker" not in at.query_params  # a busca não reabre o ativo
+
+
+def test_busca_mostra_o_nome_do_cadastro(ambiente: Path) -> None:
+    _com_dados(ambiente)
+    at = _abrir()
+    assert "WEGE3 — WEG" in at.sidebar.selectbox(key="busca_ativo").options
+
+
+def test_favoritar_e_remover_pela_tela_sem_rede(ambiente: Path) -> None:
+    _com_dados(ambiente)
+    at = _abrir("WEGE3")
+    at.button(key="alternar_favorita").click().run()
+    assert not at.exception
+    arquivo = ambiente / "favoritos.yaml"
+    assert "WEGE3" in arquivo.read_text(encoding="utf-8")
+    assert at.button(key="alternar_favorita").label == "★ Favorita"
+    at = _abrir()
+    at.button(key="remover_WEGE3").click().run()
+    assert not at.exception
+    assert "WEGE3" not in arquivo.read_text(encoding="utf-8")

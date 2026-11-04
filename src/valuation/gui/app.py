@@ -6,13 +6,14 @@ import streamlit as st
 
 from valuation.config import ErroConfiguracao
 from valuation.data.cadastro import normalizar_ticker
-from valuation.gui import ativo, inicio
+from valuation.gui import ativo, inicio, navegacao
 
 
 def principal() -> None:
     st.set_page_config(page_title="Lastro — valuation", page_icon="📈", layout="wide")
     ticker = st.query_params.get("ticker")
     try:
+        navegacao.mostrar()
         if ticker:
             ativo.mostrar(normalizar_ticker(ticker))
         else:

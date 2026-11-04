@@ -7,10 +7,12 @@ import datetime as dt
 import pandas as pd
 import streamlit as st
 
+from valuation import config as cfg
 from valuation.contabil import ErroContabil
 from valuation.data import cadastro as cad
 from valuation.gui import aba_valuation, acoes, dados, estado, geral
 from valuation.servicos import atualizacao as atu
+from valuation.servicos import favoritas as sfav
 from valuation.universo import EmpresaUniverso
 
 TIPOS_SUPORTADOS = ("nao_financeira", "financeira")
@@ -18,12 +20,6 @@ TIPOS_SUPORTADOS = ("nao_financeira", "financeira")
 
 def _do_universo(ticker: str) -> EmpresaUniverso | None:
     return next((e for e in dados.universo() if e.ticker == ticker), None)
-
-
-def _voltar() -> None:
-    if st.button("← Início"):
-        st.query_params.clear()
-        st.rerun()
 
 
 def _baixar_sem_cache(ticker: str) -> bool:
@@ -67,12 +63,19 @@ def _cadastro_com_dados(ticker: str) -> tuple[pd.DataFrame, cad.Empresa] | None:
 
 def _cabecalho(ticker: str, empresa: cad.Empresa, membro: EmpresaUniverso) -> None:
     especie = next((c.especie for c in empresa.classes if c.ticker == ticker), "—")
-    st.title(f"{ticker} — {empresa.nome_comercial or empresa.razao_social}")
+    titulo, estrela = st.columns([6, 1])
+    titulo.title(f"{ticker} — {empresa.nome_comercial or empresa.razao_social}")
+    favorita = ticker in dados.favoritos()
+    if estrela.button("★ Favorita" if favorita else "☆ Favoritar", key="alternar_favorita"):
+        if favorita:
+            sfav.remover(ticker, cfg.CAMINHO_FAVORITOS)
+        else:
+            sfav.adicionar(ticker, [e.ticker for e in dados.universo()], cfg.CAMINHO_FAVORITOS)
+        st.rerun()
     st.caption(f"Classe {especie} · {membro.setor.value}")
 
 
 def mostrar(ticker: str) -> None:
-    _voltar()
     membro = _do_universo(ticker)
     if membro is None:
         st.error(

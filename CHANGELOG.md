@@ -2,6 +2,10 @@
 
 ## [Não lançado]
 
+### Sprint GUI 2, C: navegação e favoritas pela tela (ADR 0024)
+- Barra lateral em todas as páginas, com busca por ticker e nome e botão Início. ☆/★ no cabeçalho do ativo e "Remover" no
+  início, com a validação da CLI e sem download ao favoritar. `servicos/favoritas.py`, `gui/navegacao.py`.
+
 ### Sprint GUI 2, B: médias de pares e do Ibovespa em série (ADR 0024)
 - Gráfico dos múltiplos com a referência dos pares e das empresas do Ibovespa mês a mês. O último ponto bate com a média de
   hoje (conferido em pares de WEGE3, VALE3 e BBAS3). Lacuna com menos de `multiplos.min_pares` válidas.

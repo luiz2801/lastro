@@ -7,23 +7,16 @@ import datetime as dt
 import pandas as pd
 import streamlit as st
 
+from valuation import config as cfg
 from valuation.gui import acoes, dados
 from valuation.saida import formato as fo
 from valuation.servicos import atualizacao as atu
+from valuation.servicos import favoritas as sfav
 
 
 def abrir(ticker: str) -> None:
     st.query_params["ticker"] = ticker
     st.rerun()
-
-
-def _busca() -> None:
-    tickers = [e.ticker for e in dados.universo()]
-    escolhido = st.selectbox(
-        "Buscar ativo", tickers, index=None, placeholder="Digite o ticker (ex.: PETR4)"
-    )
-    if escolhido:
-        abrir(escolhido)
 
 
 def _tabela_favoritas(tickers: list[str], hoje: dt.date) -> pd.DataFrame:
@@ -62,13 +55,20 @@ def _favoritas(hoje: dt.date) -> None:
     st.subheader("Favoritas")
     tickers = dados.favoritos()
     if not tickers:
-        st.info("Nenhuma favorita. Use `valuation favoritos adicionar TICKER`.")
+        st.info(
+            "Nenhuma favorita. Use a estrela na página do ativo ou "
+            "`valuation favoritos adicionar TICKER`."
+        )
         return
     st.dataframe(_tabela_favoritas(tickers, hoje), hide_index=True, width="stretch")
     colunas = st.columns(min(len(tickers), 6))
     for i, ticker in enumerate(tickers):
-        if colunas[i % len(colunas)].button(ticker, key=f"abrir_{ticker}"):
+        coluna = colunas[i % len(colunas)]
+        if coluna.button(ticker, key=f"abrir_{ticker}"):
             abrir(ticker)
+        if coluna.button(f"Remover {ticker}", key=f"remover_{ticker}", type="tertiary"):
+            sfav.remover(ticker, cfg.CAMINHO_FAVORITOS)
+            st.rerun()
     if st.button("Atualizar favoritas"):
         execucao = acoes.executar("Atualizando favoritas", atu.atualizar_favoritas(tickers))
         if execucao.ok:
@@ -78,5 +78,5 @@ def _favoritas(hoje: dt.date) -> None:
 
 def mostrar() -> None:
     st.title("Lastro")
-    _busca()
+    st.caption("Busque um ativo na barra lateral.")
     _favoritas(dt.date.today())

@@ -306,6 +306,7 @@ Abrir a página só lê o que está em disco. A rede vem do clique, ou do caso d
 
 ```mermaid
 flowchart TD
+  Z["Barra lateral: busca, Início"] --> A
   A["valuation gui: ?ticker=PETR4"] --> B{"Ticker no universo?"}
   B -->|não| B1["Erro na tela: fora do universo"]
   B -->|sim| C{"Holding ou fora da v1?"}
