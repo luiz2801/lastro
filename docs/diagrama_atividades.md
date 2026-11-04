@@ -299,3 +299,31 @@ flowchart TD
   M -->|não| O[Fim; saída 0]
   N --> O
 ```
+
+## GUI: abrir um ativo (ADR 0022 e 0023)
+
+Abrir a página só lê o que está em disco. A rede vem do clique, ou do caso de ativo sem nenhum cache.
+
+```mermaid
+flowchart TD
+  A["valuation gui: ?ticker=PETR4"] --> B{"Ticker no universo?"}
+  B -->|não| B1["Erro na tela: fora do universo"]
+  B -->|sim| C{"Holding ou fora da v1?"}
+  C -->|sim| C1["Aviso: fora da v1, sem indicadores"]
+  C -->|não| D{"Cadastro e demonstrações em disco?"}
+  D -->|não| E["Rede automática: atualizar + series, uma tentativa por sessão"]
+  E -->|falhou| E1["Erro visível; só 'Tentar de novo' repete"]
+  E -->|ok| F
+  D -->|sim| F["Padroniza em memória e em cache (mtime na chave)"]
+  F --> G{"Cotação do papel em disco?"}
+  G -->|não| G1["'—' com o motivo; indicadores contábeis seguem"]
+  G -->|sim| H["carregar_series: LTM vigente na 1ª divulgação, market cap com F(c)"]
+  H --> I["Aba Geral: cartões, cotação, múltiplos com anomalias, indicadores, pares"]
+  I --> J{"Clique em Comparar com o Ibovespa?"}
+  J -->|sim| J1["Mede as empresas em disco, mesmo tipo"]
+  F --> K{"Rodada em saida/?"}
+  K -->|não| K1["Botão Rodar valuation"]
+  K -->|sim| L["Aba Valuation: lê os CSVs, sem recalcular"]
+  M["Botão Atualizar"] --> N["Outro processo: atualizar + series + rodar"]
+  N --> O["Invalida o cache; falha fica na tela"]
+```

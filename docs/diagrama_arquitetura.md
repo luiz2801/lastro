@@ -130,6 +130,7 @@ flowchart LR
         l_graf["matplotlib"]
         l_net["requests · yfinance"]
         l_xls["openpyxl (só importação XLSX)"]
+        l_gui["streamlit · plotly (grupo opcional gui)"]
     end
 
     subgraph ARQ["Arquivos locais"]

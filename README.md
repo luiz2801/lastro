@@ -76,7 +76,7 @@ um token gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
 ## Estrutura
 
 - `src/valuation/`: código, em camadas `data` → `contabil` → `projecao` → `custo_capital` →
-  `modelos` → `analise` → `saida`, mais `perfil`.
+  `modelos` → `analise` → `saida`, mais `perfil`; `servicos` e `gui` no topo, ao lado de `cli.py`.
 - `config/`: `settings.yaml` (parâmetros globais), `mapeamento_contas.yaml` (plano de contas
   padronizado), `cadastro_manual.csv` (holdings e escala de ações), `setores.yaml` e
   `empresas/{TICKER}.yaml` (ajustes e premissas de cada empresa).
@@ -181,9 +181,16 @@ Pilotos: PETR4, VALE3 e WEGE3.
   `qa.json`, `historico.csv`, `valores_reais.csv` (deflacionado pelo IPCA do Focus) e cinco gráficos
   PNG em PT-BR (football field, cascata da ponte, heatmaps de sensibilidade, histórico × projeção,
   composição do valor); `--sem-graficos` suprime os PNG.
+- **GUI local** (Sprint GUI 1, ADR 0022 e 0023): `uv sync --group gui && uv run valuation gui` abre
+  `http://127.0.0.1:8501`. Início com favoritas; por ativo, cotação, múltiplos em série com tratamento de
+  anomalias, indicadores, comparação com pares e Ibovespa e o valuation do último `rodar`. Abrir não usa
+  rede. Múltiplos em série só desde 31/03/2020, porque a CVM não publica a quantidade de ações antes.
 - **Ainda não**: o que está na seção 12 do `guia.md` (Fase 11, extensões).
 
 ## Decisões que completam ou divergem do `CLAUDE.md`
+
+- **GUI (ADR 0022 e 0023):** Streamlit + Plotly, sem conta na tela. A série de múltiplos começa em
+  31/03/2020, com o fator de split na data da composição e o LTM a partir da 1ª divulgação.
 
 Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
 

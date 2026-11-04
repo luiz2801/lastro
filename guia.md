@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.44 — 2026-11-04**
+**Versão 1.45 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -552,7 +552,7 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 |---|---|---|
 | 11 | `rodar-setor` (lote por setor) já existe (ADR 0019); falta screening e resumo consolidado entre empresas. Só entra se o usuário pedir: modo em lote/screening, SOTP/NAV para holdings, Monte Carlo, deck de commodities, tratamento de JCP, diluição | `rodar` é uma empresa por vez; o motor (funções puras) já aceita qualquer `PremissasEmpresa` |
 
-Também fora do código hoje: legendas nos gráficos PNG, abas da GUI (S4 e S5 da Sprint GUI 1), ERP implícito do Ibovespa (ADR 0018,
+Também fora do código hoje: legendas nos gráficos PNG, indicadores novos e Basileia na GUI (catálogo em `docs/backlog.md`), série histórica das médias de pares e Ibovespa, ERP implícito do Ibovespa (ADR 0018,
 proposto; `docs/backlog.md`).
 
 | Carteira C4–C6 | Proventos e agenda (fonte a validar), alocação e alvos (`alvos.yaml`), tela. Falta também o golden dos indicadores novos (margem líquida, dívida líquida/EBITDA, ROE de PETR4 ou WEGE3: depende da conferência do usuário) | `docs/backlog.md`, "Carteira pessoal"; ADR 0020. `posicao.calcular_posicoes` já reproduz a carteira (reusa `transacoes.ordenar` e `aplicar_quantidade`) |

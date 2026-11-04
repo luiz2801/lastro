@@ -2,7 +2,7 @@
 
 Mostra a **visão externa** do sistema: quem o usa, o que pede e quais sistemas externos ele consulta. O *como* está nos outros diagramas (índice em [`diagramas.md`](diagramas.md)): fluxo em [atividades](diagrama_atividades.md), ordem das chamadas em [sequência](diagrama_sequencia.md) e [interação](diagrama_interacao.md). Contratos e parâmetros ficam no [`guia.md`](../guia.md).
 
-O sistema é uma **CLI** (`valuation`, em [`cli.py`](../src/valuation/cli.py)) de uso pessoal. Cada comando é um caso de uso; a tabela da seção 5 liga cada um ao seu comando.
+O sistema é uma **CLI** (`valuation`, em [`cli.py`](../src/valuation/cli.py)) de uso pessoal, com uma GUI local (`valuation gui`, UC19 a UC21). Cada comando é um caso de uso; a tabela da seção 5 liga cada um ao seu comando.
 
 > **Notação.** O Mermaid não tem diagrama de casos de uso; ele é desenhado como `flowchart`: elipse = caso de uso, retângulo arredondado = ator, linha cheia = associação, tracejada com `«include»`/`«extend»` = relações entre casos de uso (a seta sai de quem inclui e chega em quem é incluído; no `«extend»` sai da extensão e chega no caso-base), seta de **especialização** = generalização.
 
@@ -195,6 +195,9 @@ flowchart LR
 | UC17 Consultar posição e resultado | `carteira posicao` | `carteira/posicao`, `data/precos` |
 | UC18 Consultar indicadores do ativo | `indicadores [--anos N] [--explicar]` | `analise/indicadores`, `contabil/`, `modelos/multiplos`, `saida/glossario` |
 | UC16 Navegar pelo menu | `valuation` (sem comando) | `cli._menu_interativo`, `universo` |
+| UC19 Ver um ativo na GUI | `valuation gui`, `?ticker=` | `gui/`, `servicos/historico_mercado`, `servicos/comparacao`, `servicos/resultados` |
+| UC20 Atualizar pela GUI | botões "Atualizar", "Atualizar favoritas" e "Rodar valuation" | `servicos/atualizacao`, que chama `atualizar`, `series`, `rodar` e `favoritos atualizar` |
+| UC21 Baixar as séries da GUI | `series TICKER` | `servicos/historico_mercado`, `data/cvm.coletar_series`, `data/precos` |
 
 ## 6. Especificação dos casos de uso principais
 

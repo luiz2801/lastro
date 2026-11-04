@@ -8,7 +8,7 @@ divergência, valem o código, o `guia.md` e os ADRs, nessa ordem.
 
 Valuation de ações da B3 em Python, uso pessoal e local, sem recomendação de investimento. Uma
 empresa por execução (`valuation rodar TICKER`); por setor, `valuation rodar-setor SETOR` (ADR 0019). Não financeiras: DCF (FCFF) + múltiplos.
-Financeiras: DDM / lucro residual + P/VP justificado + múltiplos.
+Financeiras: DDM / lucro residual + P/VP justificado + múltiplos. GUI local: `make gui` (ADR 0022).
 
 ## Camadas (de baixo para cima; a de cima nunca é importada pela de baixo)
 
@@ -66,3 +66,12 @@ vai no mesmo commit. Push só quando o usuário pedir.
 - Aponte a regra modular: "consulte apenas `REGRAS_DADOS.md`".
 - Separe entender de implementar, e use `/compact` em conversas longas.
 - Não corte: ADRs, docstrings, validações do `qa.py` e testes sintéticos.
+
+## GUI e serviços (ADR 0022 e 0023)
+
+- `servicos/` fica entre a CLI/GUI e o motor: sem biblioteca de terminal, avisos no retorno, erros de
+  domínio. Na CLI, `_padronizar`, `_mercado`, `_macro` e `_cotacoes` são invólucros, porque os testes
+  trocam `cli.DIR_*` e esses nomes.
+- `gui/` não faz conta e não usa rede ao abrir: lê `_em_cache` e `ler_cadastro_processado`, nunca
+  `carregar_cadastro`, que iria à rede com o TTL vencido.
+- Nada em `gui/` pode se chamar como um pacote (`valuation.py`): o Streamlit põe a pasta no `sys.path`.

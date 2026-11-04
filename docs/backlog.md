@@ -574,6 +574,15 @@ Pedido do usuário (2026-11-03): "o máximo de métricas possíveis", inclusive 
 e caixa. O catálogo completo, com fórmula proposta e estado do dado, está em **"Catálogo de métricas
 a acrescentar"** (aba Geral, abaixo). Nenhuma entra na sprint GUI 1 sem passar pela regra 7.
 
+### Estado da sprint (2026-11-04)
+
+S1 a S6 entregues. Limites conhecidos:
+
+- Indicadores novos do catálogo e Basileia não entraram (regra 7, sem decisão). Média de pares e do
+  Ibovespa só com o valor de hoje.
+- Primeira abertura de um ativo: 5 a 9 s, acima da meta de 2 s de GUI-93. Depois do cache, 0,05 s por clique.
+- Comparar com o Ibovespa fica num botão, por custar 40 s na primeira vez.
+
 ### Critério de pronto da sprint
 
 - `uv sync --group gui && valuation gui` abre `http://127.0.0.1:8501` sem rede e sem erro, mostra
