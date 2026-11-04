@@ -314,7 +314,7 @@ sem nenhuma conta feita na camada de tela.
 - Testes à mão: série sintética com preço e LTM conhecidos; ponto sem LTM disponível = NaN, não zero.
 
 **S3 — Esqueleto Streamlit** (GUI-01, 02, 03, 90, 91, 92, 97)
-- `pyproject.toml`: grupo opcional `gui` (`streamlit`, `plotly`, versões fixadas no ADR/lock);
+- `pyproject.toml`: grupo opcional `gui` (`streamlit==1.66.0`, `plotly==7.1.0`);
   `[project.scripts]` ganha o comando via `valuation gui` (subcomando em `cli.py` que chama
   `streamlit run src/valuation/gui/app.py --server.address 127.0.0.1` com
   `browser.gatherUsageStats=false`) e `make gui`. Se `streamlit` não estiver instalado, mensagem
@@ -378,6 +378,57 @@ sem nenhuma conta feita na camada de tela.
    B3 inteira? Entra na sprint seguinte.
 6. **Janela do histórico**: 10 anos (CLAUDE.md) ou o que o yfinance entregar? Preço ≥ 10 anos é
    confiável para todas as empresas do universo? **[VALIDAR]** por amostra.
+
+### Respostas do usuário (2026-11-03)
+
+1. **P/L histórico: (b)**, preço de cada data ÷ LPA do LTM vigente, ponto mensal. ✅
+2. **Defasagem: data de divulgação** do ITR/DFP. ✅ (fallback quando a CVM não trouxer a data:
+   fim do período + 45 dias no ITR e + 90 dias na DFP; **[VALIDAR]** `DT_RECEB` no arquivo real.)
+3. **Ações no tempo: em análise pelo usuário.** Levantamento feito em 2026-11-03 com `Ticker.splits`
+   do yfinance, 2016-11 a 2026-11, nos 76 tickers do universo: **84 eventos em 43 tickers**.
+   - Desdobramentos grandes: MGLU3 (8:1 em 2017 e 2019, 4:1 em 2020), PRIO3 (10:1 em 2019, 5:1 em
+     2021), CPLE3 e IGTI11 (10:1), HAPV3/EQTL3/ASAI3/RADL3 (5:1), WEGE3 (1,3 em 2018 e 2:1 em 2021),
+     BBAS3 (2:1 em 2024), VIVT3 e FLRY3 (2:1).
+   - Grupamentos (fator < 1): **MGLU3 10:1 em 2024-05-27** e **HAPV3 15:1 em 2025-06-06**.
+   - Bonificações (fatores 1,01 a 1,4, que o Yahoo também registra como split): ITUB4, BBDC3/4,
+     ITSA4, LREN3, CMIG4, EGIE3, GGBR4, RADL3 e outras. Mudam a quantidade de ações do mesmo jeito.
+   - **Achados que afetam o desenho:** (i) o `Close` do yfinance, mesmo com `auto_adjust=False`, vem
+     **ajustado por splits** (só os dividendos ficam de fora), então preço histórico e quantidade
+     atual de ações estão na mesma base, mas a quantidade da **CVM por data** está na base da época
+     (WEGE3 em 2020 tem metade das ações de hoje, ADR 0003); (ii) o yfinance **não é exaustivo** nem
+     garantido (conferir contra a composição de capital da CVM: salto de ações sem split
+     correspondente ou o inverso é aviso); (iii) a lista completa está na Etapa S2 como fixture
+     (`tests/fixtures/splits_universo.csv`, a criar).
+   - **Proposta** (aguarda confirmação): market cap(t) = `Close` ajustado(t) × ações da CVM vigentes
+     em t × F(t), com F(t) = produto dos fatores de split posteriores a t; assim a quantidade
+     histórica real é usada sem supor ações constantes (emissões e recompras entram), e o resultado
+     não depende de a quantidade atual representar o passado.
+4. **Referência no gráfico: mediana e média, com alternância na tela; janelas 10 anos, 5 anos e
+   atual.** ✅ Pendente: critério de anomalias (ver "Perguntas abertas").
+5. **Média de referência: pares do setor e B3.** ✅ com a ressalva de "B3" abaixo.
+6. **Janela do histórico: 10 anos.** ✅
+7. **Dependências: Streamlit e Plotly** (o usuário escreveu "plotpy"; assumido Plotly, a biblioteca
+   que o Streamlit renderiza; PlotPy é de Qt/desktop). Versões fixadas na S3: `streamlit==1.66.0`
+   (2026-10-14; a 1.66.1 de 2026-10-21 tem menos de 14 dias) e `plotly==7.1.0` (2026-09-15).
+   Confirmadas no PyPI em 2026-11-03.
+
+### Perguntas abertas (para fechar antes da S2)
+
+- **Anomalias com IQR (Tukey)** é aplicável. Proposta: (1) descartar primeiro o múltiplo ≤ 0 (já é o
+  padrão do projeto, indefinido); (2) nos positivos restantes, calcular Q1 e Q3 **na escala
+  logarítmica** (P/L é assimétrico à direita; na escala linear a cerca superior fica tão frouxa que
+  quase nada seria cortado) e descartar o que sair de Q1 − 1,5·IQR a Q3 + 1,5·IQR; (3) o corte vale
+  **só para a média e a mediana de referência** da janela escolhida, a série continua inteira no
+  gráfico, com os pontos descartados em cinza; (4) caixa "ignorar anomalias" ligada por padrão, e a
+  tela mostra quantos pontos foram descartados. Aceitar?
+- **"Atual"** na escolha de janela significa só o marcador do valor de hoje (sem média), ou a média
+  dos últimos 12 meses? Assumido: marcador do valor atual.
+- **"B3"** = os 76 componentes do Ibovespa de `config/universo_ibovespa.csv` (não as ~400 companhias
+  listadas), usando só as empresas já baixadas e padronizadas, com o rótulo "Ibovespa (n = X)". Mediana
+  (a média sofre com outliers) e média, financeiras separadas das demais (P/L e P/VP não se comparam
+  entre os dois grupos). Para a série histórica da B3, o custo é o de calcular a série de todas as
+  empresas: fica em **valor de hoje na S4** e **série histórica na sprint seguinte**. Aceitar?
+- **Confirmar a proposta do item 3** (market cap histórico com ações da CVM por data).
 
 ### Critério de pronto da sprint
 
