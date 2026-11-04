@@ -1,12 +1,14 @@
-"""Ponto de entrada do `streamlit run`. Rota: `?ticker=PETR4` abre o ativo; sem ele, o início."""
+"""Entrada do `streamlit run`. Rotas: `?ticker=PETR4`, `?pagina=perfil`; sem nada, o início."""
 
 from __future__ import annotations
+
+import datetime as dt
 
 import streamlit as st
 
 from valuation.config import ErroConfiguracao
 from valuation.data.cadastro import normalizar_ticker
-from valuation.gui import ativo, inicio, navegacao
+from valuation.gui import ativo, inicio, navegacao, pagina_perfil
 
 
 def principal() -> None:
@@ -14,7 +16,9 @@ def principal() -> None:
     ticker = st.query_params.get("ticker")
     try:
         navegacao.mostrar()
-        if ticker:
+        if st.query_params.get("pagina") == navegacao.PAGINA_PERFIL:
+            pagina_perfil.mostrar(dt.date.today())
+        elif ticker:
             ativo.mostrar(normalizar_ticker(ticker))
         else:
             inicio.mostrar()

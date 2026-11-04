@@ -7,7 +7,8 @@ import datetime as dt
 import pandas as pd
 import streamlit as st
 
-from valuation.gui import acoes, dados, grafico
+from valuation.gui import acoes, dados, grafico, navegacao
+from valuation.perfil import NomePerfil
 from valuation.perfil.parametros import parametros_do_perfil
 from valuation.saida import formato as fo
 from valuation.servicos import atualizacao as atu
@@ -37,20 +38,43 @@ def _sem_rodada(ticker: str) -> None:
         acoes.mostrar_falha(execucao)
 
 
-def _perfil(hoje: dt.date, r: res.Resultado) -> None:
-    efetivo, motivo = dados.perfil_efetivo(hoje)
+def _rodar_com_perfil(ticker: str, perfil: NomePerfil) -> None:
+    """O ponderado não é refeito na tela: o perfil muda o horizonte, e este, o de cada cenário."""
+    st.warning(
+        f"Para ver o valor com o perfil {perfil}, é preciso rodar de novo. Isso sobrescreve a "
+        "pasta de hoje em `saida/`; o questionário gravado não muda."
+    )
+    if st.button(f"Rodar com perfil {perfil}", key="rodar_com_perfil"):
+        execucao = acoes.executar(
+            f"Rodando {ticker} com perfil {perfil}", atu.rodar_valuation(ticker, perfil)
+        )
+        if execucao.ok:
+            st.rerun()
+        acoes.mostrar_falha(execucao)
+
+
+def _perfil(hoje: dt.date, r: res.Resultado, ticker: str) -> None:
+    override = navegacao.override()
+    efetivo, motivo = dados.perfil_efetivo(hoje, override)
     rodada = str(r.resumo.get("perfil", "—"))
     if efetivo is None:
         st.warning(f"Perfil do investidor indisponível: {motivo} A rodada usou o perfil {rodada}.")
         return
     validade = f" (válido até {efetivo.registro.valido_ate:%d/%m/%Y})" if efetivo.registro else ""
+    if override is not None:
+        validade = " (escolhido nesta sessão)"
     p = parametros_do_perfil(efetivo.perfil, dados.settings().perfil)
     st.caption(
         f"Perfil {efetivo.perfil}{validade}: margem de segurança {p.margem_seguranca:.0%}, pesos "
         f"{p.peso_pessimista:.0%} / {p.peso_base:.0%} / {p.peso_otimista:.0%}."
     )
-    if rodada != efetivo.perfil:
-        st.warning(f"A rodada usou o perfil {rodada}, e o atual é {efetivo.perfil}: rode de novo.")
+    if rodada == efetivo.perfil:
+        return
+    if override is not None:
+        st.info(f"Os valores abaixo são da rodada com o perfil {rodada}.")
+        _rodar_com_perfil(ticker, override)
+        return
+    st.warning(f"A rodada usou o perfil {rodada}, e o atual é {efetivo.perfil}: rode de novo.")
 
 
 def _cenarios(r: res.Resultado) -> None:
@@ -153,7 +177,7 @@ def mostrar(ticker: str, hoje: dt.date, base: dt.date, padronizada: emp.Padroniz
         f"Rodada de {r.data_base:%d/%m/%Y} (há {idade} d), com o preço daquele dia. "
         f"Modelo: {r.modelo.upper()}."
     )
-    _perfil(hoje, r)
+    _perfil(hoje, r, ticker)
     _cenarios(r)
     for aviso in [*r.avisos_rodada, *r.avisos]:
         st.warning(aviso)

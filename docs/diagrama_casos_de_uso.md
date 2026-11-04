@@ -198,6 +198,7 @@ flowchart LR
 | UC19 Ver um ativo na GUI | `valuation gui`, `?ticker=` | `gui/`, `servicos/historico_mercado`, `servicos/comparacao`, `servicos/grupos`, `servicos/resultados` |
 | UC20 Atualizar pela GUI | botões "Atualizar", "Atualizar favoritas", "Rodar valuation" e "Baixar séries" | `servicos/atualizacao`, que chama `atualizar`, `series`, `series-varios`, `rodar` e `favoritos atualizar` |
 | UC22 Gerenciar favoritas na GUI | ☆/★ no ativo, "Remover" no início | `gui/navegacao`, `gui/ativo`, `servicos/favoritas` |
+| UC23 Perfil na GUI | Barra lateral, `?pagina=perfil`, "Rodar com perfil X" | `gui/pagina_perfil`, `gui/navegacao`, `perfil/`, `servicos/atualizacao` |
 | UC21 Baixar as séries da GUI | `series TICKER`, `series-varios TICKERS...` | `servicos/historico_mercado`, `servicos/grupos`, `data/cvm.coletar_series_varios`, `data/precos` |
 
 ## 6. Especificação dos casos de uso principais

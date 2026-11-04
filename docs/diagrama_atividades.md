@@ -306,7 +306,11 @@ Abrir a página só lê o que está em disco. A rede vem do clique, ou do caso d
 
 ```mermaid
 flowchart TD
-  Z["Barra lateral: busca, Início"] --> A
+  Z["Barra lateral: busca, Início, Perfil"] --> A
+  Z --> Y["?pagina=perfil: validade, parâmetros, questionário"]
+  Y --> Y1{"Todas respondidas?"}
+  Y1 -->|não| Y2["Nada é gravado; diz quais faltam"]
+  Y1 -->|sim| Y3["perfil/: pontua, aplica vetos e grava o JSON; rodadas não mudam"]
   A["valuation gui: ?ticker=PETR4"] --> B{"Ticker no universo?"}
   B -->|não| B1["Erro na tela: fora do universo"]
   B -->|sim| C{"Holding ou fora da v1?"}
@@ -328,6 +332,8 @@ flowchart TD
   F --> K{"Rodada em saida/?"}
   K -->|não| K1["Botão Rodar valuation"]
   K -->|sim| L["Aba Valuation: lê os CSVs, sem recalcular"]
+  L --> R{"Perfil da sessão difere da rodada?"}
+  R -->|sim| R1["Aviso e botão Rodar com perfil X: rodar --perfil, em outro processo"]
   M["Botão Atualizar"] --> N["Outro processo: atualizar + series + rodar"]
   N --> O["Invalida o cache; falha fica na tela"]
 ```

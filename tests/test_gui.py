@@ -496,3 +496,64 @@ def test_favoritar_e_remover_pela_tela_sem_rede(ambiente: Path) -> None:
     at.button(key="remover_WEGE3").click().run()
     assert not at.exception
     assert "WEGE3" not in arquivo.read_text(encoding="utf-8")
+
+
+@pytest.fixture
+def perfil_em_disco(ambiente: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    caminho = ambiente / "perfil.json"
+    monkeypatch.setattr(cfg, "CAMINHO_PERFIL", caminho)
+    return caminho
+
+
+def _responder(at: AppTest, ate: int = 10) -> None:
+    for i in range(1, ate + 1):
+        at.radio(key=f"resposta_q{i}").set_value(at.radio(key=f"resposta_q{i}").options[0])
+
+
+def test_questionario_exige_todas_e_nao_grava_pela_metade(perfil_em_disco: Path) -> None:
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.query_params["pagina"] = "perfil"
+    at.run()
+    assert all(at.radio(key=f"resposta_q{i}").value is None for i in range(1, 11))  # nada marcado
+    _responder(at, ate=9)
+    next(b for b in at.button if b.label == "Gravar perfil").click().run()
+    assert any("Faltam: 10" in e.value for e in at.error)
+    assert not perfil_em_disco.exists()
+
+
+def test_questionario_grava_com_a_pontuacao_do_motor(perfil_em_disco: Path) -> None:
+    from valuation.perfil import registro as reg
+
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.query_params["pagina"] = "perfil"
+    at.run()
+    _responder(at)
+    next(b for b in at.button if b.label == "Gravar perfil").click().run()
+    assert not at.exception
+    gravado = reg.ler(perfil_em_disco)
+    # Primeira alternativa em todas: a soma dos pontos dela decide, e a leitura confere de novo.
+    assert gravado.respostas == {f"q{i}": 1 for i in range(1, 11)}
+    assert gravado.perfil == reg.criar_registro(gravado.respostas, gravado.data).perfil
+    assert any("Perfil " in s.value for s in at.subheader)
+
+
+def test_override_nao_toca_o_json_e_oferece_rodar(
+    perfil_em_disco: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _com_dados(perfil_em_disco.parent)
+    _rodada_dcf(perfil_em_disco.parent)
+    at = _abrir("WEGE3")
+    at.sidebar.selectbox(key="perfil_override").select("arrojado").run()
+    assert not at.exception
+    assert not perfil_em_disco.exists()
+    assert any(b.label == "Rodar com perfil arrojado" for b in at.button)
+    chamados: list[object] = []
+
+    def executar(comandos: object, *_: object) -> atu.Execucao:
+        chamados.append(comandos)
+        return atu.Execucao(True)
+
+    monkeypatch.setattr(atu, "executar", executar)
+    at.button(key="rodar_com_perfil").click().run()
+    assert chamados
+    assert [c[3:] for c in chamados[0]] == [("rodar", "WEGE3", "--perfil", "arrojado")]

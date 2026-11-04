@@ -14,7 +14,7 @@ import streamlit as st
 
 from valuation import config as cfg
 from valuation.data import cadastro as cad
-from valuation.perfil import ErroPerfil
+from valuation.perfil import ErroPerfil, NomePerfil
 from valuation.perfil import registro as reg
 from valuation.projecao import premissas as pm
 from valuation.saida import favoritos as fav
@@ -271,10 +271,12 @@ def setor(chave: str | None) -> cfg.Setor | None:
     return cfg.carregar_setores(cfg.CAMINHO_SETORES).get(chave)
 
 
-def perfil_efetivo(hoje: dt.date) -> tuple[reg.PerfilEfetivo | None, str | None]:
-    """Perfil do JSON e sua validade, sem pedir nada; sem perfil válido, `None` e o motivo."""
+def perfil_efetivo(
+    hoje: dt.date, override: NomePerfil | None = None
+) -> tuple[reg.PerfilEfetivo | None, str | None]:
+    """Override da sessão ou o perfil do JSON; sem perfil válido, `None` e o motivo."""
     try:
-        return reg.resolver_perfil(cfg.CAMINHO_PERFIL, hoje, None), None
+        return reg.resolver_perfil(cfg.CAMINHO_PERFIL, hoje, override), None
     except ErroPerfil as e:
         return None, str(e)
 

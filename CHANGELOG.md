@@ -2,6 +2,11 @@
 
 ## [Não lançado]
 
+### Sprint GUI 2, D: perfil do investidor na tela (GUI-70, ADR 0024)
+- `gui/pagina_perfil.py`: perfil gravado, validade, parâmetros e questionário sem resposta pré-marcada, com a pontuação e
+  os vetos de `perfil/`. "Perfil nesta sessão" na barra lateral, sem tocar o JSON; na aba Valuation, botão "Rodar com
+  perfil X" (`rodar --perfil`), porque o perfil muda o horizonte e o ponderado não pode ser refeito na tela.
+
 ### Sprint GUI 2, C: navegação e favoritas pela tela (ADR 0024)
 - Barra lateral em todas as páginas, com busca por ticker e nome e botão Início. ☆/★ no cabeçalho do ativo e "Remover" no
   início, com a validação da CLI e sem download ao favoritar. `servicos/favoritas.py`, `gui/navegacao.py`.

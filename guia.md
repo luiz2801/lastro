@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.50 — 2026-11-04**
+**Versão 1.51 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -51,11 +51,11 @@
 | Saída | `saida/{csv,arquivos,real,graficos,glossario,favoritos,formato}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG, glossário das métricas, favoritos e formatação pt-BR comum à CLI e à GUI (seção 19) |
 | Carteira | `carteira/{transacoes,arquivo,posicao}.py` | ✅ Etapas C1 e C2 do ADR 0020: transações, histórico validado, importação CSV/XLSX, posição, preço médio e resultado (seção 21); a C3 (indicadores por ativo) está em `analise/indicadores.py` e no comando `indicadores`; proventos e alocação ainda não (seção 12) |
 | Serviços | `servicos/{empresa,mercado,indicadores,resultados,atualizacao,cache,derivados,historico_mercado,comparacao,grupos,favoritas}.py` | Cadastro, padronização, preços, market cap, macro, indicadores e leitura da última rodada (extraídos de `cli.py`), mais fluxos da CLI em outro processo, estado do cache e série histórica (seção 22) |
-| GUI | `gui/{app,navegacao,dados,estado,acoes,inicio,ativo,geral,aba_valuation,grafico}.py` | Sprint GUI 1: início, página de ativo, barra de estado, atualização a pedido e abas Geral e Valuation (seção 23) |
+| GUI | `gui/{app,navegacao,dados,estado,acoes,inicio,ativo,geral,aba_valuation,pagina_perfil,grafico}.py` | Sprint GUI 1: início, página de ativo, barra de estado, atualização a pedido e abas Geral e Valuation (seção 23) |
 | CLI | `cli.py` | `gui`, `series`, `series-varios`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 823 testes (812 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 827 testes (816 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -1015,7 +1015,7 @@ faixa_52s)` e `ponte_de_cenario(r, cenario)`.
 
 **`atualizacao.py`**: a atualização a pedido roda os fluxos da CLI em outro processo (`python -m
 valuation`, entrada em `valuation/__main__.py`), para valer exatamente o mesmo `atualizar`/`rodar`.
-`baixar_dados`, `rodar_valuation`, `atualizar_ativo` e `atualizar_favoritas` montam os comandos;
+`baixar_dados`, `baixar_series_grupo`, `rodar_valuation(ticker, perfil=None)`, `atualizar_ativo` e `atualizar_favoritas` montam os comandos;
 `executar(comandos, ao_ler) -> Execucao(ok, saida, falhou_em)` para no primeiro que falhar e nunca
 levanta por falha do comando.
 
@@ -1093,8 +1093,11 @@ usar o relógio e passa `agora`/`base` para baixo.
 - `estado.py`: barra de estado (data-base, idade de cada fonte, expansor de avisos).
 - `acoes.py`: `executar(rotulo, comandos)` num `st.status`, com as últimas linhas ao vivo; falha fica
   na tela (`mostrar_falha`) e o cache é invalidado ao fim.
-- `navegacao.py`: barra lateral de todas as páginas: busca no universo com o nome do cadastro e botão Início. A escolha
-  é tratada em callback, que esvazia o campo: sem isso, voltar ao início reabriria o ativo.
+- `navegacao.py`: barra lateral de todas as páginas: busca no universo com o nome do cadastro, Início, Perfil e "Perfil
+  nesta sessão" (`override()`, nunca grava). A escolha da busca é tratada em callback, que esvazia o campo: sem isso,
+  voltar ao início reabriria o ativo.
+- `pagina_perfil.py` (`?pagina=perfil`): perfil gravado, validade, parâmetros, e questionário sem resposta pré-marcada. Só
+  coleta as respostas; pontuação, vetos e validade são de `perfil/`. Falta de resposta não grava nada.
 - `inicio.py`: tabela das favoritas (último `resumo.csv`), abrir e remover cada uma e "Atualizar favoritas".
 - `geral.py`: aba Geral: cartões, cotação (GUI-12), múltiplo em série (seletor de indicador, de
   referência e janela de 10 ou 5 anos), indicadores Hoje | Histórico, endividamento, liquidez e caixa
@@ -1104,7 +1107,9 @@ usar o relógio e passa `agora`/`base` para baixo.
   caminho de rede dessas linhas). Pares
   aparecem ao abrir; o Ibovespa só no botão, porque mede dezenas de empresas (40 s na primeira vez, com 63 empresas).
 - `aba_valuation.py`: só lê `saida/`: cenários, ponderado, preço máximo, upside, Ke implícito × hurdle,
-  custo de capital, checagens, football field e ponte (Plotly, a partir dos CSVs), perfil lido do JSON.
+  custo de capital, checagens, football field e ponte (Plotly, a partir dos CSVs), perfil do JSON ou da sessão. O
+  ponderado **não é refeito na tela**: o perfil muda o horizonte, e este, o valor de cada cenário. Override diferente da
+  rodada mostra "Rodar com perfil X" (`rodar --perfil`), que sobrescreve a pasta do dia.
   Sem rodada, botão "Rodar valuation". **Não se chama `valuation.py`:** o Streamlit põe a pasta do script
   no `sys.path`, e o arquivo esconderia o pacote (`test_nenhum_modulo_da_gui_esconde_um_pacote`).
 - `grafico.py`: figuras Plotly. `indicador` desenha o histórico anual + LTM: fora da referência com ✕ cinza,

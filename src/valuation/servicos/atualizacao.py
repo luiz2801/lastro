@@ -32,8 +32,10 @@ def baixar_series_grupo(tickers: Sequence[str], sem_demonstracoes: Sequence[str]
     return [*comandos, comando("series-varios", *tickers)]
 
 
-def rodar_valuation(ticker: str) -> list[Comando]:
-    return [comando("rodar", ticker)]
+def rodar_valuation(ticker: str, perfil: str | None = None) -> list[Comando]:
+    if perfil is None:
+        return [comando("rodar", ticker)]
+    return [comando("rodar", ticker, "--perfil", perfil)]
 
 
 def atualizar_ativo(ticker: str) -> list[Comando]:
