@@ -18,6 +18,7 @@ from rich.table import Table
 
 from valuation import __version__
 from valuation.analise import cenarios as cen
+from valuation.analise import indicadores as ind
 from valuation.analise import sensibilidade as sens
 from valuation.carteira import ErroCarteira
 from valuation.carteira import arquivo as carteira_arq
@@ -742,6 +743,93 @@ def historico(
         if chave in tabela_m.columns:
             tabela.add_row(rotulo, *(_formatar(v, unidade) for v in tabela_m[chave]))
     console.print(tabela)
+
+
+def _anos_encerrados(indice: pd.Index, base: dt.date) -> list[object]:
+    """Exercícios (índice anual) encerrados em 31/12 até a data-base."""
+    return [a for a in indice if dt.date(int(a), 12, 31) <= base]
+
+
+@app.command()
+def indicadores(
+    ticker: str = typer.Argument(..., help="Ex.: PETR4."),
+    anos: int = typer.Option(5, "--anos", min=1, help="Quantos exercícios mostrar."),
+    data_base: str | None = typer.Option(
+        None, "--data-base", help="AAAA-MM-DD (padrão: settings)."
+    ),
+    forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+    explicar: bool = EXPLICAR,
+) -> None:
+    """Indicadores por ativo: margens, alavancagem, retornos e múltiplos de mercado (Etapa C3)."""
+    agora = dt.datetime.now(dt.UTC)
+    try:
+        settings = carregar_settings()
+        base = (
+            dt.date.fromisoformat(data_base)
+            if data_base
+            else settings.resolver_data_base(agora.date())
+        )
+        p = _padronizar(ticker, settings)
+        financeira = p.plano.tipo == "financeira"
+        data_bal = _data_balanco(p.contas, base)
+        if financeira:
+            anual = fin.metricas(per.anual(p.contas))
+            ltm = fin.metricas_ltm(p.contas, dt_fim=data_bal)
+            definicoes = ind.HISTORICOS_FINANCEIRA
+            calcular = ind.historicos_financeira
+        else:
+            aliquota = settings.impostos.aliquota_nominal
+            anual = nf.metricas(per.anual(p.contas), aliquota_nominal=aliquota, ajustes=p.ajustes)
+            ltm = nf.metricas_ltm(
+                p.contas, aliquota_nominal=aliquota, dt_fim=data_bal, ajustes=p.ajustes
+            )
+            definicoes = ind.HISTORICOS
+            calcular = ind.historicos
+        anual = anual.loc[_anos_encerrados(anual.index, base)].tail(anos)
+        tabela_h = calcular(pd.concat([anual, ltm.to_frame().T]))
+        colunas = [*map(str, anual.index), f"LTM {data_bal:%m/%Y}"]
+    except ValueError as e:
+        raise _erro(f"--data-base inválida: {e}") from e
+    except (ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroContabil) as e:
+        raise _erro(str(e)) from e
+
+    tabela = Table(title=f"Indicadores — {', '.join(p.empresa.tickers)}")
+    tabela.add_column("Indicador")
+    for coluna in colunas:
+        tabela.add_column(coluna, justify="right")
+    for chave, (rotulo, unidade, _) in definicoes.items():
+        tabela.add_row(rotulo, *(_formatar(v, unidade) for v in tabela_h[chave]))
+    console.print(tabela)
+
+    avisos: list[str] = []
+    mercado_mostrado: tuple[str, ...] = ()
+    try:
+        mk = _mercado(ticker, settings, base, agora, forcar)
+        f = _fundamentos(p, mk.cap, settings, base, mk.macro.cambio.valor)
+        multiplos = ind.de_mercado(f, financeira=financeira)
+        avisos.extend(mk.avisos)
+    except (ErroDadosExternos, ErroContabil, ErroModelo, ErroConfiguracao, ErroDownload) as e:
+        avisos.append(f"Múltiplos de mercado indisponíveis: {e}")
+    else:
+        mercado_mostrado = tuple(multiplos)
+        validado = mk.precos.get(cad.normalizar_ticker(ticker)) or next(iter(mk.precos.values()))
+        preco = validado.valor
+        mercado = Table(title=f"De mercado em {base.isoformat()}")
+        mercado.add_column("Indicador")
+        mercado.add_column("Valor", justify="right")
+        mercado.add_row("Preço", _brl(preco))
+        mercado.add_row("Market cap (R$ mi)", _formatar(f.market_cap, "mi"))
+        mercado.add_row("LTM até", f.data_balanco.isoformat())
+        for nome, valor in multiplos.items():
+            unidade = "%" if nome == "dividend_yield" else "x"
+            mercado.add_row(mt.ROTULOS[cast(mt.NomeMultiplo, nome)], _formatar(valor, unidade))
+        console.print(mercado)
+    for aviso in avisos:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
+    if explicar:
+        chaves = [d[2] for d in definicoes.values()]
+        _legenda(gl.legenda_indicadores(chaves, mercado_mostrado))
+    console.print("Estudo pessoal; não é recomendação de investimento.")
 
 
 @app.command()

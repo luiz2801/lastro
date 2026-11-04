@@ -41,19 +41,21 @@ flowchart LR
         uc11(["UC11 Gerenciar favoritos"])
         uc12(["UC12 Estimar ERP implícito"])
         uc13(["UC13 Consultar glossário"])
+        uc18(["UC18 Consultar indicadores<br/>do ativo"])
         uc16(["UC16 Navegar pelo menu interativo"])
         carteira(["UC14 e UC15<br/>Lançar e importar transações<br/>(seção 4)"])
         obter(["Obter cotações e macro"])
     end
 
     inv --- uc01 & uc02 & uc03 & uc04 & uc05 & uc06 & uc07
-    inv --- uc08 & uc09 & uc10 & uc11 & uc12 & uc13 & uc16 & carteira
+    inv --- uc08 & uc09 & uc10 & uc11 & uc12 & uc13 & uc16 & uc18 & carteira
 
     uc05 -.->|"«include»"| obter
     uc07 -.->|"«include»"| obter
     uc08 -.->|"«include»"| obter
     uc09 -.->|"«include»"| obter
     uc12 -.->|"«include»"| obter
+    uc18 -.->|"«include» (múltiplos de mercado)"| obter
     uc10 -.->|"«include» (por empresa)"| uc09
     uc11 -.->|"«include» (só os desatualizados)"| uc09
     uc16 -.->|"«include»"| uc09
@@ -62,7 +64,7 @@ flowchart LR
     obter --- bcb
     obter --- mkt
 
-    class uc01,uc02,uc03,uc04,uc05,uc06,uc07,uc08,uc09,uc10,uc11,uc12,uc13,uc16,carteira,obter caso
+    class uc01,uc02,uc03,uc04,uc05,uc06,uc07,uc08,uc09,uc10,uc11,uc12,uc13,uc16,uc18,carteira,obter caso
     style SIS fill:#fafafa,stroke:#adb5bd,color:#1a1a1a
     classDef ator fill:#dbe4ff,stroke:#3b5bdb,color:#1a1a1a
     classDef externo fill:#e9ecef,stroke:#868e96,color:#1a1a1a
@@ -72,7 +74,7 @@ flowchart LR
 Leitura:
 
 - `UC10 Avaliar setor`, `UC11 Gerenciar favoritos` (subcomando `atualizar`) e `UC16` reaproveitam o `UC09` em vez de reimplementá-lo. Em UC10 e UC11, uma falha numa empresa **não** interrompe as demais.
-- `Obter cotações e macro` nunca roda sozinho: é o trecho comum que `mercado`, `wacc`, `comparar`, `rodar` e `erp` compartilham (`cli._mercado`). Só ele fala com BCB, Tesouro, Yahoo e brapi.
+- `Obter cotações e macro` nunca roda sozinho: é o trecho comum que `mercado`, `wacc`, `comparar`, `indicadores`, `rodar` e `erp` compartilham (`cli._mercado`). Só ele fala com BCB, Tesouro, Yahoo e brapi.
 - `UC02` é o **único** que baixa DFP, ITR e composição do capital. Os demais leem os parquets de `data/processed/` e, sem eles, pedem para rodar `atualizar`. O cadastro (CVM e FCA) é a exceção: vários comandos o carregam por `_carregar_cadastro`, sempre com cache e TTL.
 
 ## 3. Detalhe de UC09 — Avaliar empresa (`valuation rodar TICKER`)
@@ -140,7 +142,7 @@ Escolha do modelo: `tipo_modelo = nao_financeira` usa o DCF do FCFF e `financeir
 
 ## 4. Carteira pessoal (ADR 0020, Etapas C1 e C2)
 
-Camada à parte do valuation: não lê CVM. Só a posição (UC17) consulta cotações. As Etapas C3 a C6 (indicadores, proventos, alocação) ainda não existem; quando entrarem, ganham casos de uso próprios aqui.
+Camada à parte do valuation: não lê CVM. Só a posição (UC17) consulta cotações. A Etapa C3 (indicadores por ativo, UC18) é um comando do ativo, e não da carteira, por isso está no diagrama da seção 2. As Etapas C4 a C6 (proventos, alocação, tela) ainda não existem; quando entrarem, ganham casos de uso próprios aqui.
 
 ```mermaid
 flowchart LR
@@ -191,6 +193,7 @@ flowchart LR
 | UC14 Lançar transação | `carteira lancar` | `carteira/` |
 | UC15 Importar transações | `carteira importar` | `carteira/` |
 | UC17 Consultar posição e resultado | `carteira posicao` | `carteira/posicao`, `data/precos` |
+| UC18 Consultar indicadores do ativo | `indicadores [--anos N] [--explicar]` | `analise/indicadores`, `contabil/`, `modelos/multiplos`, `saida/glossario` |
 | UC16 Navegar pelo menu | `valuation` (sem comando) | `cli._menu_interativo`, `universo` |
 
 ## 6. Especificação dos casos de uso principais
@@ -225,6 +228,13 @@ Fluxo principal e variantes, no formato da aula (fluxo principal de eventos × f
 - **Pré-condição:** nenhuma (o arquivo `carteira/transacoes.csv` é criado no primeiro uso). **Pós-condição:** transações acrescentadas ao fim do arquivo; o que já estava nele não é reescrito.
 - **Fluxo principal:** (1) o investidor informa a transação (UC14) ou um arquivo CSV/XLSX (UC15); (2) o sistema normaliza e valida cada linha por tipo; (3) valida o histórico inteiro (carteira gravada + novas), por data; (4) acrescenta tudo.
 - **Excepcional:** qualquer linha inválida, venda acima da posição, evento sem posição ou data futura ⇒ **nada é gravado**, cada erro sai com o número da linha, saída 1. Linha idêntica a uma já gravada (reimportação) é recusada, salvo `--permitir-duplicadas`.
+
+### UC18 — Consultar indicadores do ativo
+
+- **Pré-condição:** `atualizar` já rodou para o ticker. **Pós-condição:** nada é gravado.
+- **Fluxo principal:** (1) o investidor pede os indicadores de um ticker; (2) o sistema padroniza as demonstrações e calcula as métricas por exercício encerrado e no LTM; (3) mostra margem líquida, margem EBITDA, dívida líquida/EBITDA, ROE e ROIC (financeiras: ROE, payout, ROA e ativo/PL); (4) obtém preço e market cap e mostra P/L, P/VP, dividend yield, EV/EBITDA e EV/EBIT; (5) com `--explicar`, imprime a legenda.
+- **Variante:** preço ou composição de capital indisponíveis ⇒ a tabela histórica sai e a de mercado é trocada por um aviso (saída 0).
+- **Excepcional:** ticker sem dados baixados, plano de contas incompatível (holding) ou `--data-base` inválida ⇒ erro, saída 1.
 
 ### UC17 — Consultar posição e resultado
 

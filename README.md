@@ -40,6 +40,7 @@ make atualizar                               # = valuation atualizar --tickers P
 uv run valuation qa PETR4                    # controles de qualidade; sai com 1 se houver erro
 uv run valuation historico PETR4             # métricas anuais + LTM (R$ milhões)
 uv run valuation historico PETR4 --trimestral
+uv run valuation indicadores PETR4           # margens, dívida/EBITDA, ROE, ROIC e múltiplos de mercado
 uv run valuation cobertura --tickers PETR4,VALE3,WEGE3
 uv run valuation mercado PETR4               # preço, market cap, Ibovespa, dólar, Selic, IPCA, Rf
 uv run valuation perfil                      # questionário de perfil (--mostrar, --refazer)

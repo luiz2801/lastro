@@ -1,5 +1,6 @@
 import datetime as dt
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -18,7 +19,7 @@ from valuation.data import cadastro as cad
 from valuation.data import macro as mac
 from valuation.data import precos as prc
 from valuation.data.cvm import url_cadastro, url_documento, url_fca
-from valuation.data.validacao import manual
+from valuation.data.validacao import ErroDadosExternos, manual
 from valuation.perfil import registro as reg
 from valuation.perfil.questionario import QUESTIONARIO
 from valuation.projecao import premissas as pm
@@ -505,6 +506,59 @@ def test_rodar_financeira(mercado_banco: Path, caminho_perfil: Path) -> None:
     texto = " ".join(resultado.output.split())
     assert "DDM — WEGE3" in texto
     assert "preço máximo de compra para o perfil moderado" in texto
+
+
+def _sem_bordas(saida: str) -> str:
+    """Texto da tabela Rich sem as linhas de borda, com espaços normalizados."""
+    return " ".join(re.sub(r"[┃│┏┓┡┩└┘┌┐━─╇┳┯┷┿╋┼├┤┬┴╈]", " ", saida).split())
+
+
+def test_indicadores(mercado_falso: Path) -> None:
+    resultado = CliRunner().invoke(app, ["indicadores", "WEGE3", "--anos", "2", "--explicar"])
+    assert resultado.exit_code == 0, resultado.output
+    texto = _sem_bordas(resultado.output)
+    assert "LTM 12/2025" in texto
+    # DFP sintética: lucro da controladora 9, receita 100, dívida 100 - caixa 30, EBITDA 20 + 8
+    # de D&A, PL 100 - 5 de minoritários (ROE = 9 / 95; ROIC contra o capital do ano anterior).
+    assert "Margem líquida 9,0% 9,0% 9,0%" in texto
+    assert "Dívida líquida / EBITDA 2,5x 2,5x 2,5x" in texto
+    assert "ROE (PL inicial) — 9,5% 9,5%" in texto
+    # Market cap 900; EV = 900 + dívida 100 - caixa 30 + minoritários 5 = 975.
+    assert "Preço R$ 10,00" in texto
+    assert "P/L 100,0x" in texto  # 900 / lucro 9
+    assert "P/VP 9,5x" in texto  # 900 / PL da controladora 95
+    assert "EV/EBITDA 34,8x" in texto  # 975 / 28
+    assert "EV/EBIT 48,8x" in texto  # 975 / 20
+    assert "Legenda" in texto and "Dív. líq./EBITDA" in texto
+
+
+def test_indicadores_sem_mercado_ainda_mostra_o_historico(
+    mercado_falso: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def sem_rede(*args: object, **kwargs: object) -> cli._Mercado:
+        raise ErroDadosExternos("sem preço")
+
+    monkeypatch.setattr(cli, "_mercado", sem_rede)
+    resultado = CliRunner().invoke(app, ["indicadores", "WEGE3"])
+    assert resultado.exit_code == 0, resultado.output
+    texto = _sem_bordas(resultado.output)
+    assert "Margem líquida" in texto
+    assert "Múltiplos de mercado indisponíveis: sem preço" in texto
+
+
+def test_indicadores_data_base_invalida(weg_sintetica: Path) -> None:
+    resultado = CliRunner().invoke(app, ["indicadores", "WEGE3", "--data-base", "ontem"])
+    assert resultado.exit_code == 1
+    assert "--data-base inválida" in resultado.output
+
+
+def test_indicadores_de_financeira(mercado_banco: Path) -> None:
+    resultado = CliRunner().invoke(app, ["indicadores", "WEGE3"])
+    assert resultado.exit_code == 0, resultado.output
+    texto = _sem_bordas(resultado.output)
+    assert "ROE (PL inicial)" in texto and "Payout" in texto and "Ativo / PL" in texto
+    assert "Dívida líquida" not in texto  # não se aplica a bancos
+    assert "P/VP" in texto and "EV/EBITDA" not in texto
 
 
 def test_wacc(mercado_falso: Path) -> None:

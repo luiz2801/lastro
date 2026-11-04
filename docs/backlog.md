@@ -507,7 +507,9 @@ Feita em 2026-11-03 (`carteira/posicao.py`, `valuation carteira posicao`). Sem C
 
 *Entrega:* `valuation carteira posicao` em tabela Rich, com aviso de cotação defasada.
 
-### Etapa C3 — Indicadores por ativo (RF-004)
+### Etapa C3 — Indicadores por ativo (RF-004) ✅ (golden pendente)
+
+Feita em 2026-11-03 (`analise/indicadores.py`, `valuation indicadores`, glossário). **Falta o item 3** (golden): os números de PETR4 estão no terminal, mas só entram em `tests/golden/` depois que o usuário os conferir com o release.
 
 1. `analise/indicadores.py`: margem líquida, dívida líquida/EBITDA e ROE das não financeiras
    (esta última usa o PL inicial, como o ROE das financeiras). Os indicadores já existentes

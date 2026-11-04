@@ -16,7 +16,7 @@ flowchart BT
 
     subgraph APL["Aplicação (camadas de cálculo e saída)"]
         saida["saida<br/>csv, graficos, arquivos,<br/>real, glossario, favoritos"]
-        analise["analise<br/>cenarios, sensibilidade"]
+        analise["analise<br/>cenarios, sensibilidade,<br/>indicadores"]
         modelos["modelos<br/>dcf, ddm, ponte, multiplos"]
         projecao["projecao<br/>premissas, sugestor,<br/>projetor, financeira, escrita"]
         custo["custo_capital<br/>beta, capm, kd, wacc,<br/>erp_implicito"]
@@ -82,7 +82,7 @@ Notas sobre desvios da imagem "em linha" do `CLAUDE.md` (seção 3, `data → co
 | `projecao` | Schema das premissas, sugestor, resolução por cenário, projeção ano a ano (FCFF e DDM) | `ErroProjecao` |
 | `custo_capital` | Beta, Ke (CAPM), Kd, WACC, ERP implícito | `ErroCustoCapital` |
 | `modelos` | DCF, ponte EV → equity, DDM com lucro residual, múltiplos | `ErroModelo` |
-| `analise` | Cenários ponderados pelo perfil, taxas implícitas, matrizes de sensibilidade | (usa `ErroModelo`) |
+| `analise` | Cenários ponderados pelo perfil, taxas implícitas, matrizes de sensibilidade, indicadores por ativo | (usa `ErroModelo`) |
 | `saida` | CSV, `meta.json`, valores reais, gráficos, glossário, favoritos | — |
 | `carteira` | Transações da carteira pessoal: validação e importação CSV/XLSX | `ErroCarteira` |
 | `universo` | Setores da CVM e empresas do Ibovespa por setor | — |

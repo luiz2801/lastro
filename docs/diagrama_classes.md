@@ -865,7 +865,7 @@ classDiagram
 
 - As classes `_Execucao`, `_Padronizada`, `_Mercado`, `_Par` e `_Comparaveis` são **privadas de `cli.py`**: agrupam o que o comando `rodar` carrega entre as etapas. Nenhuma camada inferior as conhece.
 - `CenarioSaida` uniformiza DCF e DDM para a camada de saída (`ponte` só existe no DCF).
-- Classes da carteira: `Transacao` (C1) e `Posicao`, `Preco`, `LinhaCarteira` e `ResumoCarteira` (C2, `carteira/posicao.py`, puras). As etapas C3 a C6 (indicadores, proventos, alocação, tela) ainda não existem (ADR 0020).
+- Classes da carteira: `Transacao` (C1) e `Posicao`, `Preco`, `LinhaCarteira` e `ResumoCarteira` (C2, `carteira/posicao.py`, puras). A Etapa C3 (`analise/indicadores.py`) é só de funções puras sobre `DataFrame` e `Fundamentos`, sem classe nova. As etapas C4 a C6 (proventos, alocação, tela) ainda não existem (ADR 0020).
 
 ## 7. Exceções de domínio
 

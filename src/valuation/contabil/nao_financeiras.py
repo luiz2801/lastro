@@ -167,6 +167,8 @@ def metricas(
     m["patrimonio_liquido_total"] = c("patrimonio_liquido_total")
     m["minoritarios"] = c("minoritarios")
     m["investimentos"] = c("investimentos")
+    # PL da controladora do início do período (linha anterior; a 1ª linha fica NaN): base do ROE.
+    m["pl_controladora_inicio"] = (m["patrimonio_liquido_total"] - m["minoritarios"]).shift(1)
     m["capital_investido"] = m["patrimonio_liquido_total"] + m["divida_liquida"]
     medio = (m["capital_investido"] + m["capital_investido"].shift(1)) / 2
     m["roic"] = (m["nopat"] / medio).where(medio > 0)

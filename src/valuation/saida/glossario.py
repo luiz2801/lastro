@@ -22,7 +22,7 @@ class Termo:
     interpretacao: str
 
 
-GRUPOS = ("Custo de capital", "Modelos", "Múltiplos", "Perfil e decisão")
+GRUPOS = ("Custo de capital", "Modelos", "Múltiplos", "Indicadores", "Perfil e decisão")
 
 _T = Termo
 TERMOS: tuple[Termo, ...] = (
@@ -251,7 +251,7 @@ TERMOS: tuple[Termo, ...] = (
         "Retorno sobre o patrimônio líquido",
         "Modelos",
         "Lucro da controladora sobre o PL da controladora.",
-        "Lucro líquido / PL médio",
+        "Lucro da controladora / PL da controladora do início do período",
         "ROE acima do Ke cria valor; o g sustentável é ROE x (1 - payout).",
     ),
     _T(
@@ -363,6 +363,61 @@ TERMOS: tuple[Termo, ...] = (
         "EBIT + D&A",
         "Pode ser ajustado por não recorrentes definidos no YAML da empresa.",
     ),
+    # --- Indicadores ------------------------------------------------------------------------
+    _T(
+        "margem_liquida",
+        "Margem líquida",
+        "Margem líquida",
+        "Indicadores",
+        "Quanto da receita líquida sobra como lucro para os acionistas da controladora.",
+        "Lucro líquido da controladora / receita líquida",
+        "Compare com a própria história e com pares do setor; commodities oscilam com o ciclo.",
+    ),
+    _T(
+        "margem_ebitda",
+        "Margem EBITDA",
+        "Margem EBITDA",
+        "Indicadores",
+        "Geração operacional de caixa por real de receita, antes de depreciação e impostos.",
+        "EBITDA (EBIT + D&A) / receita líquida",
+        "Mostra a eficiência operacional; é a margem que o DCF projeta e faz reverter à mediana.",
+    ),
+    _T(
+        "divida_liquida_ebitda",
+        "Dív. líq./EBITDA",
+        "Dívida líquida sobre EBITDA",
+        "Indicadores",
+        "Em quantos anos de EBITDA a dívida líquida seria paga.",
+        "(Dívida bruta - caixa e aplicações) / EBITDA ajustado; arrendamento na dívida (IFRS 16)",
+        "Negativo = caixa líquido. Acima de 3x pede atenção; indefinido (—) se o EBITDA é <= 0.",
+    ),
+    _T(
+        "roic",
+        "ROIC",
+        "Retorno sobre o capital investido",
+        "Indicadores",
+        "Retorno operacional após impostos sobre o capital que financia o negócio.",
+        "NOPAT / média do capital investido (PL + dívida líquida)",
+        "Acima do WACC a empresa cria valor; abaixo, destrói.",
+    ),
+    _T(
+        "roa",
+        "ROA",
+        "Retorno sobre o ativo",
+        "Indicadores",
+        "Lucro líquido gerado por real de ativo (financeiras).",
+        "Lucro líquido / ativo total do início do período",
+        "Em bancos é baixo por natureza; leia junto com a alavancagem.",
+    ),
+    _T(
+        "alavancagem",
+        "Ativo / PL",
+        "Alavancagem contábil",
+        "Indicadores",
+        "Quantas vezes o ativo é maior que o patrimônio líquido (financeiras).",
+        "Ativo total / patrimônio líquido consolidado",
+        "Alavancagem alta amplifica ROE e risco; o índice de Basileia não está na CVM.",
+    ),
 )
 
 _POR_CHAVE = {t.chave: t for t in TERMOS}
@@ -443,3 +498,8 @@ LEGENDA_WACC = ("rf", "erp", "beta", "ke", "kd", "wacc")
 def legenda_multiplos(nomes: Iterable[str]) -> tuple[str, ...]:
     """Legenda dos múltiplos que aparecem na tabela, mais LTM e quartis."""
     return (*nomes, *LEGENDA_MULTIPLOS)
+
+
+def legenda_indicadores(historicos: Iterable[str], mercado: Iterable[str]) -> tuple[str, ...]:
+    """Legenda do comando `indicadores`: os indicadores e múltiplos mostrados, mais LTM."""
+    return (*dict.fromkeys((*historicos, *mercado)), "ltm")

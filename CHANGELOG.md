@@ -2,6 +2,23 @@
 
 ## [Não lançado]
 
+### Carteira pessoal, Etapa C3: indicadores por ativo (ADR 0020, RF-004)
+- `src/valuation/analise/indicadores.py` (puro): `historicos` (margem líquida, margem EBITDA,
+  dívida líquida/EBITDA, ROE sobre o PL inicial e ROIC), `historicos_financeira` (ROE, payout, ROA,
+  ativo/PL) e `de_mercado` (P/L, P/VP, dividend yield, EV/EBITDA, EV/EBIT por `mt.multiplo`, a
+  mesma conta do `comparar`). Denominador ≤ 0 vira NaN. Os valores já existentes são só reexpostos.
+- `contabil/nao_financeiras.py`: nova coluna `pl_controladora_inicio` (PL total − minoritários da
+  linha anterior; no LTM, o balanço de 12 meses antes), base do ROE. Nada mais muda nas métricas.
+- `valuation indicadores TICKER [--anos N] [--data-base] [--forcar] [--explicar]`: tabela por
+  exercício encerrado + LTM e tabela "De mercado". Sem mercado (preço ou composição indisponível),
+  mostra o histórico e avisa. Financeiras: só os indicadores e múltiplos de equity.
+- Glossário: grupo novo "Indicadores" (margem líquida, margem EBITDA, dívida líquida/EBITDA, ROIC,
+  ROA, ativo/PL) e `legenda_indicadores`. Correção: a definição do ROE dizia "PL médio", mas o
+  código usa o PL do início do período.
+- Testes: `tests/test_indicadores.py` (à mão), `pl_controladora_inicio` em `test_nao_financeiras.py`
+  e quatro casos do comando em `test_cli.py` (657 testes, 646 passam). `guia.md` 1.35.
+- Pendente: golden dos indicadores novos (depende da conferência do usuário com o release).
+
 ### Backlog: validação cruzada dos fundamentos (yfinance × CVM)
 - `docs/backlog.md`: desenho, etapas V1 a V5, testes, limites e perguntas abertas da checagem de
   lucro, PL, ativo e receita contra o Yahoo, com alerta pedindo o release só quando divergir. Inclui a

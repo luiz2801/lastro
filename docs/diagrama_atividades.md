@@ -272,3 +272,30 @@ flowchart TD
   F --> G[Tabela Rich com totais e avisos]
 ```
 
+## 5. Indicadores por ativo (`indicadores`, ADR 0020, Etapa C3)
+
+Comando de consulta do ativo, sem gravação. O histórico não depende de rede; só os múltiplos de
+mercado dependem.
+
+```mermaid
+flowchart TD
+  A[indicadores TICKER --anos --data-base] --> B[_padronizar: contas padronizadas e plano da companhia]
+  B --> C{Plano}
+  C -->|não financeira| D[nf.metricas anual + metricas_ltm: inclui pl_controladora_inicio]
+  C -->|financeira| E[fin.metricas anual + metricas_ltm]
+  D --> F[Exercícios encerrados até a data-base + LTM]
+  E --> F
+  F --> G[ind.historicos / historicos_financeira: razões, denominador menor ou igual a zero = NaN]
+  G --> H[Tabela histórica]
+  H --> I[_mercado: preço, market cap e câmbio na data-base]
+  I -->|preço ou composição indisponível| W[Aviso: múltiplos de mercado indisponíveis]
+  I --> J[_fundamentos: LTM no último balanço, em BRL]
+  J --> K[ind.de_mercado: mt.multiplo, a mesma conta do comparar]
+  K --> L[Tabela de mercado]
+  H --> M{--explicar?}
+  L --> M
+  W --> M
+  M -->|sim| N[Legenda do glossário: gl.legenda_indicadores]
+  M -->|não| O[Fim; saída 0]
+  N --> O
+```

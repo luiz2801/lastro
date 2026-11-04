@@ -37,6 +37,12 @@ ANUAL = pd.DataFrame(
 )
 
 
+def test_pl_controladora_inicio_e_o_da_linha_anterior() -> None:
+    m = nf.metricas(ANUAL, aliquota_nominal=0.34)
+    assert pd.isna(m.loc[2024, "pl_controladora_inicio"])
+    assert m.loc[2025, "pl_controladora_inicio"] == 500 - 30  # PL total - minoritários de 2024
+
+
 def test_metricas_calculadas_a_mao() -> None:
     m = nf.metricas(ANUAL, aliquota_nominal=0.34).loc[2025]
     assert m["ebitda"] == 320
