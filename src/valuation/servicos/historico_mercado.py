@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from valuation.analise import anomalias as an
 from valuation.analise import indicadores as ind
 from valuation.analise import serie_multiplos as sm
 from valuation.config import DIR_PROCESSED, DIR_RAW, Settings
@@ -24,6 +25,8 @@ from valuation.data.http import SessaoHttp
 from valuation.data.validacao import ErroDadosExternos
 from valuation.modelos import ErroModelo
 from valuation.modelos import multiplos as mt
+from valuation.saida import arquivos as arq
+from valuation.servicos import comparacao as cmp
 from valuation.servicos import indicadores as sind
 from valuation.servicos.empresa import Padronizada
 
@@ -37,6 +40,30 @@ class SeriesMercado:
     vigencia: pd.Series  # data -> fim do período do LTM vigente
     inicio_composicao: dt.date | None
     avisos: list[str] = field(default_factory=list)
+    nao_positivos: pd.DataFrame | None = None  # data x múltiplo: True = métrica ≤ 0 (não é lacuna)
+
+
+@dataclass(frozen=True)
+class CartoesCotacao:
+    preco: float
+    data_preco: dt.date
+    faixa_52_semanas: tuple[float, float] | None
+    market_cap: float
+    dividend_yield: float
+
+
+@dataclass(frozen=True)
+class AnaliseMultiplo:
+    """Um múltiplo na janela escolhida: a série inteira, o que saiu da referência e por quê."""
+
+    nome: mt.NomeMultiplo
+    serie: pd.Series
+    filtro: an.Filtro
+    atual: float
+    referencia: float
+    descartados: pd.Series  # data -> motivo; inclui métrica ≤ 0
+    lacunas: int
+    aviso_referencia: str | None
 
 
 def _dir_precos(dir_raw: Path) -> Path:
@@ -218,4 +245,55 @@ def carregar_series(
     multiplos = pd.DataFrame(
         {n: sm.serie_multiplo(n, caps, vigentes, fundamentos) for n in nomes}, index=pontos
     )
-    return SeriesMercado(ticker, cotacao, multiplos, caps, vigentes, inicio_composicao, avisos)
+    nao_positivos = pd.DataFrame(
+        {n: sm.denominador_nao_positivo(n, vigentes[caps.notna()], fundamentos) for n in nomes},
+        index=pontos,
+    ).fillna(False)
+    return SeriesMercado(
+        ticker, cotacao, multiplos, caps, vigentes, inicio_composicao, avisos, nao_positivos
+    )
+
+
+def cartoes(series: SeriesMercado, base: dt.date) -> CartoesCotacao | None:
+    """Valores de hoje; `None` se não há fechamento até a data-base."""
+    fechamentos = series.cotacao.loc[series.cotacao.index <= pd.Timestamp(base), "close"].dropna()
+    if fechamentos.empty:
+        return None
+    caps = series.market_cap.dropna()
+    ultimo_dy = series.multiplos["dividend_yield"].iloc[-1] if len(series.multiplos) else None
+    return CartoesCotacao(
+        float(fechamentos.iloc[-1]),
+        pd.Timestamp(fechamentos.index[-1]).date(),
+        arq.faixa_52_semanas(series.cotacao, base),
+        float(caps.iloc[-1]) if not caps.empty else float("nan"),
+        float("nan") if ultimo_dy is None else float(ultimo_dy),
+    )
+
+
+def analisar_multiplo(
+    series: SeriesMercado,
+    nome: mt.NomeMultiplo,
+    janela_anos: int,
+    tipo: an.Referencia,
+    settings: Settings,
+    base: dt.date,
+) -> AnaliseMultiplo:
+    """Filtra a janela e calcula a referência. "Atual" é o último ponto, sem preenchimento."""
+    inicio = pd.Timestamp(base) - pd.DateOffset(years=janela_anos)
+    serie = series.multiplos.loc[series.multiplos.index > inicio, nome]
+    filtro = an.filtrar(serie, an.CLASSES[nome], cmp.corte_fixo(settings, nome))
+    motivos = filtro.descartados.copy()
+    if series.nao_positivos is not None and an.CLASSES[nome] is an.Classe.POSITIVO:
+        marcas = series.nao_positivos.loc[serie.index, nome]
+        extra = pd.Series("múltiplo ≤ 0", index=marcas[marcas].index, dtype="object")
+        motivos = pd.concat([motivos, extra]).sort_index()
+    return AnaliseMultiplo(
+        nome=nome,
+        serie=serie,
+        filtro=filtro,
+        atual=float(serie.iloc[-1]) if len(serie) else float("nan"),
+        referencia=an.referencia(filtro, tipo),
+        descartados=motivos,
+        lacunas=int(serie.isna().sum()) - int(motivos.index.isin(serie[serie.isna()].index).sum()),
+        aviso_referencia=an.AVISO_MEDIA_SIMPLES if tipo == "media_simples" else None,
+    )

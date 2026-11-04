@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.42 — 2026-11-04**
+**Versão 1.43 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -50,12 +50,12 @@
 | Análise | `analise/{cenarios,sensibilidade,indicadores,serie_multiplos,anomalias}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade, FCFF e DDM; indicadores por ativo (seção 20); série histórica de múltiplos e anomalias da GUI (seção 22) |
 | Saída | `saida/{csv,arquivos,real,graficos,glossario,favoritos,formato}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG, glossário das métricas, favoritos e formatação pt-BR comum à CLI e à GUI (seção 19) |
 | Carteira | `carteira/{transacoes,arquivo,posicao}.py` | ✅ Etapas C1 e C2 do ADR 0020: transações, histórico validado, importação CSV/XLSX, posição, preço médio e resultado (seção 21); a C3 (indicadores por ativo) está em `analise/indicadores.py` e no comando `indicadores`; proventos e alocação ainda não (seção 12) |
-| Serviços | `servicos/{empresa,mercado,indicadores,resultados,atualizacao,cache,historico_mercado}.py` | Cadastro, padronização, preços, market cap, macro, indicadores e leitura da última rodada (extraídos de `cli.py`), mais fluxos da CLI em outro processo, estado do cache e série histórica (seção 22) |
-| GUI | `gui/{app,dados,estado,acoes,inicio,ativo}.py` | Esqueleto da Sprint GUI 1: início, página de ativo, barra de estado, atualização a pedido (seção 23); abas Geral e Valuation ainda vazias |
-| CLI | `cli.py` | `gui`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
+| Serviços | `servicos/{empresa,mercado,indicadores,resultados,atualizacao,cache,historico_mercado,comparacao}.py` | Cadastro, padronização, preços, market cap, macro, indicadores e leitura da última rodada (extraídos de `cli.py`), mais fluxos da CLI em outro processo, estado do cache e série histórica (seção 22) |
+| GUI | `gui/{app,dados,estado,acoes,inicio,ativo,geral,grafico}.py` | Sprint GUI 1: início, página de ativo, barra de estado, atualização a pedido e aba Geral (seção 23); aba Valuation ainda vazia |
+| CLI | `cli.py` | `gui`, `series`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 761 testes (750 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 776 testes (765 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -174,6 +174,7 @@ mediana de 5a), `_resumo` (linha do `resumo.csv`), `_mostrar_valuation`. Finance
 
 | Comando | Parâmetros | O que faz | Efeito de cada parâmetro |
 |---|---|---|---|
+| `series TICKER` | `--forcar` | Baixa cotação de 10 anos de cada classe, splits e ITR antigos para os gráficos da GUI (`hm.baixar_series`, ADR 0023) | Sem cotação do próprio papel ⇒ saída 1; as demais faltas viram aviso. Não muda nada do que `rodar` lê |
 | `gui` | `--porta N` (8501) | Abre a GUI em `127.0.0.1`, sem telemetria e sem a pergunta de e-mail do Streamlit (seção 23) | Sem o grupo `gui` instalado ⇒ mensagem pedindo `uv sync --group gui` e saída 1. A CLI não importa `streamlit` |
 | `versao` | — | Imprime versão e Python | — |
 | `cadastro buscar TEXTO` | `--forcar` | Busca por ticker/razão/nome/CNPJ no cadastro | `--forcar` ignora TTL e rebaixa cadastro+FCA |
@@ -589,6 +590,7 @@ proposto; `docs/backlog.md`).
 | `test_serie_multiplos.py` | F(c), base de hoje, `conferir_splits`, pontos mensais, divulgação e fallback, vigência sem olhar o futuro, múltiplos à mão com lacunas, Log-IQR, corte fixo, Tukey, marcação e referências à mão | `_composicao`, `_fund`, `_serie` |
 | `test_servicos_historico_mercado.py` | série de ponta a ponta à mão: P/L com data de divulgação, lacuna antes da composição, split sem degrau, avisos, ITR só em memória, `baixar_series` | `p`, `_cotacao`, `_composicao`, `_splits`, `_divulgacoes` |
 | `test_series_dados.py` | `coletar_series`, `ler_divulgacoes` (1ª versão), composição combinada, `splits` e caches sem rede | `SessaoFalsa`, `yfinance` falso em `sys.modules` |
+| `test_servicos_comparacao.py` | pares, cortes, referência de grupo com motivos, Ibovespa por tipo, `medir_de_hoje` à mão, análise de um múltiplo (descartes, lacunas, janela) e cartões | `_fund`, `_series`, `_padronizada` |
 | `test_favoritos.py` | lista de favoritos (carga, chave inválida, ida e volta), último `resumo.csv` (pasta mais recente, `br`/`intl`, sem avisos, sem rodada), comandos `favoritos`, `adicionar`/`remover` e `atualizar` com `rodar` falso | `tmp_path`, `cli.CAMINHO_FAVORITOS`/`DIR_SAIDA` trocados |
 | `test_http.py` | cache, TTL, 304, retry, fallback | `sessao_falsa` |
 | `test_cvm.py` | parsing, escala, versões, `coletar` | `zip_cvm("dfp_cia_aberta_2025")` etc. |
@@ -1013,6 +1015,17 @@ LTM vigente), `inicio_composicao`, `avisos`. `baixar_series(empresa, ticker, set
 sessao, forcar, ...)` é quem usa a rede: cotação de cada classe, splits e `cvm.coletar_series`. Os ITR
 antigos entram só em memória (`_contas_da_serie`); `contas_padronizadas.parquet` não é regravado.
 
+Na mesma entrada: `cartoes(series, base) -> CartoesCotacao | None` (preço, faixa de 52 semanas pela
+conta de `arq.faixa_52_semanas`, market cap, DY) e `analisar_multiplo(series, nome, janela_anos, tipo,
+settings, base) -> AnaliseMultiplo` (série da janela, `filtro`, `atual` = último ponto sem preenchimento,
+`referencia`, `descartados` com o motivo, inclusive métrica ≤ 0, e `lacunas`).
+
+**`comparacao.py`**: `tickers_pares` (saiu de `cli.py`), `corte_fixo(settings, nome)`, `medir_de_hoje(p,
+settings, base, ...) -> Medida(ticker, fundamentos, motivo)` (market cap pelo último fechamento em disco,
+sem validação cruzada, e LTM do último balanço), `medir_varios`, `tickers_ibovespa(universo, financeira)`
+(mesmo tipo, holdings fora) e `referencia_do_grupo(medidas, nome, tipo, settings) -> ReferenciaGrupo(valor,
+n, descartadas)`, com o mesmo tratamento de anomalias dos gráficos.
+
 **Puros de apoio:**
 - `analise/serie_multiplos.py`: `fator_splits`, `acoes_na_base_atual` (quantidade × F(dt_refer), a data
   da **composição**, não a do preço), `conferir_splits` (tolerância 5%), `pontos_mensais`,
@@ -1044,6 +1057,12 @@ usar o relógio e passa `agora`/`base` para baixo.
 - `acoes.py`: `executar(rotulo, comandos)` num `st.status`, com as últimas linhas ao vivo; falha fica
   na tela (`mostrar_falha`) e o cache é invalidado ao fim.
 - `inicio.py`: busca no universo, tabela das favoritas (último `resumo.csv`) e "Atualizar favoritas".
+- `geral.py`: aba Geral: cartões, cotação (GUI-12), múltiplo em série (seletor de indicador, de
+  referência e janela de 10 ou 5 anos), indicadores Hoje | Histórico e médias de comparação. Pares
+  aparecem ao abrir; o Ibovespa só no botão, porque mede dezenas de empresas (40 s na primeira vez, com 63 empresas).
+- `grafico.py`: figuras Plotly. Um eixo; azul = série, cinza = fora da referência, tinta = referência e
+  hoje. A escala segue os pontos válidos; descartado acima dela fica preso à borda com ▲, e o valor
+  verdadeiro no tooltip. Métrica ≤ 0 (sem valor de múltiplo) aparece em 0 com ✕.
 - `ativo.py`: estados de erro (fora do universo, holding/FII, sem dados contábeis), cabeçalho, barra de
   estado, "Atualizar" (`atualizar` + `rodar`) e as abas.
 

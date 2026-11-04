@@ -16,10 +16,12 @@ def _py(codigo: str) -> atu.Comando:
 
 def test_comandos_chamam_a_cli_pelo_mesmo_interpretador() -> None:
     assert atu.baixar_dados("PETR4") == [
-        (sys.executable, "-m", "valuation", "atualizar", "--tickers", "PETR4")
+        (sys.executable, "-m", "valuation", "atualizar", "--tickers", "PETR4"),
+        (sys.executable, "-m", "valuation", "series", "PETR4"),
     ]
-    assert atu.atualizar_ativo("PETR4")[1][3:] == ("rodar", "PETR4")
-    assert atu.atualizar_favoritas()[0][3:] == ("favoritos", "atualizar")
+    assert atu.atualizar_ativo("PETR4")[2][3:] == ("rodar", "PETR4")
+    favoritas = atu.atualizar_favoritas(["PETR4"])
+    assert [c[3:] for c in favoritas] == [("series", "PETR4"), ("favoritos", "atualizar")]
 
 
 def test_executar_entrega_cada_linha_e_junta_stderr() -> None:

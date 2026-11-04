@@ -9,7 +9,7 @@ import streamlit as st
 
 from valuation.contabil import ErroContabil
 from valuation.data import cadastro as cad
-from valuation.gui import acoes, dados, estado
+from valuation.gui import acoes, dados, estado, geral
 from valuation.servicos import atualizacao as atu
 from valuation.universo import EmpresaUniverso
 
@@ -98,9 +98,10 @@ def mostrar(ticker: str) -> None:
     base = dados.settings().resolver_data_base(agora.date())
     _cabecalho(ticker, empresa, membro)
     avisos: list[str] = []
+    padronizada_ok = None
     try:
-        padronizada = dados.padronizada(ticker, cadastro, empresa.cd_cvm)
-        avisos += padronizada.avisos
+        padronizada_ok = dados.padronizada(ticker, cadastro, empresa.cd_cvm)
+        avisos += padronizada_ok.avisos
     except ErroContabil as e:
         st.error(f"Sem dados contábeis utilizáveis: {e}")
     estado.mostrar(base, dados.estado_fontes(ticker, empresa.cd_cvm), agora, avisos)
@@ -111,8 +112,11 @@ def mostrar(ticker: str) -> None:
             st.rerun()
         acoes.mostrar_falha(execucao)
 
-    geral, valuation = st.tabs(["Geral", "Valuation"])
-    with geral:
-        st.info("Cotação e indicadores: em construção.")
+    aba_geral, valuation = st.tabs(["Geral", "Valuation"])
+    with aba_geral:
+        if padronizada_ok is None:
+            st.info("— sem dados contábeis para os indicadores.")
+        else:
+            geral.mostrar(ticker, padronizada_ok, cadastro, base)
     with valuation:
         st.info("Valuation por cenário: em construção.")

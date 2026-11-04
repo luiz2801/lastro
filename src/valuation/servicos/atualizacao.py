@@ -20,8 +20,8 @@ def comando(*argumentos: str) -> Comando:
 
 
 def baixar_dados(ticker: str) -> list[Comando]:
-    """Só as demonstrações da CVM: usado quando o ativo não tem nenhum cache."""
-    return [comando("atualizar", "--tickers", ticker)]
+    """Demonstrações da CVM e séries de mercado: usado quando o ativo não tem nenhum cache."""
+    return [comando("atualizar", "--tickers", ticker), comando("series", ticker)]
 
 
 def rodar_valuation(ticker: str) -> list[Comando]:
@@ -32,8 +32,8 @@ def atualizar_ativo(ticker: str) -> list[Comando]:
     return [*baixar_dados(ticker), *rodar_valuation(ticker)]
 
 
-def atualizar_favoritas() -> list[Comando]:
-    return [comando("favoritos", "atualizar")]
+def atualizar_favoritas(tickers: Sequence[str]) -> list[Comando]:
+    return [*(comando("series", t) for t in tickers), comando("favoritos", "atualizar")]
 
 
 @dataclass(frozen=True)

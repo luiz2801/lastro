@@ -70,7 +70,7 @@ def _favoritas(hoje: dt.date) -> None:
         if colunas[i % len(colunas)].button(ticker, key=f"abrir_{ticker}"):
             abrir(ticker)
     if st.button("Atualizar favoritas"):
-        execucao = acoes.executar("Atualizando favoritas", atu.atualizar_favoritas())
+        execucao = acoes.executar("Atualizando favoritas", atu.atualizar_favoritas(tickers))
         if execucao.ok:
             st.rerun()
         acoes.mostrar_falha(execucao)

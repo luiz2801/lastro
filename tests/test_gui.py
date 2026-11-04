@@ -191,6 +191,95 @@ def test_botao_atualizar_chama_o_fluxo_da_cli(
     assert "Falhou em `valuation rodar WEGE3`" in _textos(at)
 
 
+def _com_series(raiz: Path) -> None:
+    """Série sintética: 9 ações a R$ 10; DFP sintética tem lucro 9 e PL 100 (5 de minoritários)."""
+    _com_dados(raiz)
+    precos = raiz / "raw" / "precos"
+    precos.mkdir(parents=True)
+    indice = pd.date_range(end="2026-10-30", periods=24, freq="ME", name="data")
+    pd.DataFrame({"close": 10.0, "adj_close": 10.0, "volume": 1.0}, index=indice).to_parquet(
+        precos / "yf_WEGE3.SA_20161030_20261030.parquet"
+    )
+    pd.DataFrame(
+        {"fator": []}, index=pd.DatetimeIndex([], name="data"), dtype="float64"
+    ).to_parquet(precos / "splits_WEGE3.SA.parquet")
+    pd.DataFrame(
+        {
+            "dt_refer": [indice[12]],
+            "qt_acao_ordin_cap_integr": [9],
+            "qt_acao_pref_cap_integr": [0],
+            "qt_acao_total_cap_integr": [9],
+            "qt_acao_ordin_tesouro": [0],
+            "qt_acao_pref_tesouro": [0],
+            "qt_acao_total_tesouro": [0],
+        }
+    ).to_parquet(raiz / "processed" / "cvm" / "5410" / "composicao_capital.parquet")
+
+
+def _metricas(at: AppTest) -> dict[str, str]:
+    return {m.label: m.value for m in at.metric}
+
+
+def test_aba_geral_mostra_cartoes_e_graficos_do_cache(ambiente: Path) -> None:
+    _com_series(ambiente)
+    at = _abrir("WEGE3")
+    assert not at.exception
+    metricas = _metricas(at)
+    assert metricas["Preço"] == "R$ 10,00"
+    assert metricas["Market cap (R$ mi)"] == "0"  # 90 reais: formato em milhões, sem casas
+    assert metricas["Margem líquida"] == "9,0%"
+    assert len(at.get("plotly_chart")) == 2
+    assert "ponto(s) fora da referência" in _textos(at)
+    assert "A CVM só publica a quantidade de ações" in _textos(at)  # lacuna com o motivo
+
+
+def test_seletores_trocam_sem_rede(ambiente: Path) -> None:
+    _com_series(ambiente)
+    at = _abrir("WEGE3")
+    at.selectbox(key="referencia_serie").select("media_simples").run()
+    assert not at.exception
+    assert "sensível a extremos" in _textos(at)
+    at.selectbox(key="indicador_serie").select("p_vp").run()
+    assert not at.exception
+    at.radio(key="janela_serie").set_value("5 anos").run()
+    at.radio(key="periodo_cotacao").set_value("Máximo").run()
+    at.radio(key="visao_indicadores").set_value("Histórico").run()
+    assert not at.exception
+    tabela = at.dataframe[0].value
+    assert "Margem líquida" in tabela.index
+
+
+def test_sem_cotacao_em_disco_nao_vai_a_rede(ambiente: Path) -> None:
+    _com_dados(ambiente)
+    at = _abrir("WEGE3")
+    assert not at.exception
+    assert "sem cotação de WEGE3 em disco" in _textos(at)
+    assert _metricas(at)["Margem líquida"] == "9,0%"  # indicadores contábeis seguem
+
+
+def test_comparacao_com_ibovespa_so_no_clique_e_com_o_que_esta_em_disco(ambiente: Path) -> None:
+    _com_series(ambiente)
+    at = _abrir("WEGE3")
+    colunas = at.dataframe[0].value.columns
+    assert not any("Ibovespa" in c for c in colunas)
+    at.button(key="botao_ibovespa_WEGE3").click().run()
+    assert not at.exception
+    assert "Ibovespa (n = 1)" in at.dataframe[0].value.columns
+
+
+def test_comando_series_baixa_e_avisa(ambiente: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _com_dados(ambiente)
+    monkeypatch.setattr(cli, "DIR_RAW", ambiente / "raw")
+    monkeypatch.setattr(cli, "DIR_PROCESSED", ambiente / "processed")
+    monkeypatch.setattr(cli, "criar_sessao", lambda: object())
+    monkeypatch.setattr(cli, "_carregar_cadastro", lambda *_: CADASTRO)
+    monkeypatch.setattr(cli.hm, "baixar_series", lambda *a, **k: ["XXXX4 sem cotação"])
+    resultado = CliRunner().invoke(app, ["series", "wege3"])
+    assert resultado.exit_code == 0, resultado.output
+    assert "XXXX4 sem cotação" in resultado.output
+    assert "Séries de WEGE3 gravadas" in " ".join(resultado.output.split())
+
+
 def test_gui_sem_dependencia_de_terminal() -> None:
     pasta = Path(APP).parent
     for arquivo in pasta.rglob("*.py"):

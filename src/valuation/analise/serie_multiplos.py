@@ -137,6 +137,20 @@ def serie_multiplo(
     return pd.Series(valores, dtype="float64", name=nome)
 
 
+def denominador_nao_positivo(
+    nome: mt.NomeMultiplo,
+    vigentes: pd.Series,
+    fundamentos: Mapping[pd.Timestamp, mt.Fundamentos],
+) -> pd.Series:
+    """Datas em que o múltiplo é NaN por métrica ≤ 0 (prejuízo, por exemplo), e não por lacuna."""
+    metrica = mt.DEFINICOES[nome][1]
+    marcas: dict[pd.Timestamp, bool] = {}
+    for data, fim in vigentes.items():
+        f = None if pd.isna(fim) else fundamentos.get(fim)
+        marcas[pd.Timestamp(str(data))] = f is not None and bool(f.metrica(metrica) <= 0)
+    return pd.Series(marcas, dtype="bool")
+
+
 def cortar_periodo(serie: pd.DataFrame, periodo: Periodo, base: dt.date) -> pd.DataFrame:
     """Trecho da série no período até a data-base (GUI-12)."""
     fim = pd.Timestamp(base)

@@ -2,6 +2,14 @@
 
 ## [Não lançado]
 
+### Sprint GUI 1, S4: aba Geral
+- `gui/geral.py` e `gui/grafico.py`: cartões (preço, 52 semanas, market cap, DY), cotação com seletor de
+  período, múltiplos em série com referência (mediana, média winsorizada ou simples, esta com aviso),
+  janela de 10 ou 5 anos, pontos fora da referência em cinza com a contagem e o motivo, indicadores Hoje
+  | Histórico e comparação com pares do setor e Ibovespa (valor de hoje, só empresas em disco).
+- `servicos/comparacao.py`; `hm.cartoes` e `hm.analisar_multiplo`. Comando `valuation series TICKER`,
+  acionado por "Atualizar" e "Atualizar favoritas".
+
 ### Sprint GUI 1, S2: série histórica de cotação e múltiplos (ADR 0023)
 - `analise/serie_multiplos.py` e `analise/anomalias.py` (puros), `servicos/historico_mercado.py`:
   preço de cada data sobre o LTM vigente, em ponto mensal, a partir da 1ª divulgação. A conta é a do

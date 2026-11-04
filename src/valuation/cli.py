@@ -82,7 +82,9 @@ from valuation.saida import glossario as gl
 from valuation.saida import graficos as gr
 from valuation.saida import real
 from valuation.saida.csv import INTERNACIONAL, FormatoCsv, gravar_csv, gravar_matriz
+from valuation.servicos import comparacao as scmp
 from valuation.servicos import empresa as emp
+from valuation.servicos import historico_mercado as hm
 from valuation.servicos import indicadores as sind
 from valuation.servicos import mercado as mer
 from valuation.universo import SetorCVM, buscar_setor, carregar_universo, empresas_do_setor
@@ -1213,12 +1215,7 @@ DEFASAGEM_AVISO_DIAS = 140
 
 
 def _tickers_pares(premissas: pm.PremissasEmpresa, proprios: tuple[str, ...]) -> list[str]:
-    """Pares do setor + `pares.incluir` - `pares.excluir`, sem as classes da própria empresa."""
-    setor = _setor(premissas.pares.setor)
-    candidatos = [*(setor.pares if setor else ()), *premissas.pares.incluir]
-    fora = {cad.normalizar_ticker(t) for t in (*premissas.pares.excluir, *proprios)}
-    unicos = dict.fromkeys(cad.normalizar_ticker(t) for t in candidatos)
-    return [t for t in unicos if t not in fora]
+    return scmp.tickers_pares(premissas, proprios, _setor(premissas.pares.setor))
 
 
 def _pares_do_yaml(ticker: str) -> list[str]:
@@ -3249,6 +3246,34 @@ def favoritos_atualizar(
     falhas = [t for t, res in resultados if res == "falhou"]
     if falhas:
         raise _erro(f"{len(falhas)} favorito(s) falharam: {', '.join(falhas)}.")
+
+
+@app.command()
+def series(
+    ticker: str = typer.Argument(..., help="Ex.: PETR4."),
+    forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+) -> None:
+    """Baixa cotação de 10 anos, splits e ITR antigos, usados nos gráficos da GUI (ADR 0023)."""
+    agora = dt.datetime.now(dt.UTC)
+    try:
+        settings = carregar_settings()
+        base = settings.resolver_data_base(agora.date())
+        empresa = cad.empresa_por_ticker(_carregar_cadastro(settings, base, forcar), ticker)
+        avisos = hm.baixar_series(
+            empresa,
+            cad.normalizar_ticker(ticker),
+            settings,
+            base,
+            agora,
+            sessao=criar_sessao(),
+            forcar=forcar,
+            dir_raw=DIR_RAW,
+            dir_processed=DIR_PROCESSED,
+        )
+    except (ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroDadosExternos) as e:
+        raise _erro(str(e)) from e
+    _imprimir_avisos(avisos)
+    console.print(f"Séries de {cad.normalizar_ticker(ticker)} gravadas em {DIR_PROCESSED / 'cvm'}.")
 
 
 @app.command("gui")
