@@ -412,23 +412,52 @@ sem nenhuma conta feita na camada de tela.
    (2026-10-14; a 1.66.1 de 2026-10-21 tem menos de 14 dias) e `plotly==7.1.0` (2026-09-15).
    Confirmadas no PyPI em 2026-11-03.
 
+### Respostas da segunda rodada (2026-11-03)
+
+- **Item 3 (market cap histórico com ações da CVM por data): aprovado.** ✅
+- **Resposta sobre a API:** o yfinance **lista** desdobramentos, grupamentos e bonificações
+  (`Ticker.splits`) e **ajusta preço e dividendos** por eles; conferido em 2026-11-03: `Close` sem
+  salto em MGLU3 (grupamento 1:10 em 2024-05-27, 12,57 → 12,52) e em WEGE3 (2:1 em 2021-04-28,
+  37,01 → 36,50). **Não normaliza** o que vem da CVM: lucro, PL e dívida são valores em R$ e não
+  mudam, mas a quantidade de ações vem na base da época. Qualquer métrica por ação (LPA, VPA,
+  dividendo por ação, market cap) é nossa conta, com o fator F(t) acumulado dos splits.
+- **Anomalias: base = `guia_de_tratamento_de_anomalias_de_p_l_em_valuation.md`** (raiz do repo).
+  Procedimento adotado: (1) remover P/L ≤ 0 e guardar as empresas/datas removidas; (2) se n ≥ 15,
+  Log-IQR com corte superior `exp(Q3_y + 1,5·IQR_y)`; (3) se n < 15, corte fixo + mediana.
+  - O guia tem um erro de digitação na seção 4, passo 2: escreve `Q1,y + 1,5·IQR_y`; o correto, pela
+    seção 3, é `Q3,y + 1,5·IQR_y`. Vale o da seção 3.
+  - O guia trata o corte transversal (pares). Na série temporal de uma empresa (120 pontos
+    mensais em 10 anos), n ≥ 15 sempre vale; nos pares da maioria dos setores n < 15.
+  - A empresa/data removida não some do relatório: a GUI mostra o motivo (P/L ≤ 0 ou acima do
+    corte) e sugere o múltiplo alternativo do guia (EV/EBITDA, P/S ou PEG).
+- **B3 e pares: aceitos** como propostos (Ibovespa, só empresas carregadas, financeiras separadas;
+  valor de hoje na S4, série histórica depois). ✅
+- **"Atual" = marcador do valor de hoje** (assumido, ninguém discordou). ✅
+- **Escopo de dados por favoritas** (ver "Perguntas abertas"): carga primária só das favoritas
+  (`config/favoritos.yaml`, ADR 0021); ativo não favorito é carregado sob demanda quando aberto.
+
 ### Perguntas abertas (para fechar antes da S2)
 
-- **Anomalias com IQR (Tukey)** é aplicável. Proposta: (1) descartar primeiro o múltiplo ≤ 0 (já é o
-  padrão do projeto, indefinido); (2) nos positivos restantes, calcular Q1 e Q3 **na escala
-  logarítmica** (P/L é assimétrico à direita; na escala linear a cerca superior fica tão frouxa que
-  quase nada seria cortado) e descartar o que sair de Q1 − 1,5·IQR a Q3 + 1,5·IQR; (3) o corte vale
-  **só para a média e a mediana de referência** da janela escolhida, a série continua inteira no
-  gráfico, com os pontos descartados em cinza; (4) caixa "ignorar anomalias" ligada por padrão, e a
-  tela mostra quantos pontos foram descartados. Aceitar?
-- **"Atual"** na escolha de janela significa só o marcador do valor de hoje (sem média), ou a média
-  dos últimos 12 meses? Assumido: marcador do valor atual.
-- **"B3"** = os 76 componentes do Ibovespa de `config/universo_ibovespa.csv` (não as ~400 companhias
-  listadas), usando só as empresas já baixadas e padronizadas, com o rótulo "Ibovespa (n = X)". Mediana
-  (a média sofre com outliers) e média, financeiras separadas das demais (P/L e P/VP não se comparam
-  entre os dois grupos). Para a série histórica da B3, o custo é o de calcular a série de todas as
-  empresas: fica em **valor de hoje na S4** e **série histórica na sprint seguinte**. Aceitar?
-- **Confirmar a proposta do item 3** (market cap histórico com ações da CVM por data).
+1. **Corte fixo quando n < 15** (pares): qual teto? O guia cita 80x ou 100x "por setor".
+   Recomendação: **100x global**, parâmetro em `settings.yaml` (`multiplos.corte_pl`), com
+   sobrescrita por setor em `setores.yaml` depois, se precisar.
+2. **Média**: o guia manda priorizar a **mediana** e evitar a média simples. Recomendação: seletor
+   com **Mediana (padrão)**, **Média winsorizada** (limites do corte) e **Média simples** com aviso
+   "sensível a extremos".
+3. **`comparar`/`multiplos.py` já têm seu tratamento** (descarta negativos, winsoriza por
+   parâmetro, exige ≥ 3 pares). Trocar pelo guia mudaria os valores implícitos já gravados.
+   Recomendação: **não mexer agora**; o tratamento do guia entra em módulo novo
+   (`analise/anomalias.py`) usado só pela GUI, e a unificação fica para um ADR depois.
+4. **Outros múltiplos**: o guia fala só de P/L. Recomendação: mesmo procedimento para P/VP, EV/EBITDA
+   e EV/EBIT (razões sempre positivas, cauda à direita); dividend yield sem corte.
+5. **Carga e atualização na GUI** (muda ADR 0022, item 3):
+   - Ao abrir: ler o cache dos favoritos, sem rede, e mostrar a idade de cada um.
+   - Ativo **não favorito**: ao abrir, usa o cache se existir; se não existir, baixa e calcula na
+     hora (rede, com progresso). Botão "Atualizar" em toda página de ativo.
+   - Pergunta: ao abrir, os favoritos **desatualizados** (mais de N dias) devem ser atualizados
+     sozinhos, em segundo plano, ou só quando você clicar? Recomendação: **só no clique** (botão
+     "Atualizar favoritas", que reaproveita `favoritos atualizar`), e automático apenas quando um
+     favorito não tiver nenhum cache. Evita rede e espera inesperadas a cada abertura.
 
 ### Critério de pronto da sprint
 
