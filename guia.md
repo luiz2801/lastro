@@ -1,11 +1,11 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.32 — 2026-11-03**
+**Versão 1.33 — 2026-11-03**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
 > [`REGRAS_MODELOS.md`](docs/regras/REGRAS_MODELOS.md) e [`REGRAS_TESTES.md`](docs/regras/REGRAS_TESTES.md)).
-> Este arquivo descreve **o que existe hoje** (Fases 0 a 10 e a Etapa C1 da carteira implementadas) para que você não precise reler os módulos. Para o que ainda **não** existe,
+> Este arquivo descreve **o que existe hoje** (Fases 0 a 10 e as Etapas C1 e C2 da carteira implementadas) para que você não precise reler os módulos. Para o que ainda **não** existe,
 > veja a seção 12.
 > Política de commits, que documento atualizar em cada mudança e ADRs: `CONTRIBUTING.md` e
 > `docs/decisoes/README.md`.
@@ -49,11 +49,11 @@
 | Modelos | `modelos/{dcf,ponte,multiplos,ddm}.py` | ✅ DCF do FCFF, ponte EV → equity, múltiplos dos pares e DDM com lucro residual (seção 20) |
 | Análise | `analise/{cenarios,sensibilidade}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade, FCFF e DDM (seção 20) |
 | Saída | `saida/{csv,arquivos,real,graficos,glossario,favoritos}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG, glossário das métricas e favoritos (seção 19) |
-| Carteira | `carteira/{transacoes,arquivo}.py` | ✅ Etapa C1 do ADR 0020: transações, histórico validado, importação CSV/XLSX (seção 21); posição, indicadores, proventos e alocação ainda não (seção 12) |
-| CLI | `cli.py` | `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
+| Carteira | `carteira/{transacoes,arquivo,posicao}.py` | ✅ Etapas C1 e C2 do ADR 0020: transações, histórico validado, importação CSV/XLSX, posição, preço médio e resultado (seção 21); indicadores, proventos e alocação ainda não (seção 12) |
+| CLI | `cli.py` | `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.500 linhas de código, 593 testes (582 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.500 linhas de código, 606 testes (595 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -198,6 +198,7 @@ mediana de 5a), `_resumo` (linha do `resumo.csv`), `_mostrar_valuation`. Finance
 | `glossario [TERMO]` | — | Sem argumento, lista os termos por grupo (custo de capital, modelos, múltiplos, perfil e decisão) com o que é, como se calcula e como ler; com `TERMO` (sigla ou nome, sem distinguir caixa, acento ou símbolos: `p/vp`, `ev ebitda`), explica só os que casam. Termo inexistente ⇒ sai com 1 | Dados estáticos de `saida/glossario.py`; não lê configuração nem rede |
 | `carteira lancar TIPO TICKER QUANTIDADE` | `--preco`; `--valor`; `--taxas`; `--data AAAA-MM-DD` (hoje); `--observacao` | Valida a transação e o histórico inteiro e a acrescenta ao fim de `CAMINHO_TRANSACOES` | `TIPO` = compra, venda, provento, agrupamento, desdobramento ou bonificacao; em agrupamento/desdobramento `QUANTIDADE` é o fator (> 1). Data futura, venda acima da posição ⇒ saída 1 sem gravar (seção 21) |
 | `carteira importar ARQUIVO` | `--formato-csv br\|intl` (br); `--permitir-duplicadas` | Lê CSV ou XLSX (cabeçalho = colunas de `transacoes.csv`) e acrescenta tudo ou nada | uma linha inválida, ou histórico que não fecha, recusa o arquivo inteiro e lista `linha N: motivo`. Linha idêntica a uma já gravada é recusada (reimportação) salvo `--permitir-duplicadas`. `intl` vale só para o CSV de entrada; o arquivo da carteira segue `settings.csv` |
+| `carteira posicao` | `--data-base AAAA-MM-DD` (settings); `--forcar` | Reproduz `CAMINHO_TRANSACOES` até a data-base, cota só os tickers abertos (`_cotar_carteira`: `preco_validado` yfinance × brapi) e imprime a tabela Rich: quantidade, preço médio, custo, cotação, patrimônio, resultado não realizado, proventos, resultado total e % (+ linha de total) e os avisos | Carteira vazia na data ⇒ mensagem e saída 0. Ticker sem cotação ⇒ aviso e totais parciais (não aborta). Cotação > 5 dias antes da data-base ⇒ aviso de defasagem. `--data-base` inválida ⇒ saída 1 (seção 21) |
 | `perfil` | `--mostrar` ou `--refazer` | Sem perfil (ou vencido): roda o questionário (resposta = número da alternativa; inválida ⇒ pergunta de novo), grava `CAMINHO_PERFIL` e mostra perfil + parâmetros. Com perfil válido: só mostra | `--mostrar` só mostra (sem perfil ⇒ sai com 1); `--refazer` responde de novo mesmo válido e aceita JSON corrompido (sem ele, JSON inválido ⇒ sai com 1). Os dois juntos ⇒ erro. Validade conferida contra `date.today()`, **não** contra `data_base` |
 
 `--explicar` (em `wacc`, `comparar` e `rodar`, DCF e DDM; `EXPLICAR` e `_legenda(chaves)`) imprime no fim a tabela
@@ -554,7 +555,7 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 Também fora do código hoje: legendas nos gráficos PNG, GUI, ERP implícito do Ibovespa (ADR 0018,
 proposto; `docs/backlog.md`).
 
-| Carteira C2–C6 | Posição e preço médio, indicadores por ativo (`analise/indicadores.py`), proventos e agenda (fonte a validar), alocação e alvos (`alvos.yaml`), tela | `docs/backlog.md`, "Carteira pessoal"; ADR 0020. Reusar `transacoes.ordenar` e `aplicar_quantidade` para reproduzir a carteira |
+| Carteira C3–C6 | Indicadores por ativo (`analise/indicadores.py`), proventos e agenda (fonte a validar), alocação e alvos (`alvos.yaml`), tela | `docs/backlog.md`, "Carteira pessoal"; ADR 0020. `posicao.calcular_posicoes` já reproduz a carteira (reusa `transacoes.ordenar` e `aplicar_quantidade`) |
 
 ## 13. Convenções que o código já segue (siga também)
 
@@ -601,6 +602,7 @@ proposto; `docs/backlog.md`).
 | `test_saida_arquivos.py` | `serializavel` (dataclass, numpy, datas, NaN), JSON/YAML ida e volta, sha256, `fontes_cvm`, `commit_git` fora de repositório, `tabela_historico`, `faixa_52_semanas`, `faixas_football`, `montar_meta` | — |
 | `test_graficos.py` | formatação pt-BR; os cinco gráficos geram PNG válido (inclusive valores negativos) | — |
 | `test_carteira.py` | esquema de cada tipo de transação (valor bruto, fator, tipo com acento, ticker), histórico (venda acima da posição, mesmo dia, eventos, data futura, todos os erros juntos), CSV br/intl e XLSX equivalentes, linha com erro nomeada, cabeçalho, gravação só-acréscimo (BOM uma vez, bytes anteriores intactos, nada gravado em erro, reimportação) e os comandos `carteira` | `caminho_carteira` (troca `cli.CAMINHO_TRANSACOES`) |
+| `test_posicao.py` | preço médio passo a passo à mão (compra, compra, venda parcial, desdobramento, bonificação), realizado/não realizado/proventos e a identidade do resultado total, data-base que ignora o futuro, agrupamento, venda total, provento sem posição, sem cotação e cotação defasada (avisos), e o comando `carteira posicao` (cotação substituída por `cli._cotar_carteira`; `COLUMNS=200` para o Rich não truncar) | `carteira_com_historico` (troca `cli.CAMINHO_TRANSACOES`) |
 | `test_golden.py` | 111 valores de `tests/golden/referencias.yaml` (PETR4, VALE3, WEGE3 e ITUB4, esta pelas `financeiras.metricas`) contra o pipeline | **dados reais** em `data/processed/cvm/`; pulado se ausentes |
 
 `conftest.py`: `SessaoFalsa` (rotas URL → `(status, bytes, headers)`; devolve 304 se
@@ -767,6 +769,12 @@ vez de baixar dados reais. Sem rede nos testes.
 42. Na carteira, número com ponto num CSV br é erro, não milhar: `1.5` é recusado e `1.500` vale
     1500 (`arquivo._numero`). No mesmo dia, a ordem do arquivo decide se a venda cabe na posição;
     arquivo de corretora em ordem decrescente precisa ser invertido antes de importar.
+43. `carteira posicao` usa o `Close` **não ajustado** do último pregão até a data-base
+    (`prc.preco_validado`). Depois de desdobramento/bonificação o yfinance pode ter o histórico
+    ajustado ou não; se a transação do evento está lançada, a quantidade já foi multiplicada, e uma
+    cotação ajustada duas vezes distorceria o patrimônio (confira o aviso de defasagem e a cotação).
+    A posição inclui o `custo` das ações em carteira; o `resultado` total conta também vendas e
+    proventos de papéis já encerrados. Taxas entram no custo da compra e abatem a venda e o provento.
 
 ## 17. `perfil/` — perfil do investidor
 
@@ -892,13 +900,16 @@ até o valor por ação, que sai em BRL (× câmbio).
 
 Camada no topo da cadeia (acima de `saida`); só importa `config`. Nenhuma camada inferior a
 importa. Exceção: `ErroCarteira(ValueError)` em `carteira/__init__.py`, com `.erros` (todas as
-mensagens; `str()` as junta por linha). Só valida e grava transações: sem cotação, posição, preço
-médio nem proventos (Etapas C2 a C5 do `docs/backlog.md`).
+mensagens; `str()` as junta por linha). Valida e grava transações (C1) e calcula posição, preço médio e
+resultado (C2). Ainda sem indicadores, proventos nem alocação (Etapas C3 a C5 do `docs/backlog.md`).
 
 | Módulo | Símbolos | Detalhe |
 |---|---|---|
 | `transacoes.py` | `Transacao` (frozen: `data, ticker, tipo, quantidade, preco, valor, taxas, observacao`), `TipoTransacao`, `EVENTOS`, `nova_transacao(...)`, `validar_historico(transacoes, rotulos, hoje)`, `ordenar`, `aplicar_quantidade` | Puro. `nova_transacao` normaliza (ticker maiúsculo, tipo sem acento/caixa) e valida por tipo. Compra/venda: `preco` > 0, `valor` = quantidade x preço **bruto** (informado, tem de bater em R$ 0,01), `taxas` à parte. Provento: `quantidade` = ações com direito, `valor` bruto, `taxas` = retenções. Agrupamento/desdobramento: `quantidade` = fator > 1 (desdobramento: cada ação vira `fator`; agrupamento: `fator` ações viram uma). Bonificação: ações recebidas, custo zero. Eventos não levam preço, valor nem taxas. Ticker `^[A-Z]{4}\d{1,2}$` |
 | `arquivo.py` | `COLUNAS`, `ler_arquivo(caminho, config) -> (transacoes, linhas)`, `carregar`, `acrescentar(caminho, config, novas, linhas_origem, hoje=, permitir_duplicadas=)`, `converter_linha` | CSV (`config.separador`/`decimal`) ou XLSX (primeira aba, `openpyxl`, importado dentro da função). Cabeçalho na linha 1 com `data, ticker, tipo, quantidade` obrigatórias; coluna desconhecida ⇒ erro. Data `AAAA-MM-DD` ou `DD/MM/AAAA`. Arquivo só-acréscimo: `acrescentar` valida carteira + novas **antes** de abrir o arquivo; BOM só na criação |
+| `posicao.py` | `Posicao`, `Preco`, `LinhaCarteira`, `ResumoCarteira`, `calcular_posicoes(transacoes, data_base) -> dict[ticker, Posicao]`, `avaliar(posicoes, precos, data_base, avisos=()) -> ResumoCarteira`, `TOLERANCIA_DIAS_DEFASAGEM` | Puro (sem I/O nem relógio). Custo da posição = Σ compras (`valor + taxas`) menos a baixa das vendas **pelo preço médio vigente** (a venda não muda o preço médio); desdobramento/agrupamento mudam só a quantidade (o preço médio se ajusta); bonificação entra a custo zero; provento soma `valor − taxas` e não mexe na posição. `realizado` = venda líquida (`valor − taxas`) − custo baixado. **Resultado total = patrimônio + vendas líquidas + proventos − compras** (= realizado + não realizado + proventos; a identidade é testada); `%` = resultado / compras. Posição zerada tem custo 0 e entra nos totais (para o realizado e os proventos não sumirem), sem exigir cotação. Ticker aberto sem `Preco` ⇒ linha sem patrimônio/resultado, aviso e `completo=False` (totais só do que tem cotação). Cotação > `TOLERANCIA_DIAS_DEFASAGEM` (5) dias antes da data-base ⇒ aviso |
+
+`calcular_posicoes` presume histórico já validado (`carregar` valida): venda acima da posição ali é `ValueError`, erro de programação, não de dado. Transações com data após a `data_base` são ignoradas.
 
 `validar_historico` reproduz a carteira por data (no mesmo dia, ordem do arquivo) e recusa venda
 acima da posição, agrupamento/desdobramento/bonificação sem posição do ticker e, com `hoje`, data

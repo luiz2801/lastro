@@ -21,6 +21,7 @@ from valuation.analise import cenarios as cen
 from valuation.analise import sensibilidade as sens
 from valuation.carteira import ErroCarteira
 from valuation.carteira import arquivo as carteira_arq
+from valuation.carteira import posicao as carteira_pos
 from valuation.carteira import transacoes as carteira_tr
 from valuation.config import (
     CAMINHO_CADASTRO_MANUAL,
@@ -3087,6 +3088,107 @@ def carteira_importar(
     except ErroCarteira as e:
         raise _erro_carteira(e) from e
     console.print(f"Importadas {gravadas} transações de {arquivo.name} ({CAMINHO_TRANSACOES}).")
+
+
+def _brl(valor: float | None, casas: int = 2) -> str:
+    if valor is None:
+        return "—"
+    texto = f"{valor:,.{casas}f}"
+    return "R$ " + texto.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _cotar_carteira(
+    tickers: list[str], settings: Settings, base: dt.date, agora: dt.datetime, forcar: bool
+) -> tuple[dict[str, carteira_pos.Preco], list[str]]:
+    """Fechamento de cada ticker na data-base (yfinance, conferido na brapi); falha vira aviso."""
+    yf = prc.YFinanceProvider(
+        DIR_RAW / "precos",
+        dt.timedelta(hours=settings.cache_ttl_horas.precos),
+        agora,
+        forcar=forcar,
+    )
+    brapi = prc.BrapiProvider(criar_sessao())
+    precos: dict[str, carteira_pos.Preco] = {}
+    avisos: list[str] = []
+    for ticker in tickers:
+        try:
+            v = prc.preco_validado(
+                ticker, base, yf, brapi, tolerancia_rel=settings.validacao_cruzada.preco_rel
+            )
+        except ErroDadosExternos as e:
+            avisos.append(f"{ticker} sem preço: {e}")
+            continue
+        if v.data is None:  # pragma: no cover - preco_validado sempre devolve a data
+            continue
+        precos[ticker] = carteira_pos.Preco(v.valor, v.data)
+        if v.aviso:
+            avisos.append(v.aviso)
+    return precos, avisos
+
+
+@carteira_app.command("posicao")
+def carteira_posicao(
+    data_base: str | None = typer.Option(None, "--data-base", help="AAAA-MM-DD."),
+    forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache de cotações."),
+) -> None:
+    """Posição, preço médio, patrimônio e resultado da carteira na data-base (Etapa C2)."""
+    agora = dt.datetime.now(dt.UTC)
+    try:
+        settings = carregar_settings()
+        try:
+            base = (
+                dt.date.fromisoformat(data_base)
+                if data_base
+                else settings.resolver_data_base(agora.date())
+            )
+        except ValueError as e:
+            raise ErroCarteira(f"--data-base inválida: {e}") from e
+        transacoes, _ = carteira_arq.carregar(CAMINHO_TRANSACOES, settings.csv)
+        posicoes = carteira_pos.calcular_posicoes(transacoes, base)
+        abertas = [k for k, p in posicoes.items() if not p.encerrada]
+        precos: dict[str, carteira_pos.Preco] = {}
+        avisos: list[str] = []
+        if abertas:
+            precos, avisos = _cotar_carteira(abertas, settings, base, agora, forcar)
+        resumo = carteira_pos.avaliar(posicoes, precos, base, avisos)
+    except ErroCarteira as e:
+        raise _erro_carteira(e) from e
+    except (ErroConfiguracao, ErroDadosExternos) as e:
+        raise _erro(str(e)) from e
+    if not resumo.linhas:
+        console.print(f"Carteira vazia até {base.isoformat()}. Use `valuation carteira lancar`.")
+        return
+    tabela = Table(title=f"Carteira em {base.isoformat()}")
+    for coluna in ("Ticker", "Qtd", "Preço médio", "Custo", "Cotação", "Patrimônio"):
+        tabela.add_column(coluna, justify="left" if coluna == "Ticker" else "right")
+    for coluna in ("Não realizado", "Proventos", "Resultado", "%"):
+        tabela.add_column(coluna, justify="right")
+    for ln in resumo.linhas:
+        p = ln.posicao
+        tabela.add_row(
+            p.ticker + (" (encerrada)" if p.encerrada else ""),
+            f"{p.quantidade:g}".replace(".", ","),
+            _brl(p.preco_medio),
+            _brl(p.custo),
+            _brl(ln.preco.valor) if ln.preco else "—",
+            _brl(ln.patrimonio),
+            _brl(ln.nao_realizado),
+            _brl(p.proventos),
+            _brl(ln.resultado),
+            _pct(ln.resultado_pct),
+        )
+    tabela.add_section()
+    tabela.add_row(
+        "Total", "", "", _brl(resumo.custo), "", _brl(resumo.patrimonio), "",
+        _brl(resumo.proventos), _brl(resumo.resultado), _pct(resumo.resultado_pct),
+    )  # fmt: skip
+    console.print(tabela)
+    console.print(
+        "Resultado = patrimônio + vendas líquidas + proventos - compras (taxas incluídas); "
+        "preço médio ponderado pelo custo."
+    )
+    for aviso in resumo.avisos:
+        console.print(f"[yellow]Aviso:[/] {aviso}")
 
 
 def _pct(valor: float | None) -> str:

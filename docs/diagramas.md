@@ -40,6 +40,7 @@ Cada linha é uma mesma funcionalidade vista por vários diagramas.
 | UC02 Atualizar dados | [interação §1](diagrama_interacao.md#1-sequência--valuation-atualizar) | raia 2 | [cache](diagrama_estados.md#2-arquivo-no-cache-de-download-httpbaixar) | `ArquivoBaixado`, `MetaDownload`, `Empresa`, `AlvoCVM` |
 | UC09 Avaliar empresa | [sequência](diagrama_sequencia.md), [comunicação](diagrama_interacao.md#5-comunicação--valuation-rodar-ticker-visão-condensada) | raias 1 a 6 | [rodar](diagrama_estados.md#4-execução-do-comando-rodar) | `Avaliacao`, `ResultadoDCF`, `AvaliacaoDDM`, `CustoCapital`, `ResultadoCenarios` |
 | UC10 e UC11 Lote | [interação §4](diagrama_interacao.md#4-sequência--execução-em-lote-rodar-setor-e-favoritos-atualizar) | raia 1 | [favorito](diagrama_estados.md#6-favorito-e-o-seu-último-resultado) | `EmpresaUniverso`, `SetorCVM`, `ResumoFavorito` |
+| UC17 Posição | — | seção 4 (posição) | — | `Posicao`, `Preco`, `LinhaCarteira`, `ResumoCarteira` |
 | UC14 e UC15 Carteira | [interação §3](diagrama_interacao.md#3-sequência--valuation-carteira-importar), [§6](diagrama_interacao.md#6-comunicação--valuation-carteira-lancar) | seção 4 | [importação](diagrama_estados.md#5-importação-de-transações-da-carteira) | `Transacao`, `TipoTransacao` |
 
 ## 4. Notação e limites do Mermaid

@@ -138,9 +138,9 @@ Escolha do modelo: `tipo_modelo = nao_financeira` usa o DCF do FCFF e `financeir
 
 `Interromper com diagnóstico` é a variante excepcional (como "Item Preso" da aula): perfil ausente ou vencido sem `--perfil`; QA com erro (grava `qa_TICKER.json`); holding ou tipo não suportado; WACC ≤ g (ou Ke ≤ g nas financeiras); preço ou composição de capital indisponíveis. Em todos, mensagem em PT-BR e saída 1.
 
-## 4. Carteira pessoal (ADR 0020, Etapa C1)
+## 4. Carteira pessoal (ADR 0020, Etapas C1 e C2)
 
-Camada à parte do valuation: não lê CVM nem cotações. As Etapas C2 a C6 (posição, preço médio, proventos, alocação) ainda não existem; quando entrarem, ganham casos de uso próprios aqui.
+Camada à parte do valuation: não lê CVM. Só a posição (UC17) consulta cotações. As Etapas C3 a C6 (indicadores, proventos, alocação) ainda não existem; quando entrarem, ganham casos de uso próprios aqui.
 
 ```mermaid
 flowchart LR
@@ -150,6 +150,7 @@ flowchart LR
         direction TB
         uc14(["UC14 Lançar transação"])
         uc15(["UC15 Importar transações<br/>(CSV ou XLSX)"])
+        uc17(["UC17 Consultar posição<br/>e resultado"])
         val(["Validar histórico da carteira"])
         rec(["Recusar com linha e motivo"])
         dup(["Aceitar linhas repetidas"])
@@ -157,13 +158,14 @@ flowchart LR
 
     inv --- uc14
     inv --- uc15
+    inv --- uc17
     uc14 -.->|"«include»"| val
     uc15 -.->|"«include»"| val
     rec -.->|"«extend» [linha inválida ou histórico não fecha]"| uc15
     rec -.->|"«extend» [histórico não fecha]"| uc14
     dup -.->|"«extend» [--permitir-duplicadas]"| uc15
 
-    class uc14,uc15,val,rec,dup caso
+    class uc14,uc15,uc17,val,rec,dup caso
     style SIS fill:#fafafa,stroke:#adb5bd,color:#1a1a1a
     classDef ator fill:#dbe4ff,stroke:#3b5bdb,color:#1a1a1a
     classDef caso fill:#eef2ff,stroke:#5c7cfa,color:#1a1a1a
@@ -188,6 +190,7 @@ flowchart LR
 | UC13 Consultar glossário | `glossario [TERMO]` | `saida/glossario` |
 | UC14 Lançar transação | `carteira lancar` | `carteira/` |
 | UC15 Importar transações | `carteira importar` | `carteira/` |
+| UC17 Consultar posição e resultado | `carteira posicao` | `carteira/posicao`, `data/precos` |
 | UC16 Navegar pelo menu | `valuation` (sem comando) | `cli._menu_interativo`, `universo` |
 
 ## 6. Especificação dos casos de uso principais
@@ -222,3 +225,9 @@ Fluxo principal e variantes, no formato da aula (fluxo principal de eventos × f
 - **Pré-condição:** nenhuma (o arquivo `carteira/transacoes.csv` é criado no primeiro uso). **Pós-condição:** transações acrescentadas ao fim do arquivo; o que já estava nele não é reescrito.
 - **Fluxo principal:** (1) o investidor informa a transação (UC14) ou um arquivo CSV/XLSX (UC15); (2) o sistema normaliza e valida cada linha por tipo; (3) valida o histórico inteiro (carteira gravada + novas), por data; (4) acrescenta tudo.
 - **Excepcional:** qualquer linha inválida, venda acima da posição, evento sem posição ou data futura ⇒ **nada é gravado**, cada erro sai com o número da linha, saída 1. Linha idêntica a uma já gravada (reimportação) é recusada, salvo `--permitir-duplicadas`.
+
+### UC17 — Consultar posição e resultado
+
+- **Pré-condição:** `carteira/transacoes.csv` válido (carteira vazia é aceita). **Pós-condição:** nada é gravado.
+- **Fluxo principal:** (1) o investidor pede a posição numa data-base; (2) o sistema reproduz as transações até a data; (3) cota só os papéis abertos (yfinance conferido na brapi); (4) mostra por papel: quantidade, preço médio, custo, cotação, patrimônio, resultado não realizado, proventos e resultado total, mais o total da carteira.
+- **Excepcional:** papel sem cotação ⇒ aviso e totais parciais; cotação com mais de 5 dias de defasagem ⇒ aviso. Nenhum dos dois interrompe.

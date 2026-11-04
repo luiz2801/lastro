@@ -400,7 +400,9 @@ Pré-requisito de todo o resto.
 
 *Entrega:* carteira em disco, validada, sem cálculo ainda.
 
-### Etapa C2 — Posição e preço médio (RF-008, parte de dados)
+### Etapa C2 — Posição e preço médio (RF-008, parte de dados) ✅
+
+Feita em 2026-11-03 (`carteira/posicao.py`, `valuation carteira posicao`). Sem CSV de saída: só a tabela, como previsto.
 
 1. Função pura de posição: preço médio ponderado pelo custo (taxas incluídas), venda sem mudar o
    preço médio, agrupamento e desdobramento pelo fator, bonificação a custo zero.

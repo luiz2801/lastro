@@ -236,10 +236,10 @@ flowchart TD
 
 ---
 
-## 4. Carteira pessoal: lançamento e importação (ADR 0020, Etapa C1)
+## 4. Carteira pessoal: lançamento, importação e posição (ADR 0020, Etapas C1 e C2)
 
-Fluxo à parte do valuation: não lê dados da CVM nem cotações. Posição, preço médio, proventos e
-alocação (Etapas C2 a C5) vão consumir `carteira/transacoes.csv` e ainda não existem.
+Fluxo à parte do valuation: não lê dados da CVM. Só `carteira posicao` consulta cotações. Proventos,
+indicadores e alocação (Etapas C3 a C5) vão consumir `carteira/transacoes.csv` e ainda não existem.
 
 ```mermaid
 flowchart TD
@@ -253,5 +253,22 @@ flowchart TD
   E -->|não| F[validar_historico: carteira gravada + novas, por data]
   F -->|venda acima da posição, evento sem posição, data futura| X
   F -->|fecha| G[Acrescenta ao fim de carteira/transacoes.csv]
+```
+
+Posição (`carteira posicao`, Etapa C2):
+
+```mermaid
+flowchart TD
+  A[carteira posicao --data-base] --> B[carregar: lê e valida carteira/transacoes.csv]
+  B --> C[calcular_posicoes: reproduz por data até a data-base]
+  C --> D{Há papel aberto?}
+  D -->|não| V[Carteira vazia ou só encerradas: sem rede]
+  D -->|sim| E[_cotar_carteira: preco_validado yfinance x brapi, só dos abertos]
+  E -->|ticker sem preço| W[Aviso: totais parciais]
+  E --> F[avaliar: patrimônio, não realizado e resultado total]
+  V --> F
+  W --> F
+  F -->|cotação mais de 5 dias antes da data-base| X[Aviso de defasagem]
+  F --> G[Tabela Rich com totais e avisos]
 ```
 

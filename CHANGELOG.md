@@ -2,6 +2,18 @@
 
 ## [Não lançado]
 
+### Carteira pessoal, Etapa C2: posição e preço médio (ADR 0020)
+- `src/valuation/carteira/posicao.py` (puro): `calcular_posicoes` reproduz as transações até a
+  data-base (preço médio ponderado com taxas; venda não muda o preço médio; desdobramento e
+  agrupamento pelo fator; bonificação a custo zero; proventos líquidos de retenção) e `avaliar`
+  aplica o fechamento de cada ticker: patrimônio, resultado não realizado, realizado e total
+  (patrimônio + vendas + proventos − compras), com avisos de cotação ausente (totais parciais) ou
+  defasada (> 5 dias).
+- `valuation carteira posicao [--data-base] [--forcar]`: tabela Rich com totais e avisos; cotação
+  pelo `preco_validado` (yfinance conferido na brapi), só dos papéis abertos.
+- `tests/test_posicao.py` (13 testes): caso calculado à mão, identidade do resultado, avisos e o
+  comando. Valuation (DCF, DDM, múltiplos) não mudou.
+
 ### Diagramas UML do projeto
 - Conjunto completo de diagramas, um por assunto das aulas de UML (`diagramas/`), em Mermaid dentro
   de `docs/`: `diagrama_casos_de_uso.md` (atores, `«include»`, `«extend»`, especialização e a

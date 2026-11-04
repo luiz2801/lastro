@@ -805,6 +805,33 @@ classDiagram
     class Empresa
     class PlanoContas
     class PremissasEmpresa
+    class Posicao {
+        +ticker: str
+        +quantidade: float
+        +custo: float
+        +compras: float
+        +vendas: float
+        +proventos: float
+        +realizado: float
+        +preco_medio() float?
+    }
+    class Preco {
+        +valor: float
+        +data: date
+    }
+    class LinhaCarteira {
+        +patrimonio() float?
+        +nao_realizado() float?
+        +resultado() float?
+        +resultado_pct() float?
+    }
+    class ResumoCarteira {
+        +data_base: date
+        +patrimonio: float
+        +resultado: float
+        +completo: bool
+        +avisos: tuple~str~
+    }
     class MarketCap
     class Macro
     class Validado
@@ -812,6 +839,10 @@ classDiagram
     class PerfilEfetivo
 
     Transacao *-- TipoTransacao : tipo
+    Posicao ..> Transacao : calcular_posicoes
+    LinhaCarteira o-- Posicao : posicao
+    LinhaCarteira o-- "0..1" Preco : preco
+    ResumoCarteira *-- "0..*" LinhaCarteira : linhas
     CenarioSaida ..> Avaliacao : cenario_dcf(av)
     CenarioSaida ..> AvaliacaoDDM : cenario_ddm(av)
     CenarioSaida ..> FluxosCenario : real.tabela
@@ -834,7 +865,7 @@ classDiagram
 
 - As classes `_Execucao`, `_Padronizada`, `_Mercado`, `_Par` e `_Comparaveis` são **privadas de `cli.py`**: agrupam o que o comando `rodar` carrega entre as etapas. Nenhuma camada inferior as conhece.
 - `CenarioSaida` uniformiza DCF e DDM para a camada de saída (`ponte` só existe no DCF).
-- `Transacao` é a única classe da carteira; as etapas C2 a C6 (posição, preço médio, proventos, alocação) ainda não existem (ADR 0020).
+- Classes da carteira: `Transacao` (C1) e `Posicao`, `Preco`, `LinhaCarteira` e `ResumoCarteira` (C2, `carteira/posicao.py`, puras). As etapas C3 a C6 (indicadores, proventos, alocação, tela) ainda não existem (ADR 0020).
 
 ## 7. Exceções de domínio
 
