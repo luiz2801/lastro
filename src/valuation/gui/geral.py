@@ -38,11 +38,11 @@ def _cartoes(series: hm.SeriesMercado, base: dt.date) -> None:
     colunas[0].metric("Preço", fo.brl(c.preco), help=f"Fechamento de {c.data_preco:%d/%m/%Y}.")
     colunas[1].metric(
         "Mín./máx. 52 semanas",
-        f"{fo.brl(faixa[0])} / {fo.brl(faixa[1])}" if faixa else TRACO,
+        f"{fo.brl(faixa[0])} / {fo.brl(faixa[1])}".replace("$", r"\$") if faixa else TRACO,
     )
-    colunas[2].metric("Market cap (R$ mi)", fo.formatar(c.market_cap, "mi"))
+    colunas[2].metric("Market cap (R$ mi)", fo.formatar(c.market_cap, "mi", 2))
     colunas[3].metric(
-        "Dividend yield", fo.formatar(c.dividend_yield, "%"), help=_ajuda("dividend_yield")
+        "Dividend yield", fo.formatar(c.dividend_yield, "%", 2), help=_ajuda("dividend_yield")
     )
 
 
@@ -94,9 +94,9 @@ def _grafico_multiplos(series: hm.SeriesMercado, base: dt.date) -> None:
     figura = grafico.multiplo(a, rotulo, an.ROTULOS_REFERENCIA[tipo])
     st.plotly_chart(figura, key="grafico_multiplo")
     st.caption(
-        f"Hoje: {fo.multiplo(nome, a.atual)} · {an.ROTULOS_REFERENCIA[tipo]}: "
-        f"{fo.multiplo(nome, a.referencia)} · {len(a.descartados)} ponto(s) fora da referência · "
-        f"{a.lacunas} mês(es) sem dado"
+        f"Hoje: {fo.multiplo(nome, a.atual, 2)} · {an.ROTULOS_REFERENCIA[tipo]}: "
+        f"{fo.multiplo(nome, a.referencia, 2)} · {len(a.descartados)} ponto(s) fora da "
+        f"referência · {a.lacunas} mês(es) sem dado"
     )
     if len(a.descartados):
         with st.expander(f"Pontos fora da referência ({len(a.descartados)})"):
@@ -119,7 +119,7 @@ def _indicadores(p: emp.Padronizada, ticker: str, base: dt.date) -> None:
         return
     if visao == "Histórico":
         linhas = {
-            rotulo: [fo.formatar(v, unidade) for v in serie.tabela[chave]]
+            rotulo: [fo.formatar(v, unidade, 2) for v in serie.tabela[chave]]
             for chave, (rotulo, unidade, _) in serie.definicoes.items()
         }
         st.dataframe(
@@ -132,7 +132,7 @@ def _indicadores(p: emp.Padronizada, ticker: str, base: dt.date) -> None:
         colunas, serie.definicoes.items(), strict=True
     ):
         coluna.metric(
-            rotulo, fo.formatar(float(serie.tabela[chave].iloc[-1]), unidade), help=_ajuda(termo)
+            rotulo, fo.formatar(float(serie.tabela[chave].iloc[-1]), unidade, 2), help=_ajuda(termo)
         )
 
 
@@ -154,12 +154,14 @@ def _tabela_comparacao(
         do_par = scmp.referencia_do_grupo(pares, nome, tipo, dados.settings())
         linha = {
             "Múltiplo": mt.ROTULOS[nome],
-            series.ticker: fo.multiplo(nome, ultimo),
-            coluna_pares: fo.multiplo(nome, do_par.valor),
+            series.ticker: fo.multiplo(nome, ultimo, 2),
+            coluna_pares: fo.multiplo(nome, do_par.valor, 2),
         }
         if ibovespa is not None:
             do_ibov = scmp.referencia_do_grupo(ibovespa, nome, tipo, dados.settings())
-            linha[f"Ibovespa (n = {_medidas_validas(ibovespa)})"] = fo.multiplo(nome, do_ibov.valor)
+            linha[f"Ibovespa (n = {_medidas_validas(ibovespa)})"] = fo.multiplo(
+                nome, do_ibov.valor, 2
+            )
         linhas.append(linha)
     return pd.DataFrame(linhas)
 

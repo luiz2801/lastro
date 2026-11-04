@@ -8,20 +8,24 @@ from __future__ import annotations
 import pandas as pd
 
 
-def formatar(valor: float, unidade: str) -> str:
-    """`%` com uma casa, `x` com uma casa ou, nas demais unidades, milhões sem casas."""
+def _ptbr(texto: str) -> str:
+    return texto.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def formatar(valor: float, unidade: str, casas: int | None = None) -> str:
+    """`%` e `x` com uma casa, milhões sem casas, salvo `casas` (a GUI usa 2)."""
     if pd.isna(valor):
         return "—"
     if unidade == "%":
-        return f"{valor:.1%}".replace(".", ",")
+        return _ptbr(f"{valor * 100:,.{1 if casas is None else casas}f}") + "%"
     if unidade == "x":
-        return f"{valor:.1f}x".replace(".", ",")
-    return f"{valor / 1e6:,.0f}".replace(",", ".")
+        return _ptbr(f"{valor:,.{1 if casas is None else casas}f}") + "x"
+    return _ptbr(f"{valor / 1e6:,.{0 if casas is None else casas}f}")
 
 
-def multiplo(nome: str, valor: float) -> str:
+def multiplo(nome: str, valor: float, casas: int | None = None) -> str:
     """Dividend yield em %, demais múltiplos em x."""
-    return formatar(valor, "%" if nome == "dividend_yield" else "x")
+    return formatar(valor, "%" if nome == "dividend_yield" else "x", casas)
 
 
 def componente_wacc(componente: str, valor: float) -> str:

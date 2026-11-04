@@ -226,8 +226,8 @@ def test_aba_geral_mostra_cartoes_e_graficos_do_cache(ambiente: Path) -> None:
     assert not at.exception
     metricas = _metricas(at)
     assert metricas["Preço"] == "R$ 10,00"
-    assert metricas["Market cap (R$ mi)"] == "0"  # 90 reais: formato em milhões, sem casas
-    assert metricas["Margem líquida"] == "9,0%"
+    assert metricas["Market cap (R$ mi)"] == "0,00"  # 90 reais: formato em milhões, sem casas
+    assert metricas["Margem líquida"] == "9,00%"
     assert len(at.get("plotly_chart")) == 2
     assert "ponto(s) fora da referência" in _textos(at)
     assert "A CVM só publica a quantidade de ações" in _textos(at)  # lacuna com o motivo
@@ -254,7 +254,7 @@ def test_sem_cotacao_em_disco_nao_vai_a_rede(ambiente: Path) -> None:
     at = _abrir("WEGE3")
     assert not at.exception
     assert "sem cotação de WEGE3 em disco" in _textos(at)
-    assert _metricas(at)["Margem líquida"] == "9,0%"  # indicadores contábeis seguem
+    assert _metricas(at)["Margem líquida"] == "9,00%"  # indicadores contábeis seguem
 
 
 def test_comparacao_com_ibovespa_so_no_clique_e_com_o_que_esta_em_disco(ambiente: Path) -> None:

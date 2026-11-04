@@ -88,7 +88,7 @@ def multiplo(a: AnaliseMultiplo, rotulo: str, rotulo_referencia: str) -> go.Figu
         verdadeiro = a.serie.reindex(fora)
         y = verdadeiro.clip(upper=teto).fillna(0.0)
         textos = [
-            f"{d:%d/%m/%Y}<br>{fo.multiplo(a.nome, float(verdadeiro[d]))}<br>{a.descartados[d]}"
+            f"{d:%d/%m/%Y}<br>{fo.multiplo(a.nome, float(verdadeiro[d]), 2)}<br>{a.descartados[d]}"
             for d in fora
         ]
         figura.add_trace(
@@ -110,7 +110,7 @@ def multiplo(a: AnaliseMultiplo, rotulo: str, rotulo_referencia: str) -> go.Figu
         figura.add_hline(
             y=a.referencia,
             line={"color": TINTA, "width": 1, "dash": "dash"},
-            annotation_text=f"{rotulo_referencia}: {fo.multiplo(a.nome, a.referencia)}",
+            annotation_text=f"{rotulo_referencia}: {fo.multiplo(a.nome, a.referencia, 2)}",
             annotation_position="top left",
         )
     if pd.notna(a.atual):
@@ -119,7 +119,7 @@ def multiplo(a: AnaliseMultiplo, rotulo: str, rotulo_referencia: str) -> go.Figu
                 x=[a.serie.index[-1]],
                 y=[a.atual],
                 mode="markers",
-                name=f"Hoje: {fo.multiplo(a.nome, a.atual)}",
+                name=f"Hoje: {fo.multiplo(a.nome, a.atual, 2)}",
                 marker={
                     "color": TINTA,
                     "size": 11,
@@ -145,7 +145,7 @@ def ponte(itens: pd.Series) -> go.Figure:
             increasing={"marker": {"color": AZUL}},
             decreasing={"marker": {"color": CINZA}},
             totals={"marker": {"color": TINTA}},
-            text=[fo.formatar(float(v), "mi") for v in itens],
+            text=[fo.formatar(float(v), "mi", 2) for v in itens],
             textposition="outside",
             hovertemplate="%{x}<br>R$ %{text} mi<extra></extra>",
         )
