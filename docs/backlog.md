@@ -76,6 +76,191 @@ só depois da v1 (ou antes, com uma decisão registrada em ADR).
 - Melhor depois da Fase 9, quando as saídas (CSVs e gráficos) estiverem prontas para serem
   reaproveitadas.
 
+## GUI — requisitos a partir das referências (registrado em 2026-11-03)
+
+Referências: as duas páginas de ativo salvas em `GUI/` (PETR4 no Investidor10 e no portal de
+cotação com abas Geral/Contábil/Comunicado). Só **requisitos**: nada implementado. Vale o
+princípio da seção acima: a GUI é camada fina sobre o motor, sem cálculo próprio, e lê os mesmos
+YAMLs e saídas.
+
+Legenda de **dado**: ✅ já existe na CLI/saídas; 🔶 existe parcial ou precisa de função nova sobre
+dados já baixados; ❌ não há fonte gratuita ou está fora do escopo (CLAUDE.md, seção 1). Prioridade:
+**P1** núcleo para a página de ativo funcionar, **P2** completa a semelhança, **P3** acabamento.
+
+### Decisões que bloqueiam (perguntar antes de implementar, regra 7 do `CLAUDE.md`)
+
+1. **Tecnologia** (exige ADR; dependência nova): Streamlit (rápido, aparência limitada, difícil
+   copiar o layout das referências), NiceGUI/Dash (mais controle) ou backend local (FastAPI) +
+   HTML/JS (fidelidade visual máxima, mais trabalho). Recomendação a discutir: FastAPI + frontend
+   leve, porque as referências têm layout denso, abas, cards e gráficos interativos.
+2. **Escopo da fidelidade**: copiar só a *página de ativo* ou também navegação global (rankings,
+   agenda, notícias)?
+3. **Gráficos interativos** (zoom, tooltip, períodos) exigem biblioteca JS ou Plotly, hoje o projeto
+   só tem matplotlib/PNG. Aceitar a dependência?
+4. **Tema** claro, escuro ou ambos; idioma só PT-BR (assumido).
+5. **Execução**: GUI roda o `rodar` sob demanda (lento, rede) ou só lê o último `saida/` e cache,
+   com botão "atualizar"?
+
+### Fora do escopo (as referências têm, mas não entram)
+
+Login/cadastro, planos PRO, anúncios, comunidade e comentários, avaliações de usuários, cursos,
+IA ("Status Alpha"/Agente IA), Forecast e consenso de analistas (CLAUDE.md, decisão 12), FIIs,
+stocks, REITs, BDRs, cripto, tesouro e renda fixa como páginas de ativo, notícias e fatos
+relevantes (sem fonte gratuita estável decidida), mercado de opções, volatilidade vs IBOV como
+produto próprio, "Preço justo Graham/Bazin" como *rótulo* (ver RF-G12).
+
+### Estrutura da aplicação
+
+- **GUI-01 (P1)** Shell: cabeçalho com busca de ticker (autocomplete pelo universo e cadastro),
+  menu de seções e seletor de perfil do investidor; rodapé com aviso "estudo, não é recomendação".
+- **GUI-02 (P1)** Rota por ativo (`/ativo/PETR4`) com abas fixas, como a referência (Geral,
+  Contábil, Valuation, Comparar; "Comunicado" ❌ fica de fora). Troca de classe de ação
+  (PETR3/PETR4) no topo.
+- **GUI-03 (P1)** Barra de estado: data-base, idade do cache por fonte (CVM, preços, macro),
+  avisos do `qa` e do `meta.json` sempre visíveis; botão "atualizar dados" (chama `atualizar`).
+- **GUI-04 (P2)** Páginas globais: início/dashboard, favoritos, carteira, perfil, configurações.
+
+### Aba Geral — cabeçalho e cotação
+
+- **GUI-10 (P1)** Cabeçalho do ativo: nome, ticker, classe, setor/subsetor/segmento (cadastro CVM),
+  botão de favorito (liga em `config/favoritos.yaml`, ADR 0021). Dado ✅.
+- **GUI-11 (P1)** Cards de resumo: valor atual e variação do dia, mín./máx. 52 semanas, dividend
+  yield 12m (e R$ por ação), valorização 12m. Dado 🔶 (preços ✅; dividendos pagos 🔶 conforme
+  fonte, ver GUI-32).
+- **GUI-12 (P1)** Gráfico de cotação com seletor de período (1 dia, 5 dias, 30 dias, 6 meses, YTD,
+  1/5/10 anos, personalizado), cotação padrão × ajustada, moeda R$/US$/EUR. Dado 🔶: intradiário
+  (1 dia) ❌ com yfinance diário; moedas usam câmbio do adaptador de macro.
+- **GUI-13 (P2)** Comparar rentabilidade contra IBOV, CDI, IPCA e outros ativos (até 5). Dado 🔶.
+- **GUI-14 (P2)** Rentabilidade nominal e **real** (descontada IPCA) por janela: 1/3 meses, 1/2/5/10
+  anos. Dado 🔶 (IPCA ✅, preços ✅).
+- **GUI-15 (P3)** Simulador "se tivesse investido há X": valor hoje com reinvestimento de
+  dividendos. Dado 🔶.
+- **GUI-16 (P3)** Dados de negociação: tipo da ação, tag along, liquidez média diária, participação
+  no IBOV. Dado 🔶 (liquidez calculável de preço×volume; tag along e participação ❌ sem fonte).
+
+### Aba Geral — indicadores fundamentalistas
+
+- **GUI-20 (P1)** Grade de indicadores em cinco grupos (Valuation, Endividamento, Eficiência,
+  Rentabilidade, Crescimento) com valor atual por indicador, como a referência. Reaproveita o
+  comando `indicadores`/métricas de `contabil` (C3). Dado 🔶: faltam PEG, P/Ativo, P/SR,
+  P/Cap. giro, P/Ativo circ. líquido, giro do ativo, liquidez corrente, PL/Ativos, Passivos/Ativos
+  (cálculo novo sobre contas já padronizadas; cada definição exige pergunta, regra 7).
+- **GUI-21 (P1)** Ajuda por indicador (ícone "?"): definição, fórmula e como interpretar, vinda do
+  glossário da CLI (Etapa 7). Dado ✅; falta ampliar o glossário aos indicadores novos de GUI-20.
+- **GUI-22 (P1)** Alternar visão **Hoje | Histórico | Média do mercado**. Hoje ✅/🔶; histórico
+  (série anual até 10 anos, trimestral) 🔶 a partir de `historico.csv` e ITR; **média do
+  mercado/setor** 🔶 a partir dos pares de `setores.yaml` (não é média da B3 inteira, deixar
+  explícito no rótulo).
+- **GUI-23 (P2)** Histórico de cada indicador em gráfico (linha ou barra), com seletor de
+  indicador, janela (2/5/10/15 anos, máximo), opção "ignorar anomalias", e linhas de valor atual,
+  média da própria empresa e média do setor.
+- **GUI-24 (P2)** Comparação com os pares do setor: tabela empresa × pares nos mesmos indicadores
+  (`multiplos_pares.csv` ✅), com edição de incluir/excluir pares.
+- **GUI-25 (P2)** Financeiras: grade própria (ROE, P/VP, payout, DY, PL, carteira) em vez da de não
+  financeiras, escolhida por `tipo_modelo` ✅.
+
+### Aba Contábil
+
+- **GUI-30 (P1)** Tabelas anual e trimestral de DRE, balanço e fluxo de caixa padronizados (10 anos),
+  com variação ano a ano e seletor de linha para virar gráfico. Dado ✅ (`contas_padronizadas`).
+- **GUI-31 (P2)** Gráficos "receitas e lucros", "lucro × cotação", "evolução do patrimônio" e
+  "fluxo de caixa". Dado 🔶.
+- **GUI-32 (P2)** Dividendos: histórico (data com, pagamento, tipo, valor), DY por ano e payout.
+  Dado 🔶: payout ✅ via DFP; proventos por data dependem da fonte de preços (yfinance expõe
+  dividendos; JCP/tipo ❌, ver pendência de JCP, CLAUDE.md seção 19, item 7).
+- **GUI-33 (P2)** Painel de **QA**: resultado de `qa.json` por verificação, severidade e conta
+  afetada, com o relatório de cobertura. Dado ✅. Diferencial das referências: aqui a procedência
+  do número é visível.
+- **GUI-34 (P3)** Posição acionária, regiões e segmentos de receita, produção (barris): ❌ fora das
+  fontes da v1.
+
+### Aba Valuation (o que as referências não têm; é o objetivo do projeto)
+
+- **GUI-40 (P1)** Resultado por cenário (pessimista/base/otimista), valor ponderado pelo perfil,
+  **preço máximo de compra**, upside, retorno esperado × hurdle. Dado ✅ (`resumo.csv`).
+- **GUI-41 (P1)** Football field, ponte EV→equity em cascata, composição VP fluxos × VT, histórico ×
+  projeção, heatmap de sensibilidade. Dado ✅ (PNG hoje; versão interativa se a decisão 3 aprovar).
+- **GUI-42 (P1)** Checagens do DCF/DDM visíveis: VT/EV, múltiplo implícito, g < WACC, g ≤ teto,
+  DDM × lucro residual (financeiras), avisos de baixa confiança. Dado ✅.
+- **GUI-43 (P1)** WACC/Ke com cada componente (Rf, beta e R², ERP, Kd, estrutura) e avisos de
+  qualidade do beta. Dado ✅ (`wacc.csv`).
+- **GUI-44 (P2)** **Edição de premissas** com a sugestão do histórico ao lado (`premissas sugerir`),
+  validação pydantic em tempo real, salvar no `config/empresas/{T}.yaml` e **recalcular** sem
+  rodar a CLI; botão "restaurar sugerido". É o requisito de maior risco: deve gravar o YAML
+  preservando comentários e não duplicar regra do motor.
+- **GUI-45 (P2)** Sensibilidade interativa (WACC × g, margem × crescimento, Ke × g) chamando
+  `avaliar` (função pura) em vez de CSV estático.
+- **GUI-46 (P2)** Múltiplos implícitos (P/L, EV/EBITDA, P/VP pelos quartis dos pares) com valor por
+  ação e aviso de poucos pares.
+- **GUI-47 (P2)** Valores reais (deflacionados) em alternância nominal/real.
+- **GUI-48 (P3)** Comparação entre execuções de datas diferentes (`saida/{T}/{data}/`) para ver
+  o que mudou nas premissas e no valor.
+- **GUI-49 (P3)** "Meu preço-alvo": campo livre do usuário contra o preço máximo do modelo (a
+  referência tem "Definir meu Preço-Alvo").
+
+### Preço justo e preço teto (referências: Graham e Bazin)
+
+- **GUI-50 (P2)** Bloco "preço justo (Graham)" e "preço teto (Bazin)" ao lado do valuation. Depende
+  da "Métrica de preço teto" desta página e de **decisão do usuário** sobre incluir ou não
+  fórmulas de terceiros (LPA, VPA, DY alvo, média de dividendos). Não substituem o DCF e vêm
+  rotulados como heurísticas.
+
+### Favoritos, comparador e carteira
+
+- **GUI-60 (P1)** Aba/lista de favoritos com preço, valor ponderado, upside, data do cálculo e
+  idade do cache; ações: adicionar/remover, atualizar um ou todos. Dado ✅ (Etapa 8).
+- **GUI-61 (P2)** Comparador de ativos (até 5) lado a lado em indicadores e valuation (`comparar`).
+- **GUI-62 (P2)** Carteira: patrimônio, posição, preço médio, indicadores por ativo, alocação real ×
+  alvo em rosca (Etapas C2 a C5 do plano da carteira, Etapa C6 é esta tela). Importação de
+  XLSX/CSV pela tela.
+- **GUI-63 (P3)** Agenda de proventos e de resultados da carteira (Etapa C4). Dado ❌ até a C4.
+- **GUI-64 (P3)** Rastreador/ranking simples sobre o universo (filtros por indicador). Fora da v1
+  (execução em lote, CLAUDE.md seção 1); só com decisão do usuário.
+
+### Perfil e configurações
+
+- **GUI-70 (P1)** Questionário de perfil na tela, mesma pontuação e vetos do `perfil/`; mostra
+  validade (12 meses) e permite override explícito de perfil.
+- **GUI-71 (P2)** Edição de `settings.yaml` (ERP, g máximo, margens do perfil) com aviso de que
+  todos os [PLACEHOLDER] devem ser revisados, e glossário geral de métricas (Etapa 7).
+
+### Requisitos não funcionais
+
+- **GUI-90 (P1)** Zero lógica financeira na camada de tela; toda conta passa por funções existentes
+  e é coberta por teste do motor. Testes da GUI sem rede (fixtures sintéticas).
+- **GUI-91 (P1)** Estados vazios e de erro explícitos: dado ausente mostra "—" com motivo
+  (ticker sem YAML, sem DFP, fora do escopo como holding), nunca zero silencioso.
+- **GUI-92 (P1)** Formatação pt-BR (vírgula decimal, R$, %, escala em mi/bi) centralizada; mesma
+  regra de arredondamento dos CSVs.
+- **GUI-93 (P2)** Desempenho: página por ativo abre em < 2 s a partir de cache; cálculo longo roda
+  em segundo plano com progresso e não trava a tela.
+- **GUI-94 (P2)** Responsiva (desktop primeiro, utilizável em ~400 px) e acessível (contraste,
+  foco, rótulos).
+- **GUI-95 (P2)** Local e single-user: escuta só em `127.0.0.1`, sem login, sem telemetria,
+  sem chave de API; `perfil/` e `carteira/` continuam fora do git.
+- **GUI-96 (P2)** Reprodutibilidade: tudo mostrado traz a data-base e a versão de premissas;
+  botão "exportar" reaproveita os CSVs/PNGs da Fase 9.
+- **GUI-97 (P3)** Comando `valuation gui` (entry point) e alvo `make gui`.
+
+### Lacunas de dados a resolver antes (por prioridade)
+
+1. Série histórica de cada indicador (anual/trimestral) e média do setor: cálculo novo sobre dados
+   existentes, mais a decisão de definição por indicador.
+2. Indicadores faltantes de GUI-20 (cada um com sua definição, regra 7).
+3. Dividendos por data e tipo (fonte e JCP).
+4. Intradiário e cotação em outras moedas, se GUI-12 exigir.
+5. API interna estável (funções que devolvem objetos/DataFrames, não texto de CLI) para a GUI
+   consumir; hoje parte da apresentação mora em `cli.py`.
+
+### Ordem sugerida de entrega
+
+1. ADR de tecnologia + esqueleto (GUI-01/02/03/90/91/92/97) com a página PETR4 lendo `saida/`.
+2. Aba Geral: GUI-10 a 12, 20 a 22; favoritos (GUI-60).
+3. Aba Valuation: GUI-40 a 43, 70.
+4. Aba Contábil: GUI-30, 33, 32.
+5. Edição de premissas e sensibilidade interativa (GUI-44/45).
+6. Comparador, carteira e extras (P2/P3).
+
 ## Métrica de preço teto
 
 Definir antes de implementar qual "preço teto" se quer:
@@ -350,6 +535,7 @@ Agiliza o uso cotidiano depois que o universo estiver razoavelmente coberto (Eta
 
 Só depois das Fases 9 e 10 fechadas, e após as etapas 5–8 estabilizarem a CLI.
 
+0. Requisitos detalhados (GUI-01 a GUI-97) na seção "GUI — requisitos a partir das referências".
 1. Decidir tecnologia (Streamlit local ou desktop) e registrar em ADR.
 2. Implementar como camada fina sobre o motor: chama as mesmas funções puras e lê os mesmos YAMLs.
 3. Telas prioritárias: favoritos/dashboard, edição de premissas, resultado (football field,
