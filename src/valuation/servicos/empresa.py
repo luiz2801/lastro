@@ -108,6 +108,12 @@ def padronizar(
         consolidado = False
     try:
         selecionadas = pad.selecionar_reapresentacoes(demonstracoes, consolidado=consolidado)
+        if consolidado and not selecionadas["consolidado"].all():
+            trocados = selecionadas.loc[~selecionadas["consolidado"].astype(bool), "dt_fim"]
+            avisos.append(
+                f"{normalizado} sem consolidado em {trocados.nunique()} data(s), a primeira em "
+                f"{trocados.min():%m/%Y}: usadas as demonstrações individuais nelas."
+            )
         moeda = detectar_moeda(selecionadas, premissas.moeda_relatorio)
         contas = pad.padronizar(selecionadas, plano, ticker=normalizado)
         contas.to_parquet(pad.caminho_padronizadas(dir_processed, empresa.cd_cvm), index=False)

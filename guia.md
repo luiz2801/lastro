@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.46 — 2026-11-04**
+**Versão 1.47 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -55,7 +55,7 @@
 | CLI | `cli.py` | `gui`, `series`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 791 testes (780 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 794 testes (783 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -955,6 +955,8 @@ diretórios) entra por parâmetro nomeado, com a constante de `config.py` como p
   `pad.padronizar` → grava `contas_padronizadas.parquet`. `nao_financeira` ou `financeira` (plano
   conforme o tipo); `holding`/`nao_suportada` ⇒ `ErroContabil`. Companhia sem nenhuma demonstração
   consolidada usa as individuais, com aviso em `avisos`.
+- Família e período com o consolidado zerado ou ausente usam o individual, se ele tiver valor
+  (`pad.selecionar_reapresentacoes`, ADR 0024; TIMS3, ASAI3 e SBSP3), com aviso em `avisos`.
 - `Padronizada(empresa, plano, selecionadas, contas, moeda, premissas, caminho_premissas, avisos)`;
   `.ajustes` = `AjustesContabeis` do YAML (usado por `historico` e `premissas`).
 - Falha depois de um aviso: o aviso segue em `e.__notes__` (`add_note`). `cli._padronizar` o imprime

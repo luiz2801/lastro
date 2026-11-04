@@ -189,6 +189,33 @@ def periodicidade(dt_ini: pd.Timestamp, dt_fim: pd.Timestamp) -> str:
     return {12: "A", 3: "T"}.get(meses, "YTD")
 
 
+def _individual_no_lugar_do_zerado(df: pd.DataFrame, individuais: pd.DataFrame) -> pd.DataFrame:
+    """Família e período com o consolidado zerado ou ausente usam o individual, se ele tiver valor.
+
+    A TIM deixou de consolidar em 2024 e segue enviando o arquivo consolidado só com zeros; a Sendas
+    (ASAI3) parou de enviá-lo em 2021; a Sabesp só o tem desde 2022.
+    """
+    chave = ["familia", "dt_ini", "dt_fim"]
+
+    def com_valor(linhas: pd.DataFrame) -> pd.Series:
+        tem: pd.Series = (
+            linhas.assign(v=linhas["valor"].fillna(0) != 0).groupby(chave, dropna=False)["v"].any()
+        )
+        return tem
+
+    if individuais.empty:
+        return df
+    consolidado = com_valor(df)
+    individual = com_valor(individuais)
+    com_consolidado = consolidado.index[consolidado]
+    trocar = individual.index[individual].difference(com_consolidado)
+    if trocar.empty:
+        return df
+    fora = pd.MultiIndex.from_frame(df[chave]).isin(trocar)
+    entram = pd.MultiIndex.from_frame(individuais[chave]).isin(trocar)
+    return pd.concat([df[~fora], individuais[entram]], ignore_index=True)
+
+
 def selecionar_reapresentacoes(
     demonstracoes: pd.DataFrame, *, consolidado: bool = True
 ) -> pd.DataFrame:
@@ -197,7 +224,8 @@ def selecionar_reapresentacoes(
     "Mais recente" = maior (`dt_refer`, `versao`). Documento que informa o período só com zeros
     não conta (os ITR de 2025 de BAZA3, BNBR3 e outros trazem o balanço comparativo zerado), a
     menos que nenhum outro o informe. Se o documento escolhido trouxer DFC pelos métodos indireto e
-    direto, fica o indireto (os códigos `6.xx` coincidem).
+    direto, fica o indireto (os códigos `6.xx` coincidem). Pedido o consolidado, família e período
+    em que ele vem zerado ou ausente usam o individual (ADR 0024).
     """
     df = demonstracoes[
         (demonstracoes["consolidado"] == consolidado)
@@ -207,6 +235,13 @@ def selecionar_reapresentacoes(
         tipo = "consolidadas" if consolidado else "individuais"
         raise ErroContabil(f"Nenhuma demonstração {tipo} encontrada.")
     df["familia"] = df["demonstracao"].map(FAMILIAS)
+    if consolidado:
+        outras = demonstracoes[
+            ~demonstracoes["consolidado"].astype(bool)
+            & demonstracoes["demonstracao"].isin(list(FAMILIAS))
+        ].copy()
+        outras["familia"] = outras["demonstracao"].map(FAMILIAS)
+        df = _individual_no_lugar_do_zerado(df, outras)
 
     chave = ["familia", "dt_ini", "dt_fim"]
     candidatos = (

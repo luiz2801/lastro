@@ -14,9 +14,9 @@ O que a fonte real desmentiu (conferido em 2026-11-04 nas 65 não financeiras do
 - **`passivo_total` (conta 2) inclui o PL:** é igual ao ativo. "Passivo total ÷ ativo", como o catálogo
   propunha, daria 100% sempre.
 - **Despesas financeiras (3.06.02) zeradas com resultado financeiro diferente de zero:** MOTV3 e USIM5
-  desde 2023, SBSP3 desde 2024, ASAI3 e TIMS3.
+  desde 2023, SBSP3 desde 2024, TIMS3 e ASAI3 (estas por causa do item seguinte).
 - **TIMS3 com o consolidado inteiro zerado em 2024 e 2025;** o individual tem os valores (ativo de R$ 56 bi).
-- **ASAI3 com demonstrações só até 2020** (cd_cvm 25372). Seu valor de hoje usaria o balanço de 2020.
+- **ASAI3 com demonstrações só até 2020** (cd_cvm 25372): desde 2021 só há individual, e o sistema só lia o consolidado.
 - **Série histórica de quase ninguém em disco:** 68 de 74 tickers sem a composição antiga.
 - **IF.data:** metadados e lista de relatórios respondem, os dados deram HTTP 500 em todas as tentativas.
 
@@ -72,8 +72,10 @@ Busca só no universo, com o nome. ★/☆ no cabeçalho e "remover" no início,
 CLI. O override vale na sessão e nunca toca o JSON. O ponderado não é refeito na tela porque o perfil muda o horizonte,
 e o horizonte muda o valor de cada cenário: a tela avisa e oferece "Rodar com perfil X", que sobrescreve a pasta do dia.
 
-**F. Dados com defeito.** Período com o consolidado inteiro zerado usa o individual, família a família, com aviso
-(TIMS3). **Muda os números dessas companhias também no `rodar`.** ASAI3: só investigar e relatar.
+**F. Dados com defeito.** Família e período com o consolidado zerado ou ausente usam o individual, com aviso. **Muda
+os números também no `rodar`** de TIMS3, ASAI3 e SBSP3; comparadas as contas de todo o universo, as outras 71 não mudam.
+A proposta original para a ASAI3 era só investigar. A investigação mostrou a mesma causa: desde 2021 a Sendas só publica
+o individual, e os dados dela paravam em 2020. A mesma regra resolve os dois casos.
 
 ## Consequências
 

@@ -18,7 +18,7 @@
 3. **IFRS 16 (Arrendamentos Mercantis)**:
    - Passivos de arrendamento operacional/leasing pós-2019 devem ser tratados como passivo oneroso e integrados à dívida bruta (com opção de desativação configurável).
 4. **Demonstrações Consolidadas**:
-   - Sempre utilize dados consolidados (`DFP/ITR Consolidado`). Utilize demonstrações individuais apenas para empresas que não publicam consolidadas ou caso explicitamente configurado.
+   - Sempre utilize dados consolidados (`DFP/ITR Consolidado`). Utilize demonstrações individuais apenas para empresas que não publicam consolidadas, para os períodos em que o consolidado vem zerado ou ausente (ADR 0024, com aviso) ou caso explicitamente configurado.
 5. **QA Contábil e Falha Ruidosa**:
    - O módulo `qa.py` deve validar a equação patrimonial fundamental ($Ativo = Passivo + PL$) e a coerência lógica da DRE.
    - Discrepâncias relevantes devem gerar `warning` nos logs ou exceções claras, jamais coerção forçada ou silenciamento de erros.

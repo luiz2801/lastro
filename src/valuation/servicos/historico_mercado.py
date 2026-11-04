@@ -130,7 +130,7 @@ def _contas_da_serie(p: Padronizada, dir_processed: Path) -> pd.DataFrame:
     demonstracoes = pd.concat(
         [pad.ler_demonstracoes(dir_processed, p.empresa.cd_cvm), itr], ignore_index=True
     )
-    consolidado = bool(p.selecionadas["consolidado"].iloc[0])
+    consolidado = bool(p.selecionadas["consolidado"].any())
     selecionadas = pad.selecionar_reapresentacoes(demonstracoes, consolidado=consolidado)
     return pad.padronizar(selecionadas, p.plano, ticker=p.premissas.ticker)
 

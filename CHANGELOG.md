@@ -2,6 +2,12 @@
 
 ## [Não lançado]
 
+### Consolidado zerado ou ausente usa o individual (ADR 0024)
+- `pad.selecionar_reapresentacoes`: família e período sem consolidado com valor passam a usar o individual, com
+  aviso. **Muda números** de ASAI3 (demonstrações paravam em 2020; agora vão até 2026), TIMS3 (consolidado zerado
+  em 2024 e 2025, entre outros) e SBSP3 (consolidado só desde 2022). As outras 71 empresas ficam idênticas
+  (comparação das contas padronizadas do universo).
+
 ### Sprint GUI 2, E: desempenho da abertura (ADR 0024)
 - Abertura de um ativo, só cálculo: de 4,3 a 8,1 s para 0,3 a 0,4 s com o cache em disco (2,3 a 4,1 s na primeira
   vez). Nenhum número mudou (comparação exata com a referência).

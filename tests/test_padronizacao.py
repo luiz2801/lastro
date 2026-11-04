@@ -267,3 +267,35 @@ def test_ler_demonstracoes_sem_arquivo(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         pad.ler_demonstracoes(tmp_path, 9512)
     assert pad.caminho_padronizadas(tmp_path, 9512).name == "contas_padronizadas.parquet"
+
+
+def test_consolidado_zerado_usa_o_individual_por_periodo() -> None:
+    bom = documento({"1": 10}, dem="BPA", dt_fim="2024-12-31", consolidado=True)
+    zerado = documento({"1": 0}, dem="BPA", dt_fim="2025-12-31", consolidado=True)
+    individual = juntar(
+        documento({"1": 7}, dem="BPA", dt_fim="2024-12-31", consolidado=False),
+        documento({"1": 9}, dem="BPA", dt_fim="2025-12-31", consolidado=False),
+    )
+    sel = pad.selecionar_reapresentacoes(juntar(bom, zerado, individual))
+    por_data = sel.set_index("dt_fim")["valor"]
+    assert por_data[pd.Timestamp("2024-12-31")] == 10  # consolidado com valor fica
+    assert por_data[pd.Timestamp("2025-12-31")] == 9
+
+
+def test_consolidado_e_individual_zerados_mantem_o_consolidado() -> None:
+    zerado = documento({"1": 0}, dem="BPA", dt_fim="2025-12-31", consolidado=True)
+    ind = documento({"1": 0}, dem="BPA", dt_fim="2025-12-31", consolidado=False)
+    sel = pad.selecionar_reapresentacoes(juntar(zerado, ind))
+    assert sel["consolidado"].all()
+
+
+def test_consolidado_ausente_no_periodo_usa_o_individual() -> None:
+    """ASAI3: consolidado até 2020, só individual depois."""
+    dados = juntar(
+        documento({"1": 10}, dem="BPA", dt_fim="2020-12-31", consolidado=True),
+        documento({"1": 7}, dem="BPA", dt_fim="2020-12-31", consolidado=False),
+        documento({"1": 9}, dem="BPA", dt_fim="2021-12-31", consolidado=False),
+    )
+    por_data = pad.selecionar_reapresentacoes(dados).set_index("dt_fim")["valor"]
+    assert por_data[pd.Timestamp("2020-12-31")] == 10
+    assert por_data[pd.Timestamp("2021-12-31")] == 9
