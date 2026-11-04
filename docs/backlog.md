@@ -367,6 +367,102 @@ Só iniciar se o usuário pedir explicitamente; exige decisão sobre distribuiç
 
 *Entrega:* distribuição do valor por ação e VaR do upside; Fase 11 do roadmap.
 
+## Validação cruzada dos fundamentos (yfinance × CVM)
+
+Objetivo (pedido do usuário em 2026-11-03): não precisar enviar os relatórios das companhias a cada
+conferência. O pipeline compara lucro, PL, ativo (e receita, nas não financeiras) calculados a
+partir da CVM com os fundamentos do Yahoo (`yfinance`, já dependência do projeto). Se coincidem, nada
+é pedido; se divergem, dispara um alerta pedindo o release daquele período. O golden continua sendo o
+registro fixo conferido com o documento da companhia; a checagem externa é só triagem.
+
+**Sondagem feita em 2026-11-03** (leitura, sem gravar nada): `Ticker.quarterly_income_stmt` e
+`quarterly_balance_sheet` trazem ~5 trimestres (o mais antigo vem `NaN`). BBAS3 bateu com o IFRS do
+golden até a primeira casa decimal em lucro dos controladores (`Net Income Common Stockholders`),
+PL dos controladores (`Stockholders Equity`) e ativo total (`Total Assets`). PETR4 veio em **dólar**
+(receita do 2T26: 33.607 contra R$ 169.530 mi), então precisa de checagem de moeda. Em banco, o
+`Total Revenue` do Yahoo não é a receita da CVM: não comparar.
+
+### Desenho
+
+1. **Adaptador** `src/valuation/data/fundamentos.py` (camada `data`, sem importar camadas acima):
+   - `FundamentosProvider` (Protocol, como `PrecosProvider`) e a implementação `yfinance`, devolvendo
+     tabela longa `data_ref, metrica, valor, moeda, fonte`, com métricas padronizadas
+     (`lucro_controladora`, `patrimonio_liquido_controladora`, `ativo_total`, `receita_liquida`).
+   - Mapa de rótulos do Yahoo → métrica em `config/` (não no código); moeda de `financialCurrency`.
+   - Cache em `data/raw/fundamentos/` (parquet + `.meta.json`), TTL em `cache_ttl_horas.fundamentos`,
+     retry e cópia vencida em falha de rede, como em `precos.py`. Falha ou ausência nunca é erro.
+2. **Comparação** em `contabil/qa.py`, que continua pura: `verificar(..., referencia_externa=None)`
+   recebe a tabela já baixada (quem baixa é a CLI). Para cada (métrica, data) em comum, monta duas
+   `Leitura` (CVM principal, Yahoo alternativa) e chama `validacao.cruzar`; consolida num único
+   `Verificacao` de código `fundamentos_divergentes`.
+   - Fluxos: trimestres de `periodos.trimestral`; saldos: datas de balanço. Só períodos que existem
+     nos dois lados.
+   - Financeiras: só lucro dos controladores, PL dos controladores e ativo total. Não financeiras:
+     inclui receita líquida. EBITDA e dívida líquida ficam fora (definições diferentes entre fontes).
+3. **Resultado por situação**:
+
+   | Situação | Severidade | Efeito |
+   |---|---|---|
+   | todos os períodos coincidem | `info` | "conferido com yfinance em N períodos"; nenhum pedido |
+   | diferença acima da tolerância | `aviso` | lista (métrica, período, valor CVM, valor Yahoo) e a frase "envie o release de {período}" |
+   | moeda do Yahoo ≠ moeda da CVM (PETR4) | `info` | "sem validação: Yahoo em USD" |
+   | Yahoo sem o período ou sem rede | `info` | "sem validação externa"; nunca bloqueia |
+
+   O aviso aparece no `qa.json`, na saída do `valuation qa TICKER` e `valuation rodar` e no
+   `meta.json`. Não interrompe a execução (mesma política da validação cruzada de preços e macro).
+4. **Tolerância** (`settings.yaml`, `validacao.fundamentos`, **[PLACEHOLDER]**): relativa de 0,5% **e**
+   diferença absoluta acima de R$ 1 milhão, para o arredondamento do Yahoo (0,1 milhão) e valores
+   pequenos não dispararem falso alerta.
+5. **Fluxo do usuário**: coincidiu → segue sem enviar nada. Alertou → envia o release; o agente
+   confere, corrige o mapeamento ou o dado e, se for o caso, acrescenta o período ao
+   `tests/golden/referencias.yaml`.
+6. **Em lote** (extensão): `valuation validar --tudo` percorre o universo e lista quais empresas têm
+   divergência, para o usuário enviar só esses relatórios.
+
+### Etapas
+
+- **V1 — Validar a fonte** (antes de qualquer código): script exploratório de leitura sobre os
+  pilotos (PETR4, VALE3, WEGE3, ITUB4, BBAS3): cobertura de períodos, rótulos, moeda e taxa de acerto
+  contra a CVM. Registrar em `docs/fontes.md`; fixar a tolerância com o resultado.
+- **V2 — ADR e adaptador**: ADR 0022 (uso do yfinance para fundamentos só como segunda fonte, nunca
+  principal, sem alterar o `CLAUDE.md`), `fundamentos.py`, mapa de rótulos, cache; `tests/test_fundamentos.py`.
+- **V3 — Integração**: parâmetro em `qa.verificar`, chamada na CLI (`qa` e `rodar`), opção
+  `--sem-externo`, `settings.yaml`, avisos no `meta.json`; casos novos em `tests/test_qa.py`.
+- **V4 — Lote**: `valuation validar --tudo` sobre o universo.
+- **V5 — Moeda (opcional)**: comparar emissores em USD (PETR4) convertendo pela PTAX da data com
+  tolerância larga (ordem de 5%), ou manter "sem validação". Decisão do usuário.
+
+### Testes (sem rede, como manda `docs/regras/REGRAS_TESTES.md`)
+
+Provider falso e tabelas sintéticas: coincidência, divergência de 1%, diferença abaixo do piso
+absoluto, período `NaN` ou ausente, moeda USD, rede fora do ar, financeira sem receita comparada,
+cache dentro do TTL e cópia vencida em falha; `qa.json` com o novo código. Nenhum teste chama o
+Yahoo.
+
+### Limites a registrar
+
+- Cobre só os últimos ~5 trimestres: serve para erro em dado recente (reapresentação, conta nova),
+  não para os 10 anos.
+- O Yahoo parte dos mesmos documentos que a CVM: é independente do nosso parser e mapeamento, não
+  do que a companhia divulgou. Coincidir diz que as duas leituras concordam, não que conferem com o
+  documento.
+- Alerta significa "confira": moeda, definição (lucro ajustado × IFRS) ou erro do Yahoo também disparam.
+- Yahoo pode atrasar a publicação de um trimestre novo: aparece como "sem validação", não como erro.
+- Rótulos validados só para BBAS3 e PETR4; confirmar nos demais pilotos na etapa V1.
+
+### Documentos a atualizar na entrega
+
+`docs/fontes.md`, ADR 0022 (com índice), `guia.md` (módulo `fundamentos`, `qa`, testes), `README.md`
+(tabela de APIs e testes), `CHANGELOG.md`, `docs/diagrama_atividades.md` e os UML afetados
+(`docs/diagramas.md`: classes, sequência do `rodar`, arquitetura), `docs/regras/REGRAS_DADOS.md` se
+surgir regra nova.
+
+### Perguntas abertas para o usuário
+
+1. Tolerância: aceita 0,5% com piso de R$ 1 milhão?
+2. O alerta só avisa (recomendado) ou deve bloquear o `rodar`?
+3. Vale a pena a etapa V5 (conversão por PTAX) ou emissores em USD ficam "sem validação"?
+
 ## Carteira pessoal (ADR 0020, planejado em 2026-10-31)
 
 Escopo pedido pelo usuário: RF-004, 007, 008, 009, 010, 011 e 012 do plano de requisitos, de forma

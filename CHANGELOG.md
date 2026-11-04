@@ -2,6 +2,11 @@
 
 ## [Não lançado]
 
+### Backlog: validação cruzada dos fundamentos (yfinance × CVM)
+- `docs/backlog.md`: desenho, etapas V1 a V5, testes, limites e perguntas abertas da checagem de
+  lucro, PL, ativo e receita contra o Yahoo, com alerta pedindo o release só quando divergir. Inclui a
+  sondagem de 2026-11-03 (BBAS3 bate; PETR4 vem em USD). Só documentação; nada implementado.
+
 ### README: APIs e testes que as validam
 - `README.md`, seção "APIs e fontes de dados": CVM, yfinance, brapi, BCB (SGS e Focus) e Tesouro
   Transparente, com endpoint, adaptador e a fonte usada na validação cruzada; e a tabela dos
