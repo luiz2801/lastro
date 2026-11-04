@@ -2,6 +2,12 @@
 
 ## [Não lançado]
 
+### Sprint GUI 2, E: desempenho da abertura (ADR 0024)
+- Abertura de um ativo, só cálculo: de 4,3 a 8,1 s para 0,3 a 0,4 s com o cache em disco (2,3 a 4,1 s na primeira
+  vez). Nenhum número mudou (comparação exata com a referência).
+- `servicos/derivados.py`, `hm.series_com_cache`, `cmp.medir_com_cache`: pasta `derivados/`, apagável, invalidada por
+  mudança de arquivo, settings, cadastro ou código. `contabil/padronizacao.py`: normalização memoizada e soma vetorizada.
+
 ### Sprint GUI 1, S5: aba Valuation
 - `gui/aba_valuation.py`: cenários, valor ponderado, preço máximo de compra, upside, retorno esperado x
   hurdle, custo de capital, checagens, football field e ponte em Plotly, lidos dos CSVs de `saida/`, sem

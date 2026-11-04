@@ -13,7 +13,7 @@ flowchart BT
     subgraph ORQ["Orquestração e interface"]
         cli["cli<br/>(typer, rich)"]
         gui["gui<br/>(streamlit, plotly)"]
-        servicos["servicos<br/>empresa, mercado, indicadores, resultados,<br/>atualizacao, cache, historico_mercado, comparacao"]
+        servicos["servicos<br/>empresa, mercado, indicadores, resultados,<br/>atualizacao, cache, derivados, historico_mercado, comparacao"]
     end
 
     subgraph APL["Aplicação (camadas de cálculo e saída)"]
@@ -137,7 +137,7 @@ flowchart LR
         direction TB
         f_cfg[/"«file» config/<br/>settings.yaml, setores.yaml,<br/>mapeamento_contas.yaml,<br/>empresas/*.yaml, universo, cadastro_manual"/]
         f_raw[("«database» data/raw<br/>zip, csv, json, parquet de preços<br/>+ .meta.json")]
-        f_proc[("«database» data/processed<br/>parquets por companhia, cadastro,<br/>qa, erp_implicito.json")]
+        f_proc[("«database» data/processed<br/>parquets por companhia, cadastro,<br/>qa, erp_implicito.json, derivados/")]
         f_perfil[/"«file» perfil/perfil_investidor.json"/]
         f_saida[/"«file» saida/TICKER/AAAA-MM-DD/<br/>CSV, JSON, YAML, PNG"/]
         f_cart[/"«file» carteira/transacoes.csv"/]

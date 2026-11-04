@@ -206,6 +206,14 @@ def splits_em_cache(simbolo: str, dir_cache: Path) -> pd.Series | None:
     return _ler_splits(caminho) if caminho.is_file() else None
 
 
+def arquivos_em_cache(simbolo: str, dir_cache: Path) -> list[Path]:
+    """Arquivos de cotação e de splits de `simbolo`, para quem precisa saber se algo mudou."""
+    return [
+        *dir_cache.glob(f"yf_{_nome_arquivo(simbolo)}_*.parquet"),
+        _caminho_splits(simbolo, dir_cache),
+    ]
+
+
 def historico_em_cache(simbolo: str, dir_cache: Path) -> pd.DataFrame | None:
     """Maior janela já gravada de `simbolo`, sem rede e sem TTL; `None` se não houver nenhuma.
 

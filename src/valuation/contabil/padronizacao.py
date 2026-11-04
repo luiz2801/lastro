@@ -17,9 +17,11 @@ import re
 import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 from typing import Any, Literal
 
+import numpy as np
 import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
@@ -62,7 +64,9 @@ COLUNAS_PADRONIZADAS = [
 ]
 
 
+@cache
 def _sem_acento(texto: str) -> str:
+    """Pura e chamada por linha em cada regra; as descrições distintas são poucas centenas."""
     decomposto = unicodedata.normalize("NFKD", texto)
     return "".join(c for c in decomposto if not unicodedata.combining(c)).lower()
 
@@ -226,26 +230,42 @@ def selecionar_reapresentacoes(
 
 def _somar_nivel_mais_alto(casadas: pd.DataFrame) -> pd.DataFrame:
     """Soma, por período, as contas casadas que não são subconta de outra casada."""
-    linhas = []
-    for (dt_ini, dt_fim), grupo in casadas.groupby(["dt_ini", "dt_fim"], dropna=False):
-        codigos = grupo["cd_conta"].tolist()
-        topo = grupo[[not any(_abaixo(c, o) for o in codigos) for c in codigos]]
-        primeira = topo.iloc[0]
-        linhas.append(
-            {
-                "dt_ini": dt_ini,
-                "dt_fim": dt_fim,
-                "valor": float(topo["valor"].sum()),
-                "cd_contas": ";".join(sorted(topo["cd_conta"])),
-                "dt_refer": primeira["dt_refer"],
-                "versao": primeira["versao"],
-                "demonstracao": primeira["demonstracao"],
-                "moeda": primeira["moeda"],
-                "escala_aplicada": primeira["escala_moeda"],
-                "fonte_arquivo": primeira["arquivo"],
-            }
-        )
-    return pd.DataFrame(linhas)
+    grupos = casadas.groupby(["dt_ini", "dt_fim"], dropna=False, sort=True).ngroup().to_numpy()
+    ordem = np.argsort(grupos, kind="stable")
+    cortes = np.flatnonzero(np.diff(grupos[ordem])) + 1
+    codigos = casadas["cd_conta"].to_numpy()
+    valores = casadas["valor"].to_numpy(dtype="float64")
+    primeiras: list[int] = []
+    somas: list[float] = []
+    cd_contas: list[str] = []
+    for posicoes in np.split(ordem, cortes):
+        do_periodo = [str(c) for c in codigos[posicoes]]
+        topo = [
+            i
+            for i, c in zip(posicoes, do_periodo, strict=True)
+            if not any(_abaixo(c, o) for o in do_periodo)
+        ]
+        primeiras.append(int(topo[0]))
+        somas.append(float(np.nansum(valores[topo])))
+        cd_contas.append(";".join(sorted(str(c) for c in codigos[topo])))
+    resultado = casadas.iloc[primeiras][
+        [
+            "dt_ini",
+            "dt_fim",
+            "dt_refer",
+            "versao",
+            "demonstracao",
+            "moeda",
+            "escala_moeda",
+            "arquivo",
+        ]
+    ].reset_index(drop=True)
+    resultado = resultado.rename(
+        columns={"escala_moeda": "escala_aplicada", "arquivo": "fonte_arquivo"}
+    )
+    resultado.insert(2, "valor", somas)
+    resultado.insert(3, "cd_contas", cd_contas)
+    return resultado
 
 
 def avaliar_regra(selecionadas: pd.DataFrame, regra: RegraMapeamento) -> pd.DataFrame:

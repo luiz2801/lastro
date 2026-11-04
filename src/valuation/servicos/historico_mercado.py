@@ -15,7 +15,7 @@ import pandas as pd
 from valuation.analise import anomalias as an
 from valuation.analise import indicadores as ind
 from valuation.analise import serie_multiplos as sm
-from valuation.config import DIR_PROCESSED, DIR_RAW, Settings
+from valuation.config import DIR_EMPRESAS, DIR_PROCESSED, DIR_RAW, Settings
 from valuation.contabil import ErroContabil
 from valuation.contabil import padronizacao as pad
 from valuation.data import cadastro as cad
@@ -25,8 +25,11 @@ from valuation.data.http import SessaoHttp
 from valuation.data.validacao import ErroDadosExternos
 from valuation.modelos import ErroModelo
 from valuation.modelos import multiplos as mt
+from valuation.projecao import premissas as pm
 from valuation.saida import arquivos as arq
 from valuation.servicos import comparacao as cmp
+from valuation.servicos import derivados as drv
+from valuation.servicos import empresa as emp
 from valuation.servicos import indicadores as sind
 from valuation.servicos.empresa import Padronizada
 
@@ -174,10 +177,12 @@ def _fundamentos_vigentes(
     avisos: list[str],
 ) -> dict[pd.Timestamp, mt.Fundamentos]:
     """Fundamentos em cada fim de período usado; LTM incompleto fica de fora, com aviso."""
-    com_serie = replace(p, contas=contas)
     sem_cap = prc.MarketCap(float("nan"), (), dt.date.min, ())
     fundamentos: dict[pd.Timestamp, mt.Fundamentos] = {}
     for fim in fins:
+        # Só as datas que o LTM de `fim` lê: pivotar a tabela inteira 27 vezes domina o tempo.
+        datas = [fim, fim - pd.DateOffset(years=1), pd.Timestamp(fim.year - 1, 12, 31)]
+        com_serie = replace(p, contas=contas[contas["dt_fim"].isin(datas)])
         try:
             # `acoes` só entra no valor por ação, que aqui não é usado.
             fundamentos[fim] = sind.fundamentos(
@@ -252,6 +257,116 @@ def carregar_series(
     return SeriesMercado(
         ticker, cotacao, multiplos, caps, vigentes, inicio_composicao, avisos, nao_positivos
     )
+
+
+def _entradas_series(
+    empresa: cad.Empresa,
+    ticker: str,
+    dir_raw: Path,
+    dir_processed: Path,
+    dir_empresas: Path,
+) -> list[Path]:
+    """Tudo em disco de que a série depende; qualquer mudança aqui obriga a recalcular."""
+    pasta = dir_processed / "cvm" / str(empresa.cd_cvm)
+    entradas = [
+        pasta / "demonstracoes.parquet",
+        pasta / cvm.ARQUIVO_SERIES_ITR,
+        pasta / cvm.ARQUIVO_SERIES_COMPOSICAO,
+        pasta / cvm.ARQUIVO_DIVULGACOES,
+        pm.caminho_premissas(ticker, dir_empresas),
+        pad.CAMINHO_MAPEAMENTO,
+    ]
+    simbolos = {ticker, *empresa.tickers}
+    for t in simbolos:
+        entradas += prc.arquivos_em_cache(prc.simbolo_yahoo(t), _dir_precos(dir_raw))
+    return entradas
+
+
+def _gravar_series(destino: Path, chave: str, s: SeriesMercado) -> None:
+    tabela = s.multiplos.add_prefix("m__")
+    if s.nao_positivos is not None:
+        tabela = tabela.join(s.nao_positivos.astype("bool").add_prefix("np__"))
+    tabela = tabela.assign(market_cap=s.market_cap, vigencia=s.vigencia)
+    drv.gravar_parquet(destino.with_suffix(".parquet"), tabela)
+    inicio = None if s.inicio_composicao is None else s.inicio_composicao.isoformat()
+    drv.gravar_json(
+        destino.with_suffix(".json"), chave, {"avisos": s.avisos, "inicio_composicao": inicio}
+    )
+
+
+def _ler_series(
+    destino: Path, chave: str, ticker: str, cotacao: pd.DataFrame
+) -> SeriesMercado | None:
+    meta = drv.ler_json(destino.with_suffix(".json"), chave)
+    if meta is None:
+        return None
+    try:
+        tabela = pd.read_parquet(destino.with_suffix(".parquet"))
+    except (OSError, ValueError):
+        return None
+    tabela.index = pd.DatetimeIndex(tabela.index)
+    multiplos = tabela.filter(regex="^m__").rename(columns=lambda c: c.removeprefix("m__"))
+    negativos = tabela.filter(regex="^np__").rename(columns=lambda c: c.removeprefix("np__"))
+    inicio = meta["inicio_composicao"]
+    return SeriesMercado(
+        ticker,
+        cotacao,
+        multiplos,
+        tabela["market_cap"].astype("float64"),
+        tabela["vigencia"].astype("datetime64[ns]"),
+        None if inicio is None else dt.date.fromisoformat(inicio),
+        [str(a) for a in meta["avisos"]],
+        None if negativos.empty else negativos.astype("bool"),
+    )
+
+
+def series_com_cache(
+    ticker: str,
+    cadastro: pd.DataFrame | None,
+    settings: Settings,
+    base: dt.date,
+    *,
+    p: Padronizada | None = None,
+    dir_raw: Path = DIR_RAW,
+    dir_processed: Path = DIR_PROCESSED,
+    dir_empresas: Path = DIR_EMPRESAS,
+) -> SeriesMercado | None:
+    """`carregar_series` com cache em disco, sem rede. A cotação é sempre lida na hora.
+
+    A data-base entra pelos pontos mensais: ela só muda a série quando muda algum ponto. Sem `p`, só
+    padroniza se o cache não servir (é o que torna barato ler dezenas de pares).
+    """
+    if p is not None:
+        empresa = p.empresa
+    elif cadastro is not None:
+        empresa = cad.empresa_por_ticker(cadastro, ticker)
+    else:
+        raise ValueError("series_com_cache precisa de `p` ou do cadastro.")
+    cotacao = prc.historico_em_cache(prc.simbolo_yahoo(ticker), _dir_precos(dir_raw))
+    if cotacao is None or cotacao.empty:
+        return None
+    pontos = sm.pontos_mensais(pd.DatetimeIndex(cotacao.index), base, settings.historico_anos)
+    chave = drv.chave(
+        drv.versao_codigo(),
+        settings.model_dump_json(),
+        repr(empresa),
+        ticker,
+        drv.assinatura(_entradas_series(empresa, ticker, dir_raw, dir_processed, dir_empresas)),
+        [str(d) for d in pontos],
+    )
+    destino = drv.pasta(dir_processed, empresa.cd_cvm) / f"series_{ticker}.x"
+    guardada = _ler_series(destino, chave, ticker, cotacao)
+    if guardada is not None:
+        return guardada
+    if p is None:
+        assert cadastro is not None  # o `else` acima já levantou
+        p = emp.padronizar(ticker, cadastro, dir_processed=dir_processed, dir_empresas=dir_empresas)
+    series = carregar_series(
+        p, ticker, settings, base, dir_raw=dir_raw, dir_processed=dir_processed
+    )
+    if series is not None:
+        _gravar_series(destino, chave, series)
+    return series
 
 
 def cartoes(series: SeriesMercado, base: dt.date) -> CartoesCotacao | None:

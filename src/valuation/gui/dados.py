@@ -133,9 +133,17 @@ def _series(
     _chave: tuple[float, float, float],
     dir_raw: Path,
     dir_processed: Path,
+    dir_empresas: Path,
 ) -> hm.SeriesMercado | None:
-    return hm.carregar_series(
-        _p, ticker, settings(), base, dir_raw=dir_raw, dir_processed=dir_processed
+    return hm.series_com_cache(
+        ticker,
+        None,
+        settings(),
+        base,
+        p=_p,
+        dir_raw=dir_raw,
+        dir_processed=dir_processed,
+        dir_empresas=dir_empresas,
     )
 
 
@@ -147,7 +155,7 @@ def series(p: emp.Padronizada, ticker: str, base: dt.date) -> hm.SeriesMercado |
         _mtime(pasta / "demonstracoes.parquet"),
         _mtime(pasta / "series_itr.parquet"),
     )
-    return _series(p, ticker, base, chave, cfg.DIR_RAW, cfg.DIR_PROCESSED)
+    return _series(p, ticker, base, chave, cfg.DIR_RAW, cfg.DIR_PROCESSED, cfg.DIR_EMPRESAS)
 
 
 @st.cache_data(show_spinner=False)
@@ -174,7 +182,7 @@ def _medidas(
     dir_processed: Path,
     dir_empresas: Path,
 ) -> list[scmp.Medida]:
-    return scmp.medir_varios(
+    return scmp.medir_com_cache(
         tickers,
         _cadastro_atual,
         settings(),

@@ -603,6 +603,11 @@ S1 a S6 entregues. Limites conhecidos:
 - Streamlit reexecuta o script a cada clique: sem `st.cache_data` a página passa de 2 s (GUI-93).
 - yfinance é não oficial: o botão de atualizar precisa mostrar a falha sem derrubar a tela.
 
+## Sprint GUI 2 (2026-11-04, ADR 0024)
+
+Ordem: E → A → B → C → D → Basileia. O usuário delegou as escolhas ao agente; as decisões e os motivos
+estão no ADR 0024, que vale como resposta da regra 7 para esta sprint.
+
 ## Métrica de preço teto
 
 Definir antes de implementar qual "preço teto" se quer:
