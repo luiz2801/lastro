@@ -7,6 +7,9 @@
   `servicos/` compartilhada com a CLI, leitura de `saida/` e cache com botão de atualizar.
 - `docs/backlog.md`: seção "Sprint GUI 1" (tarefas S1 a S6, perguntas abertas sobre a série
   histórica de múltiplos, critério de pronto e riscos). Nada implementado ainda.
+- `docs/backlog.md`: "Catálogo de métricas a acrescentar" (não financeiras e financeiras, com
+  fórmula proposta, estado do dado e classe de tratamento de anomalias; Basileia via IF.data a
+  validar).
 
 ### Política: perguntar antes de decidir o que muda a saída
 - `CLAUDE.md` (regra 7 da seção 0) e `CONTRIBUTING.md` (seção "Dúvidas"): toda decisão que possa

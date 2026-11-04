@@ -163,6 +163,99 @@ produto próprio, "Preço justo Graham/Bazin" como *rótulo* (ver RF-G12).
 - **GUI-25 (P2)** Financeiras: grade própria (ROE, P/VP, payout, DY, PL, carteira) em vez da de não
   financeiras, escolhida por `tipo_modelo` ✅.
 
+### Catálogo de métricas a acrescentar (registrado em 2026-11-03)
+
+Estado de hoje (conferido no código): `indicadores.py` mostra margem líquida, margem EBITDA,
+dívida líquida/EBITDA, ROE, ROIC (não financeiras); ROE, payout, ROA e ativo/PL (financeiras); e
+P/L, P/VP, dividend yield, EV/EBITDA, EV/EBIT (mercado). `modelos/multiplos.py` já calcula
+EV/Receita e EV/FCF, mas o comando `indicadores` ainda não os mostra. `contabil/nao_financeiras.py`
+tem as bases (EBITDA, NOPAT, FCFF, capex, CFO, NWC, dívida bruta/líquida, caixa, capital investido,
+alíquota efetiva). Tudo abaixo é **o que falta**.
+
+Legenda do dado: ✅ conta já padronizada, só falta a razão; 🔶 precisa de conta nova no
+`mapeamento_contas.yaml` ou de dado de preço/volume; ❌ sem fonte gratuita decidida. "Anomalia" é a
+classe de tratamento da seção "Decisões fechadas": **M+** múltiplo sempre positivo (Log-IQR),
+**M±** pode ser negativo (IQR nos dois lados), **S/C** sem corte. **Todas as fórmulas são
+propostas**: cada definição é confirmada com o usuário antes de implementar (regra 7), e cada uma
+ganha verbete no glossário (`saida/glossario.py`) e teste calculado à mão.
+
+**Não financeiras**
+
+| Grupo | Métrica | Fórmula proposta | Dado | Anomalia |
+|---|---|---|---|---|
+| Valuation | P/Receita (P/SR) | market cap ÷ receita líquida LTM | ✅ | M+ |
+| Valuation | EV/Receita, EV/FCF | já existem em `multiplos.py`; só expor | ✅ | M+ |
+| Valuation | P/Ativo | market cap ÷ ativo total | ✅ | M+ |
+| Valuation | P/Capital de giro | market cap ÷ capital de giro (NWC) | ✅ | M± (NWC pode ser ≤ 0) |
+| Valuation | P/Ativo circulante líquido | market cap ÷ (ativo circulante − passivo total) | ✅ | M± |
+| Valuation | PEG | P/L ÷ crescimento anual do lucro (CAGR 5 anos, em %) | ✅ | M± |
+| Valuation | Earnings yield e FCF yield | EBIT ÷ EV; FCFF ÷ EV | ✅ | M± |
+| Valuation | LPA, VPA | lucro e PL da controladora ÷ ações (na base de F(t)) | 🔶 | S/C |
+| Endividamento | Dívida bruta/PL, dívida líquida/PL | dívida ÷ PL total | ✅ | M± |
+| Endividamento | Dívida bruta/EBITDA, dívida líquida/EBIT | dívida ÷ EBITDA ajustado; ÷ EBIT | ✅ | M± |
+| Endividamento | Cobertura de juros | EBIT ÷ despesas financeiras | ✅ | M± |
+| Endividamento | Passivos/Ativos e PL/Ativos | passivo total ÷ ativo total; PL ÷ ativo | ✅ | S/C |
+| Endividamento | Perfil da dívida | dívida CP ÷ dívida bruta | ✅ | S/C |
+| Endividamento | Custo médio da dívida | Kd histórico (ADR 0007) como série | ✅ | M± |
+| Caixa | Caixa e aplicações, caixa/dívida CP, caixa/ativo | (caixa + aplicações) ÷ denominador | ✅ | S/C |
+| Caixa | Conversão de caixa | CFO ÷ EBITDA; FCF ÷ lucro líquido | ✅ | M± |
+| Liquidez | Corrente, seca, imediata | AC÷PC; (AC−estoques)÷PC; (caixa+aplicações)÷PC | ✅ | S/C |
+| Liquidez | Geral | (AC + realizável a LP) ÷ (PC + PNC) | 🔶 (realizável a LP) | S/C |
+| Eficiência | Giro do ativo, do imobilizado | receita ÷ ativo total médio; ÷ imobilizado médio | ✅ | M+ |
+| Eficiência | PMR, PME, PMP e ciclo de caixa | receber ÷ receita × 365; estoque ÷ custo × 365; fornecedores ÷ custo × 365 | ✅ | M+ |
+| Rentabilidade | Margem bruta, margem EBIT, despesas operacionais/receita | razões sobre receita líquida | ✅ | M± |
+| Rentabilidade | ROA, ROCE | lucro ÷ ativo inicial; EBIT ÷ (ativo − passivo circulante) | ✅ | M± |
+| Rentabilidade | Margem de FCF, capex/receita, capex/D&A | razões do histórico | ✅ | M± |
+| Crescimento | CAGR 3/5/10 anos de receita, EBITDA, lucro, dividendos | (final ÷ inicial)^(1/n) − 1; lucro ≤ 0 vira NaN | ✅ | M± |
+| Crescimento | Variação anual de receita e lucro | t ÷ t−1 − 1 | ✅ | M± |
+| Mercado | Retorno em janelas (1/3/6 meses, 1/5/10 anos), nominal e real | preço ajustado; real por IPCA | 🔶 | S/C |
+| Mercado | Volatilidade, drawdown máximo, mín./máx. 52 semanas | sobre `Close` ajustado | 🔶 | S/C |
+| Mercado | Liquidez média diária | média de preço × volume (yfinance) | 🔶 | S/C |
+| Mercado | Beta e R² | `custo_capital/beta.py` como série móvel | ✅ | S/C |
+| Proventos | Dividendo por ação e DY por ano | proventos por data ÷ preço (JCP/tipo ❌, ver GUI-32) | 🔶 | S/C |
+| Mercado | Free float, tag along, participação no IBOV | — | ❌ | — |
+
+**Financeiras (bancos e seguradoras)**
+
+O ADR 0011 mapeou só as contas necessárias ao DDM (receitas, resultado bruto, LAIR, IR, lucro,
+dividendos, ativo, passivo, PL, minoritários). Quase tudo abaixo exige inspeção das DFP reais de
+ITUB4, BBAS3, BBDC4, SANB11 e BPAC11 antes de mapear (seção 7.2 do `CLAUDE.md`).
+
+| Grupo | Métrica | Fórmula proposta | Dado | Anomalia |
+|---|---|---|---|---|
+| Capital | **Índice de Basileia**, capital principal e nível 1, RWA | divulgação prudencial do Banco Central | ❌ na CVM; candidato **IF.data (BCB)** | S/C |
+| Capital | PL/Ativos, ativo/PL | já existem (`alavancagem`) | ✅ | S/C |
+| Valuation | P/VPA tangível | market cap ÷ (PL − intangível) | 🔶 | M+ |
+| Valuation | LPA, VPA, P/L, P/VP, DY, payout | P/L, P/VP, DY e payout já existem; LPA/VPA como na tabela acima | ✅/🔶 | M+ / S/C |
+| Crédito | Carteira de crédito, carteira/ativo, carteira/depósitos | contas de "operações de crédito" e "depósitos" | 🔶 | S/C |
+| Crédito | **Inadimplência (NPL 90 dias)**, cobertura de provisões | do release/IF.data; a DFP só traz o saldo de provisões | ❌ DFP / IF.data | M± |
+| Crédito | Custo do crédito | despesa de provisão ÷ carteira média | 🔶 | M± |
+| Resultado | Margem financeira (NIM), spread | resultado da intermediação ÷ ativos rentáveis médios | 🔶 | M± |
+| Resultado | Índice de eficiência | despesas administrativas e de pessoal ÷ receitas | 🔶 | M± |
+| Resultado | Receita de serviços/receitas | tarifas e serviços ÷ receitas totais | 🔶 | S/C |
+| Rentabilidade | ROAE, ROAA | lucro ÷ PL médio; ÷ ativo médio (hoje o ROE usa o PL inicial) | ✅ | M± |
+| Seguradoras | Sinistralidade, índice combinado, prêmios ganhos | sinistros ÷ prêmios ganhos; (sinistros + despesas) ÷ prêmios | 🔶 | M± |
+
+**Basileia, em particular (entrada nova de fonte)**
+- Não está na DFP (`CLAUDE.md`, seções 11.3 e 18). Candidata gratuita: **IF.data do Banco Central**
+  (dados abertos: índice de Basileia, capital principal, nível 1, RWA, por instituição e trimestre).
+- **[VALIDAR]** antes de qualquer código: URL e formato real, cobertura de ITUB4, BBAS3, BBDC4,
+  SANB11 e BPAC11, histórico disponível e o casamento instituição ↔ ticker (o BC publica por
+  **conglomerado prudencial**, não por CNPJ de companhia aberta). Registrar em `docs/fontes.md`.
+- Exige adaptador em `data/` (cache, `.meta.json`, retry e segunda fonte ou aviso, como as demais),
+  ADR próprio (fonte e casamento) e a decisão do usuário sobre o limite mínimo que vira aviso
+  (o regulatório é 10,5% com adicional de conservação; o valor que a GUI destaca é escolha dele).
+- Fora da sprint GUI 1; **P2 da sprint seguinte**. Enquanto isso, a GUI mostra "—" com o motivo
+  "índice regulatório não consta na DFP".
+
+**Prioridade sugerida de entrega** (para decidir com o usuário)
+1. Expor o que já existe (EV/Receita, EV/FCF, ROA das não financeiras, dívida/PL, caixa, liquidez
+   corrente/seca/imediata, cobertura de juros): só razões sobre contas ✅.
+2. Séries históricas e CAGR de crescimento.
+3. Eficiência (giros e prazos médios) e demais múltiplos de balanço.
+4. Mercado (retornos, volatilidade, liquidez), depende da série de preço da S2.
+5. Financeiras: mapear contas de crédito e depósitos, depois Basileia e inadimplência (IF.data).
+
 ### Aba Contábil
 
 - **GUI-30 (P1)** Tabelas anual e trimestral de DRE, balanço e fluxo de caixa padronizados (10 anos),
@@ -461,21 +554,11 @@ sem nenhuma conta feita na camada de tela.
    Rede automática apenas para ativo sem nenhum cache: o favorito sem cache ou o não favorito
    aberto pela primeira vez, com progresso e erro visível.
 
-### Métricas pedidas além do GUI-20 (registrado em 2026-11-03)
+### Métricas pedidas além do GUI-20
 
-O usuário quer "o máximo de métricas possíveis", inclusive **Basileia, endividamento e caixa**.
-- **Endividamento e caixa (não financeiras)** ✅/🔶: já existem dívida bruta/líquida, caixa,
-  aplicações, arrendamento, dívida líquida/EBITDA e PL; falta expor como série e acrescentar
-  dívida bruta/PL, dívida bruta/EBITDA, cobertura de juros (EBIT/despesa financeira), caixa/dívida
-  CP, liquidez corrente/seca/imediata. Cada definição segue a regra 7.
-- **Basileia (financeiras)** ❌ na CVM: o índice de Basileia não está na DFP (CLAUDE.md, seção 11.3
-  e riscos). Candidato de fonte gratuita: **IF.data do Banco Central** (dados abertos, índice de
-  Basileia, capital nível 1 e principal por instituição e trimestre). **[VALIDAR]** URL, formato,
-  cobertura de ITUB4, BBAS3, BBDC4, SANB11, BPAC11 e o casamento instituição ↔ ticker (conglomerado
-  prudencial × CNPJ). Entrada nova de fonte: adaptador em `data/` com cache, `docs/fontes.md` e
-  ADR próprio. Fora da sprint GUI 1; fica como item P2 da sprint seguinte.
-- **Financeiras:** além de ROE, P/VP, payout e PL, a carteira de crédito, índice de eficiência e
-  inadimplência só saem da DFP se as contas estiverem mapeadas (ADR 0011); revisar a cobertura.
+Pedido do usuário (2026-11-03): "o máximo de métricas possíveis", inclusive Basileia, endividamento
+e caixa. O catálogo completo, com fórmula proposta e estado do dado, está em **"Catálogo de métricas
+a acrescentar"** (aba Geral, abaixo). Nenhuma entra na sprint GUI 1 sem passar pela regra 7.
 
 ### Critério de pronto da sprint
 
