@@ -245,16 +245,24 @@ ITUB4, BBAS3, BBDC4, SANB11 e BPAC11 antes de mapear (seção 7.2 do `CLAUDE.md`
 - Exige adaptador em `data/` (cache, `.meta.json`, retry e segunda fonte ou aviso, como as demais),
   ADR próprio (fonte e casamento) e a decisão do usuário sobre o limite mínimo que vira aviso
   (o regulatório é 10,5% com adicional de conservação; o valor que a GUI destaca é escolha dele).
-- Fora da sprint GUI 1; **P2 da sprint seguinte**. Enquanto isso, a GUI mostra "—" com o motivo
+- Fora da sprint GUI 1; **início da sprint seguinte** (prioridade 2 abaixo). Enquanto isso, a GUI mostra "—" com o motivo
   "índice regulatório não consta na DFP".
 
-**Prioridade sugerida de entrega** (para decidir com o usuário)
-1. Expor o que já existe (EV/Receita, EV/FCF, ROA das não financeiras, dívida/PL, caixa, liquidez
-   corrente/seca/imediata, cobertura de juros): só razões sobre contas ✅.
-2. Séries históricas e CAGR de crescimento.
-3. Eficiência (giros e prazos médios) e demais múltiplos de balanço.
-4. Mercado (retornos, volatilidade, liquidez), depende da série de preço da S2.
-5. Financeiras: mapear contas de crédito e depósitos, depois Basileia e inadimplência (IF.data).
+**Prioridade de entrega** (definida pelo usuário em 2026-11-03: financeiras e Basileia antes)
+1. Expor o que já existe (EV/Receita, EV/FCF, ROA das não financeiras): só razões sobre contas ✅.
+2. **Financeiras e Basileia:** inspecionar as DFP reais de ITUB4, BBAS3, BBDC4, SANB11 e BPAC11 e
+   mapear carteira de crédito, depósitos, provisões e despesas administrativas (ADR novo, seção 7.2
+   do `CLAUDE.md`); validar o IF.data e criar o adaptador de Basileia, capital principal e
+   inadimplência (ADR de fonte); depois NIM, eficiência, custo do crédito, ROAE/ROAA e, para
+   seguradoras, sinistralidade e índice combinado.
+3. Endividamento e caixa das não financeiras (dívida/PL, dívida/EBITDA, cobertura de juros,
+   caixa/dívida CP, liquidez corrente/seca/imediata).
+4. Séries históricas e CAGR de crescimento.
+5. Eficiência (giros e prazos médios) e demais múltiplos de balanço.
+6. Mercado (retornos, volatilidade, liquidez); depende da série de preço da S2.
+
+Consequência: o item 2 sobe de "P2 da sprint seguinte" para o **início da sprint seguinte**, e o
+adaptador do IF.data passa a ser o primeiro trabalho de fonte nova depois da GUI 1.
 
 ### Aba Contábil
 
