@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.51 — 2026-11-04**
+**Versão 1.52 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -553,7 +553,7 @@ receita (só `3.04.03–05`, candidatas a não recorrente).
 |---|---|---|
 | 11 | `rodar-setor` (lote por setor) já existe (ADR 0019); falta screening e resumo consolidado entre empresas. Só entra se o usuário pedir: modo em lote/screening, SOTP/NAV para holdings, Monte Carlo, deck de commodities, tratamento de JCP, diluição | `rodar` é uma empresa por vez; o motor (funções puras) já aceita qualquer `PremissasEmpresa` |
 
-Também fora do código hoje: legendas nos gráficos PNG, indicadores novos e Basileia na GUI (catálogo em `docs/backlog.md`), série histórica das médias de pares e Ibovespa, ERP implícito do Ibovespa (ADR 0018,
+Também fora do código hoje: legendas nos gráficos PNG, Basileia na GUI (IF.data sem validar, `docs/fontes.md`) e os demais indicadores do catálogo (`docs/backlog.md`), ERP implícito do Ibovespa (ADR 0018,
 proposto; `docs/backlog.md`).
 
 | Carteira C4–C6 | Proventos e agenda (fonte a validar), alocação e alvos (`alvos.yaml`), tela. Falta também o golden dos indicadores novos (margem líquida, dívida líquida/EBITDA, ROE de PETR4 ou WEGE3: depende da conferência do usuário) | `docs/backlog.md`, "Carteira pessoal"; ADR 0020. `posicao.calcular_posicoes` já reproduz a carteira (reusa `transacoes.ordenar` e `aplicar_quantidade`) |
@@ -798,6 +798,18 @@ vez de baixar dados reais. Sem rede nos testes.
     `historico` (contábil), e a dívida líquida inclui o arrendamento com `ifrs16: divida`. As
     companhias publicam a própria definição (ex.: Petrobras), então compare com o release antes de
     tratar a diferença como erro. A margem líquida é sobre o lucro da controladora.
+
+- **Conta 2 da CVM (`passivo_total`) inclui o PL** e é igual ao ativo: passivos de terceiros = `passivo_circulante` +
+  `passivo_nao_circulante`.
+- **`despesas_financeiras` pode vir zerada com `resultado_financeiro` preenchido** (MOTV3, USIM5, SBSP3): trate como "não
+  abre", nunca como sem despesa, e não use o líquido no lugar.
+- **ALOS3 tem debêntures em Outras Obrigações:** `divida_financeira` = 0 com despesa financeira. Os indicadores da GUI
+  mostram "—"; `rodar` e Dívida líquida/EBITDA ainda tratam como sem dívida.
+- **Mudar o código de `analise`, `contabil`, `data`, `modelos` ou `servicos` invalida todo `derivados/`:** a abertura seguinte
+  recalcula (cerca de 100 s no Ibovespa inteiro). É proposital; não confunda com lentidão em uso normal.
+- **Cotações em disco terminam em datas diferentes:** por isso `sm.sem_mes_parcial` tira o último mês da linha de grupo.
+- **Busca na barra lateral:** a escolha é tratada em callback que esvazia o campo. Ler o valor no corpo da página reabriria o
+  ativo ao voltar ao início.
 
 ## 17. `perfil/` — perfil do investidor
 

@@ -2,6 +2,11 @@
 
 ## [Não lançado]
 
+### Sprint GUI 2: fechamento (ADR 0024)
+- Tooltips dos gráficos de múltiplos e indicadores com 2 casas. Início sem o aviso do `fillna` em coluna numérica.
+- Conferência sem rede em PETR4, VALE3, WEGE3 e BBAS3: cenários, ponderado e preço máximo iguais ao `resumo.csv`; abertura
+  de 0,7 a 1,0 s de cálculo e Ibovespa em até 1,5 s, com o cache em disco. IF.data sem validar (`docs/fontes.md`).
+
 ### Sprint GUI 2, D: perfil do investidor na tela (GUI-70, ADR 0024)
 - `gui/pagina_perfil.py`: perfil gravado, validade, parâmetros e questionário sem resposta pré-marcada, com a pontuação e
   os vetos de `perfil/`. "Perfil nesta sessão" na barra lateral, sem tocar o JSON; na aba Valuation, botão "Rodar com

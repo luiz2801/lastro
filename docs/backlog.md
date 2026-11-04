@@ -579,9 +579,10 @@ a acrescentar"** (aba Geral, abaixo). Nenhuma entra na sprint GUI 1 sem passar p
 S1 a S6 entregues. Limites conhecidos:
 
 - Indicadores novos do catálogo e Basileia não entraram (regra 7, sem decisão). Média de pares e do
-  Ibovespa só com o valor de hoje.
+  Ibovespa só com o valor de hoje. (Resolvido na Sprint GUI 2, salvo Basileia.)
 - Primeira abertura de um ativo: 5 a 9 s, acima da meta de 2 s de GUI-93. Depois do cache, 0,05 s por clique.
-- Comparar com o Ibovespa fica num botão, por custar 40 s na primeira vez.
+  (Sprint GUI 2: 0,7 a 1,0 s com o cache em disco.)
+- Comparar com o Ibovespa fica num botão, por custar 40 s na primeira vez. (Sprint GUI 2: até 1,5 s.)
 
 ### Critério de pronto da sprint
 
@@ -607,6 +608,15 @@ S1 a S6 entregues. Limites conhecidos:
 
 Ordem: E → A → B → C → D → Basileia. O usuário delegou as escolhas ao agente; as decisões e os motivos
 estão no ADR 0024, que vale como resposta da regra 7 para esta sprint.
+
+Estado (2026-11-04): E, A, B, C e D entregues. Pendências:
+
+- **Basileia:** o IF.data deu HTTP 500 em todas as tentativas (`docs/fontes.md`); sem adaptador, a GUI mostra "—".
+- **A decidir pelo usuário:** ALOS3 com a dívida fora das contas de empréstimos (mudaria o `rodar`); Kd histórico de
+  MOTV3, USIM5 e SBSP3, cuja despesa financeira vem zerada; KLBN11 fora das médias (preço só da unit).
+- **Início:** o upside segue com 1 casa, porque `test_inicio_mostra_favoritas_do_cache` fixa "26,2%" e os testes existentes
+  não mudam nesta sprint. As demais métricas da GUI usam 2.
+- **Cotação em disco:** 85 de 97 tickers terminam em 30/10/2026, mesmo baixados em 04/11; a janela longa do Yahoo veio assim.
 
 ## Métrica de preço teto
 

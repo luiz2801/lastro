@@ -259,6 +259,14 @@ eles mesmo com `auto_adjust=False`; a quantidade de ações da CVM vem na base d
 exaustivo: `conferir_splits` cruza com a composição do capital. WEGE3: 1,3 em 2018-04-25 e 2 em
 2021-04-28. Levantamento do universo no `docs/backlog.md`.
 
+## IF.data do Banco Central (Basileia): **não validado** (2026-11-04)
+
+`https://olinda.bcb.gov.br/olinda/servico/IFDATA/versao/v1/odata/`. Respondem: a raiz, `$metadata` e `ListaDeRelatorio()`,
+com 5 relatórios, entre eles "Informações de Capital" (nº 5). `IfDataCadastro(AnoMes=...)` e
+`IfDataValores(AnoMes=...,TipoInstituicao=...,Relatorio='5')` devolveram HTTP 500 "Erro desconhecido" em todas as tentativas
+do dia, com 202412, 202503 e 202506, e com parâmetros por alias. O cadastro expõe `CnpjInstituicaoLider` e
+`CodConglomeradoPrudencial`, candidatos ao casamento com o ticker. Sem dado real, nenhum adaptador: a GUI mostra "—".
+
 ## Macro (BCB / Tesouro)
 
 Validado em 2026-10-30. Todas as chamadas são GET sem chave.

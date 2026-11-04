@@ -48,7 +48,7 @@ def _tabela_favoritas(tickers: list[str], hoje: dt.date) -> pd.DataFrame:
         "Upside",
         "Avisos",
     ]
-    return pd.DataFrame(linhas, columns=colunas).fillna("—")
+    return pd.DataFrame(linhas, columns=colunas).astype(object).fillna("—")
 
 
 def _favoritas(hoje: dt.date) -> None:

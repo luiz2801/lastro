@@ -86,7 +86,7 @@ def multiplo(
     """
     percentual = a.nome == "dividend_yield"
     formato_y = ".1%" if percentual else None
-    formato_valor = "%{y:.1%}" if percentual else "%{y:.1f}x"
+    formato_valor = "%{y:.2%}" if percentual else "%{y:.2f}x"
     fora = a.descartados.index
     validos = a.serie.where(~a.serie.index.isin(fora))
     figura = go.Figure()
@@ -177,7 +177,7 @@ def multiplo(
 def indicador(a: AnaliseIndicador, rotulo: str, unidade: str, nome_referencia: str) -> go.Figure:
     """Indicador por período (anual + LTM). Fora da referência em cinza; marcado com contorno."""
     y = a.serie / 1e6 if unidade == "mi" else a.serie
-    formato = {"%": ".1%", "x": ".2f", "mi": ",.0f"}[unidade]
+    formato = {"%": ".2%", "x": ".2f", "mi": ",.2f"}[unidade]
     fora = a.serie.index.isin(a.descartados.index)
     figura = go.Figure(
         go.Scatter(

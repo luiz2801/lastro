@@ -183,15 +183,17 @@ Pilotos: PETR4, VALE3 e WEGE3.
   PNG em PT-BR (football field, cascata da ponte, heatmaps de sensibilidade, histórico × projeção,
   composição do valor); `--sem-graficos` suprime os PNG.
 - **GUI local** (Sprint GUI 1, ADR 0022 e 0023): `uv sync --group gui && uv run valuation gui` abre
-  `http://127.0.0.1:8501`. Início com favoritas; por ativo, cotação, múltiplos em série com tratamento de
-  anomalias, indicadores, comparação com pares e Ibovespa e o valuation do último `rodar`. Abrir não usa
-  rede. Múltiplos em série só desde 31/03/2020, porque a CVM não publica a quantidade de ações antes.
+  `http://127.0.0.1:8501`. Barra lateral com busca, favoritas e perfil do investidor na tela; por ativo, cotação,
+  múltiplos em série com a média dos pares e do Ibovespa, tratamento de anomalias, indicadores de endividamento, liquidez e
+  caixa, e o valuation do último `rodar`. Abrir não usa rede; a abertura leva menos de 1 s de cálculo com o cache em disco. Múltiplos em série só desde 31/03/2020, porque a CVM não publica a quantidade de ações antes.
 - **Ainda não**: o que está na seção 12 do `guia.md` (Fase 11, extensões).
 
 ## Decisões que completam ou divergem do `CLAUDE.md`
 
 - **GUI (ADR 0022 e 0023):** Streamlit + Plotly, sem conta na tela. A série de múltiplos começa em
   31/03/2020, com o fator de split na data da composição e o LTM a partir da 1ª divulgação.
+- **Sprint GUI 2 (ADR 0024):** fórmulas dos indicadores novos, médias de grupo por corte mensal, Ibovespa com a carteira de
+  hoje (viés de sobrevivência), cache derivado em disco e período sem consolidado com valor usando o individual.
 
 Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
 

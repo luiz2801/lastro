@@ -75,3 +75,7 @@ vai no mesmo commit. Push só quando o usuário pedir.
 - `gui/` não faz conta e não usa rede ao abrir: lê `_em_cache` e `ler_cadastro_processado`, nunca
   `carregar_cadastro`, que iria à rede com o TTL vencido.
 - Nada em `gui/` pode se chamar como um pacote (`valuation.py`): o Streamlit põe a pasta no `sys.path`.
+- Séries e medidas de grupo passam por `servicos/derivados.py`: `data/processed/cvm/{cd}/derivados/`, apagável. A chave
+  leva o hash do código do cálculo, então mudar `analise`, `contabil`, `data`, `modelos` ou `servicos` recalcula tudo na
+  próxima abertura.
+- Conta 2 da CVM inclui o PL: passivos de terceiros = 2.01 + 2.02. Período sem consolidado com valor usa o individual.
