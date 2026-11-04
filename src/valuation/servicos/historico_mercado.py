@@ -90,12 +90,41 @@ def baixar_series(
     Sem cotação do próprio papel ⇒ `ErroDadosExternos`; as demais faltas viram aviso.
     """
     avisos: list[str] = []
-    yf = prc.YFinanceProvider(
+    yf = _provedor(settings, agora, forcar, dir_raw)
+    _baixar_precos(yf, empresa, ticker, settings, base, avisos)
+    cvm.coletar_series(
+        cvm.AlvoCVM(empresa.cnpj, empresa.cd_cvm, empresa.escala_acoes),
+        base.year,
+        settings.historico_anos,
+        dir_raw=dir_raw,
+        dir_processed=dir_processed,
+        ttl=dt.timedelta(hours=settings.cache_ttl_horas.cvm),
+        sessao=sessao,
+        agora=agora,
+        forcar=forcar,
+    )
+    return avisos
+
+
+def _provedor(
+    settings: Settings, agora: dt.datetime, forcar: bool, dir_raw: Path
+) -> prc.YFinanceProvider:
+    return prc.YFinanceProvider(
         _dir_precos(dir_raw),
         dt.timedelta(hours=settings.cache_ttl_horas.precos),
         agora,
         forcar=forcar,
     )
+
+
+def _baixar_precos(
+    yf: prc.YFinanceProvider,
+    empresa: cad.Empresa,
+    ticker: str,
+    settings: Settings,
+    base: dt.date,
+    avisos: list[str],
+) -> None:
     inicio = (pd.Timestamp(base) - pd.DateOffset(years=settings.historico_anos)).date()
     for classe in empresa.classes:
         try:
@@ -108,17 +137,45 @@ def baixar_series(
         yf.splits(prc.simbolo_yahoo(ticker))
     except ErroDadosExternos as e:
         avisos.append(f"{ticker} sem lista de splits: {e}")
-    cvm.coletar_series(
-        cvm.AlvoCVM(empresa.cnpj, empresa.cd_cvm, empresa.escala_acoes),
-        base.year,
-        settings.historico_anos,
-        dir_raw=dir_raw,
-        dir_processed=dir_processed,
-        ttl=dt.timedelta(hours=settings.cache_ttl_horas.cvm),
-        sessao=sessao,
-        agora=agora,
-        forcar=forcar,
-    )
+
+
+def baixar_series_varios(
+    empresas: dict[str, cad.Empresa],
+    settings: Settings,
+    base: dt.date,
+    agora: dt.datetime,
+    *,
+    sessao: SessaoHttp,
+    forcar: bool = False,
+    dir_raw: Path = DIR_RAW,
+    dir_processed: Path = DIR_PROCESSED,
+) -> list[str]:
+    """`baixar_series` de várias empresas (ticker -> empresa), lendo cada zip da CVM uma vez.
+
+    Falha na cotação de um papel vira aviso, e os demais seguem.
+    """
+    avisos: list[str] = []
+    yf = _provedor(settings, agora, forcar, dir_raw)
+    alvos: dict[int, cvm.AlvoCVM] = {}
+    for ticker, empresa in empresas.items():
+        try:
+            _baixar_precos(yf, empresa, ticker, settings, base, avisos)
+        except ErroDadosExternos as e:
+            avisos.append(f"{ticker} sem cotação, fora da série: {e}")
+            continue
+        alvos[empresa.cd_cvm] = cvm.AlvoCVM(empresa.cnpj, empresa.cd_cvm, empresa.escala_acoes)
+    if alvos:
+        cvm.coletar_series_varios(
+            list(alvos.values()),
+            base.year,
+            settings.historico_anos,
+            dir_raw=dir_raw,
+            dir_processed=dir_processed,
+            ttl=dt.timedelta(hours=settings.cache_ttl_horas.cvm),
+            sessao=sessao,
+            agora=agora,
+            forcar=forcar,
+        )
     return avisos
 
 

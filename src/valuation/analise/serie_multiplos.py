@@ -18,6 +18,7 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
+from valuation.analise import anomalias as an
 from valuation.modelos import multiplos as mt
 
 COLUNAS_ACOES = (
@@ -149,6 +150,48 @@ def denominador_nao_positivo(
         f = None if pd.isna(fim) else fundamentos.get(fim)
         marcas[pd.Timestamp(str(data))] = f is not None and bool(f.metrica(metrica) <= 0)
     return pd.Series(marcas, dtype="bool")
+
+
+def defasados(vigentes: pd.Series, meses: int) -> pd.Series:
+    """Pontos cujo balanço vigente é mais velho que `meses`: já não representam a empresa."""
+    limite = pd.DatetimeIndex(vigentes.index) - pd.DateOffset(months=meses)
+    return pd.Series(vigentes.to_numpy() < limite.to_numpy(), index=vigentes.index, dtype="bool")
+
+
+def sem_mes_parcial(painel: pd.DataFrame, com_cotacao: pd.Series) -> pd.DataFrame:
+    """Tira o último mês se menos da metade das empresas do mês anterior já tem cotação nele.
+
+    As cotações em disco terminam em datas diferentes: um mês que só 4 de 64 empresas alcançaram
+    não é o Ibovespa, mesmo passando do mínimo de empresas. Só o último mês: antes dele, empresa sem
+    cotação é IPO ou lacuna, e o mínimo de empresas já cuida disso.
+    """
+    if len(com_cotacao) < 2 or com_cotacao.iloc[-1] * 2 >= com_cotacao.iloc[-2]:
+        return painel
+    sem_o_ultimo: pd.DataFrame = painel.drop(index=com_cotacao.index[-1], errors="ignore")
+    return sem_o_ultimo
+
+
+def serie_do_grupo(
+    painel: pd.DataFrame,
+    classe: an.Classe,
+    tipo: an.Referencia,
+    corte_fixo: float | None,
+    min_empresas: int,
+) -> pd.DataFrame:
+    """Referência do grupo em cada mês: linhas = meses, colunas = empresas. NaN = lacuna.
+
+    Corte transversal: em cada mês, o mesmo filtro do valor de hoje (`an.filtrar`). Devolve `valor`
+    e `n` (empresas válidas depois do filtro); com `n < min_empresas`, `valor` fica NaN.
+    """
+    valores: dict[pd.Timestamp, tuple[float, int]] = {}
+    for mes, linha in painel.iterrows():
+        filtro = an.filtrar(linha, classe, corte_fixo)
+        n = len(filtro.validos)
+        valor = an.referencia(filtro, tipo) if n >= min_empresas else float("nan")
+        valores[pd.Timestamp(str(mes))] = (valor, n)
+    return pd.DataFrame.from_dict(valores, orient="index", columns=["valor", "n"]).astype(
+        {"valor": "float64", "n": "int64"}
+    )
 
 
 def cortar_periodo(serie: pd.DataFrame, periodo: Periodo, base: dt.date) -> pd.DataFrame:

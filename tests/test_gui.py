@@ -424,3 +424,43 @@ def test_historico_do_balanco_troca_o_indicador_sem_rede(ambiente: Path) -> None
     at.selectbox(key="indicador_balanco").set_value("caixa_aplicacoes").run()
     assert not at.exception
     assert any("sem referência" in c.value for c in at.caption)
+
+
+def test_comando_series_varios_isola_ticker_desconhecido(
+    ambiente: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _com_dados(ambiente)
+    monkeypatch.setattr(cli, "DIR_RAW", ambiente / "raw")
+    monkeypatch.setattr(cli, "DIR_PROCESSED", ambiente / "processed")
+    monkeypatch.setattr(cli, "DIR_EMPRESAS", ambiente / "empresas")
+    monkeypatch.setattr(cli, "criar_sessao", lambda: object())
+    monkeypatch.setattr(cli, "_carregar_cadastro", lambda *_: CADASTRO)
+    pedidos: list[list[str]] = []
+
+    def baixar(empresas: dict[str, object], *_: object, **__: object) -> list[str]:
+        pedidos.append(list(empresas))
+        return []
+
+    monkeypatch.setattr(cli.hm, "baixar_series_varios", baixar)
+    resultado = CliRunner().invoke(app, ["series-varios", "wege3", "ZZZZ3"])
+    assert resultado.exit_code == 0, resultado.output
+    assert pedidos == [["WEGE3"]]
+    assert "ZZZZ3" in resultado.output
+
+
+def test_grafico_com_linhas_de_grupo_sem_rede() -> None:
+    from valuation.analise import anomalias as an
+    from valuation.gui import grafico
+    from valuation.servicos import historico_mercado as hm
+
+    datas = pd.to_datetime(["2026-01-30", "2026-02-27"])
+    serie = pd.Series([10.0, 12.0], index=datas)
+    filtro = an.filtrar(serie, an.Classe.POSITIVO, 80.0)
+    a = hm.AnaliseMultiplo("p_l", serie, filtro, 12.0, 11.0, pd.Series(dtype="object"), 0, None)
+    grupo = pd.DataFrame({"valor": [8.0, 50.0], "n": [3, 4]}, index=datas)
+    figura = grafico.multiplo(
+        a, "P/L", "Mediana", [grafico.LinhaGrupo("Pares", grupo, grafico.LARANJA, "dash")]
+    )
+    nomes = [t.name for t in figura.data]
+    assert "Pares" in nomes
+    assert figura.layout.yaxis.range[1] == pytest.approx(55.0)  # a linha entra na escala

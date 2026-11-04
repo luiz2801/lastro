@@ -64,6 +64,12 @@ some ao reiniciar o servidor, e a linha do Ibovespa recalcularia 70 empresas.
 5. Balanço com mais de `multiplos.defasagem_max_meses` (12) sai das médias de grupo, com o motivo: um múltiplo
    com lucro de 2020 não representa a empresa hoje. **Muda a média de hoje** de grupos com ASAI3.
 
+6. Último mês parcial sai: as cotações em disco terminam em datas diferentes (85 de 97 tickers em 30/10, 12 depois), e um
+   novembro com 4 de 64 empresas não é o Ibovespa, mesmo acima do mínimo. Vale só para o último mês, se menos da metade
+   das empresas do mês anterior já tem cotação nele.
+7. Empresas com ON e PN no universo (PETR3 e PETR4, BBDC3 e BBDC4) contam duas vezes no Ibovespa, como já contam no valor de
+   hoje. Mudar um sem o outro quebraria a conferência entre os dois.
+
 **C. Navegação.** Barra lateral em todas as páginas (nativa, recolhe no celular) com busca, Início e Perfil.
 Busca só no universo, com o nome. ★/☆ no cabeçalho e "remover" no início, mesma validação da CLI, sem confirmação
 (é reversível) e sem download ao favoritar.
@@ -81,7 +87,8 @@ o individual, e os dados dela paravam em 2020. A mesma regra resolve os dois cas
 ## Consequências
 
 - Pasta nova `derivados/`, apagável a qualquer momento. Conta nova `realizavel_lp` em `contas_padronizadas.parquet`.
-- Parâmetro novo `multiplos.defasagem_max_meses`.
+- Parâmetro novo `multiplos.defasagem_max_meses`. Comando novo `series-varios`.
+- KLBN11 fica fora das médias: nenhuma classe ON/PN com preço (o papel cotado é a unit). Não investigado.
 - O Kd histórico das companhias com despesa zerada não foi conferido nem alterado.
 - ALOS3 guarda as debêntures em Outras Obrigações: a dívida mapeada é só arrendamento. Os indicadores novos mostram "—";
   o `rodar` e a Dívida líquida/EBITDA seguem como estavam, porque corrigir mudaria o valuation e pede decisão.

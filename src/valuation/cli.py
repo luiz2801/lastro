@@ -84,6 +84,7 @@ from valuation.saida import real
 from valuation.saida.csv import INTERNACIONAL, FormatoCsv, gravar_csv, gravar_matriz
 from valuation.servicos import comparacao as scmp
 from valuation.servicos import empresa as emp
+from valuation.servicos import grupos as grp
 from valuation.servicos import historico_mercado as hm
 from valuation.servicos import indicadores as sind
 from valuation.servicos import mercado as mer
@@ -3274,6 +3275,50 @@ def series(
         raise _erro(str(e)) from e
     _imprimir_avisos(avisos)
     console.print(f"Séries de {cad.normalizar_ticker(ticker)} gravadas em {DIR_PROCESSED / 'cvm'}.")
+
+
+@app.command("series-varios")
+def series_varios(
+    tickers: Annotated[list[str], typer.Argument(help="Ex.: PRIO3 RECV3 BRAV3.")],
+    forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+) -> None:
+    """Como `series`, para vários tickers, lendo cada zip da CVM uma vez; deixa o cálculo pronto."""
+    agora = dt.datetime.now(dt.UTC)
+    avisos: list[str] = []
+    try:
+        settings = carregar_settings()
+        base = settings.resolver_data_base(agora.date())
+        cadastro = _carregar_cadastro(settings, base, forcar)
+        empresas: dict[str, cad.Empresa] = {}
+        for ticker in tickers:
+            normalizado = cad.normalizar_ticker(ticker)
+            try:
+                empresas[normalizado] = cad.empresa_por_ticker(cadastro, normalizado)
+            except cad.ErroCadastro as e:
+                avisos.append(str(e))
+        avisos += hm.baixar_series_varios(
+            empresas,
+            settings,
+            base,
+            agora,
+            sessao=criar_sessao(),
+            forcar=forcar,
+            dir_raw=DIR_RAW,
+            dir_processed=DIR_PROCESSED,
+        )
+        avisos += grp.preparar_calculo(
+            list(empresas),
+            cadastro,
+            settings,
+            base,
+            dir_raw=DIR_RAW,
+            dir_processed=DIR_PROCESSED,
+            dir_empresas=DIR_EMPRESAS,
+        )
+    except (ErroConfiguracao, ErroDownload, cad.ErroCadastro, ErroDadosExternos) as e:
+        raise _erro(str(e)) from e
+    _imprimir_avisos(avisos)
+    console.print(f"Séries de {len(empresas)} ticker(s) gravadas em {DIR_PROCESSED / 'cvm'}.")
 
 
 @app.command("gui")

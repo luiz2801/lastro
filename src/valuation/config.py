@@ -157,6 +157,8 @@ class ConfigMultiplos(_Modelo):
     corte_p_vp: float = Field(gt=0)
     corte_ev_ebitda: float = Field(gt=0)
     corte_ev_ebit: float = Field(gt=0)
+    # Balanço mais velho que isto sai das médias de grupo da GUI (ADR 0024).
+    defasagem_max_meses: int = Field(default=12, ge=1)
 
 
 class ValidacaoCruzada(_Modelo):

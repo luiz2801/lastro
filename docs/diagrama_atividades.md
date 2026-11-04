@@ -317,10 +317,13 @@ flowchart TD
   D -->|sim| F["Padroniza em memória e em cache (mtime na chave)"]
   F --> G{"Cotação do papel em disco?"}
   G -->|não| G1["'—' com o motivo; indicadores contábeis seguem"]
-  G -->|sim| H["carregar_series: LTM vigente na 1ª divulgação, market cap com F(c)"]
-  H --> I["Aba Geral: cartões, cotação, múltiplos com anomalias, indicadores, pares"]
+  G -->|sim| H["series_com_cache: lê derivados/ se a chave bater; senão carregar_series (LTM na 1ª divulgação, market cap com F(c))"]
+  H --> P["Painel dos pares: só quem tem série em disco, sem balanço defasado"]
+  P --> I["Aba Geral: cartões, cotação, múltiplos com anomalias e linha dos pares, indicadores, endividamento, liquidez e caixa"]
   I --> J{"Clique em Comparar com o Ibovespa?"}
-  J -->|sim| J1["Mede as empresas em disco, mesmo tipo"]
+  J -->|sim| J1["Valor de hoje e linha da carteira de hoje, mesmo tipo, só empresas em disco"]
+  I --> Q{"Clique em Baixar séries?"}
+  Q -->|sim| Q1["Outro processo: atualizar (quem não tem demonstrações) + series-varios"]
   F --> K{"Rodada em saida/?"}
   K -->|não| K1["Botão Rodar valuation"]
   K -->|sim| L["Aba Valuation: lê os CSVs, sem recalcular"]

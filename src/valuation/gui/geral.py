@@ -12,18 +12,22 @@ from valuation.analise import anomalias as an
 from valuation.analise import indicadores as ind
 from valuation.analise import serie_multiplos as sm
 from valuation.contabil import ErroContabil
-from valuation.gui import dados, grafico
+from valuation.gui import acoes, dados, grafico
 from valuation.modelos import multiplos as mt
 from valuation.saida import formato as fo
 from valuation.saida import glossario as gl
+from valuation.servicos import atualizacao as atu
 from valuation.servicos import comparacao as scmp
 from valuation.servicos import empresa as emp
+from valuation.servicos import grupos as grp
 from valuation.servicos import historico_mercado as hm
 from valuation.servicos import indicadores as sind
 
 JANELAS = {"10 anos": 10, "5 anos": 5}
 TRACO = "—"
 COLUNAS_POR_LINHA = 4
+ROTULO_PARES = "Pares do setor"
+ROTULO_IBOV = "Empresas do Ibovespa de hoje"
 MOTIVO_BASILEIA = "índice regulatório não consta na DFP (fonte IF.data ainda não validada)"
 
 
@@ -68,7 +72,45 @@ def _grafico_cotacao(series: hm.SeriesMercado, base: dt.date) -> None:
     st.caption("Fechamento ajustado por desdobramentos e grupamentos (não por dividendos).")
 
 
-def _grafico_multiplos(series: hm.SeriesMercado, base: dt.date) -> None:
+def _linhas_dos_grupos(
+    grupos: list[tuple[str, grp.PainelGrupo, str, str]],
+    nome: mt.NomeMultiplo,
+    tipo: an.Referencia,
+) -> list[grafico.LinhaGrupo]:
+    linhas = []
+    for rotulo, painel, cor, traco in grupos:
+        serie = grp.referencia_em_serie(painel, nome, tipo, dados.settings())
+        if serie is not None:
+            linhas.append(grafico.LinhaGrupo(rotulo, serie, cor, traco))
+    return linhas
+
+
+def _baixar_grupo(rotulo: str, painel: grp.PainelGrupo, cadastro: pd.DataFrame) -> None:
+    """Fora da conta, com o motivo, e o único caminho de rede: o clique."""
+    if not painel.faltam:
+        return
+    with st.expander(f"{rotulo}: {len(painel.faltam)} empresa(s) fora da série"):
+        for ticker, motivo in painel.faltam.items():
+            st.write(f"{ticker}: {motivo}")
+    if st.button(f"Baixar séries: {rotulo}", key=f"baixar_{rotulo}"):
+        sem_demonstracoes = [
+            t for t, m in painel.faltam.items() if not dados.ticker_tem_demonstracoes(t, cadastro)
+        ]
+        execucao = acoes.executar(
+            f"Baixando séries: {rotulo}",
+            atu.baixar_series_grupo(list(painel.faltam), sem_demonstracoes),
+        )
+        if execucao.ok:
+            st.rerun()
+        acoes.mostrar_falha(execucao)
+
+
+def _grafico_multiplos(
+    series: hm.SeriesMercado,
+    base: dt.date,
+    grupos: list[tuple[str, grp.PainelGrupo, str, str]],
+    cadastro: pd.DataFrame,
+) -> None:
     st.subheader("Múltiplos na série histórica")
     nomes = [str(n) for n in series.multiplos.columns]
     esquerda, meio, direita = st.columns(3)
@@ -95,7 +137,8 @@ def _grafico_multiplos(series: hm.SeriesMercado, base: dt.date) -> None:
         st.info(f"{TRACO} sem pontos deste múltiplo na janela.")
         return
     rotulo = mt.ROTULOS[nome]
-    figura = grafico.multiplo(a, rotulo, an.ROTULOS_REFERENCIA[tipo])
+    linhas = _linhas_dos_grupos(grupos, nome, tipo)
+    figura = grafico.multiplo(a, rotulo, an.ROTULOS_REFERENCIA[tipo], linhas)
     st.plotly_chart(figura, key="grafico_multiplo")
     st.caption(
         f"Hoje: {fo.multiplo(nome, a.atual, 2)} · {an.ROTULOS_REFERENCIA[tipo]}: "
@@ -111,6 +154,17 @@ def _grafico_multiplos(series: hm.SeriesMercado, base: dt.date) -> None:
                 )
     if len(a.filtro.marcados):
         st.caption(f"{len(a.filtro.marcados)} ponto(s) fora de 1,5·IQR, mantidos no cálculo.")
+    for rotulo_grupo, painel, _, _ in grupos:
+        st.caption(
+            f"{rotulo_grupo}: {painel.em_disco} de {len(painel.tickers)} empresas em disco. "
+            f"Mês com menos de {dados.settings().multiplos.min_pares} válidas fica em lacuna."
+        )
+        _baixar_grupo(rotulo_grupo, painel, cadastro)
+    if any(rotulo_grupo == ROTULO_IBOV for rotulo_grupo, *_ in grupos):
+        st.caption(
+            "Ibovespa com a carteira de hoje aplicada ao passado (viés de sobrevivência), sem "
+            "ponderar: não há composição histórica em fonte gratuita."
+        )
 
 
 def _indicadores(p: emp.Padronizada, ticker: str, base: dt.date) -> str:
@@ -299,6 +353,27 @@ def _comparacao(
                 st.write(f"{m.ticker}: {m.motivo}")
 
 
+def _grupos(
+    series: hm.SeriesMercado,
+    p: emp.Padronizada,
+    cadastro: pd.DataFrame,
+    base: dt.date,
+) -> list[tuple[str, grp.PainelGrupo, str, str]]:
+    """Painéis dos pares e, se o usuário pediu a comparação, do Ibovespa."""
+    grupos: list[tuple[str, grp.PainelGrupo, str, str]] = []
+    setor = dados.setor(p.premissas.pares.setor)
+    tickers = scmp.tickers_pares(p.premissas, p.empresa.tickers, setor)
+    if tickers:
+        painel = dados.painel(tickers, cadastro, base)
+        grupos.append((ROTULO_PARES, painel, grafico.LARANJA, "dash"))
+    if st.session_state.get(f"ibovespa_{series.ticker}"):
+        universo = scmp.tickers_ibovespa(dados.universo(), p.plano.tipo == "financeira")
+        with st.spinner("Lendo as séries das empresas do Ibovespa..."):
+            painel = dados.painel(universo, cadastro, base)
+        grupos.append((ROTULO_IBOV, painel, grafico.VERDE, "dot"))
+    return grupos
+
+
 def mostrar(
     ticker: str,
     p: emp.Padronizada,
@@ -316,6 +391,6 @@ def mostrar(
             for aviso in series.avisos:
                 st.warning(aviso)
     _grafico_cotacao(series, base)
-    _grafico_multiplos(series, base)
+    _grafico_multiplos(series, base, _grupos(series, p, cadastro, base), cadastro)
     _balanco(p, ticker, base, _indicadores(p, ticker, base))
     _comparacao(series, p, cadastro, base)

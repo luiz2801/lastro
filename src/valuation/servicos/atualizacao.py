@@ -24,6 +24,14 @@ def baixar_dados(ticker: str) -> list[Comando]:
     return [comando("atualizar", "--tickers", ticker), comando("series", ticker)]
 
 
+def baixar_series_grupo(tickers: Sequence[str], sem_demonstracoes: Sequence[str]) -> list[Comando]:
+    """Séries de um grupo; quem não tem nem as demonstrações as baixa antes."""
+    comandos = []
+    if sem_demonstracoes:
+        comandos.append(comando("atualizar", "--tickers", ",".join(sem_demonstracoes)))
+    return [*comandos, comando("series-varios", *tickers)]
+
+
 def rodar_valuation(ticker: str) -> list[Comando]:
     return [comando("rodar", ticker)]
 

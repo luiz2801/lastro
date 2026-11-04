@@ -227,3 +227,45 @@ def test_historico_em_cache_janela_curta_nao_sobrepoe_a_longa(tmp_path: Path) ->
     df = prc.historico_em_cache("PETR4.SA", tmp_path)
     assert df is not None
     assert df["close"].tolist() == [8.0, 60.0]
+
+
+def test_coletar_series_varios_le_o_zip_uma_vez_e_separa_por_empresa(
+    tmp_path: Path, sessao_falsa: SessaoFalsa, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dois alvos, uma leitura de cada zip; cada um grava só os próprios dados."""
+    outro = "99.999.999/0001-99"
+    comp = COMPOSICAO + "\n" + COMPOSICAO.splitlines()[1].replace(CNPJ, outro)
+    conteudo = _zip(
+        tmp_path / "itr2020.zip",
+        {"itr_cia_aberta_2020.csv": INDICE, "itr_cia_aberta_composicao_capital_2020.csv": comp},
+    )
+    sessao_falsa.rotas[cvm.url_documento("ITR", 2020)] = (200, conteudo, {})
+    for ano in (2021, 2022):
+        indice = _zip(tmp_path / f"i{ano}.zip", {f"itr_cia_aberta_{ano}.csv": INDICE})
+        sessao_falsa.rotas[cvm.url_documento("ITR", ano)] = (200, indice, {})
+    dfp = _zip(tmp_path / "d.zip", {"dfp_cia_aberta_2022.csv": INDICE})
+    sessao_falsa.rotas[cvm.url_documento("DFP", 2022)] = (200, dfp, {})
+    monkeypatch.setattr(cvm, "PRIMEIRO_ANO_ITR_SERIES", 2020)
+    leituras: list[Path] = []
+    original = cvm.ler_composicao_capital
+
+    def contar(caminho: Path, *a: object, **k: object) -> pd.DataFrame:
+        leituras.append(caminho)
+        return original(caminho, *a, **k)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cvm, "ler_composicao_capital", contar)
+    cvm.coletar_series_varios(
+        [cvm.AlvoCVM(CNPJ, 5410), cvm.AlvoCVM(outro, 7777)],
+        2022,
+        0,
+        dir_raw=tmp_path / "raw",
+        dir_processed=tmp_path / "proc",
+        ttl=TTL,
+        sessao=sessao_falsa,
+        agora=AGORA,
+    )
+    assert len(leituras) == 1
+    para_um = cvm.ler_composicao_serie(tmp_path / "proc", 5410)
+    para_outro = cvm.ler_composicao_serie(tmp_path / "proc", 7777)
+    assert para_um is not None and para_outro is not None
+    assert set(para_um["cnpj"]) == {CNPJ} and set(para_outro["cnpj"]) == {outro}

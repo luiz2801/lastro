@@ -7,6 +7,7 @@ de referência e o valor de hoje.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -19,6 +20,8 @@ from valuation.servicos.indicadores import AnaliseIndicador
 AZUL = "#2a78d6"
 CINZA = "#898781"
 TINTA = "#52514e"
+LARANJA = "#d9730d"  # pares do setor
+VERDE = "#1a9e6f"  # Ibovespa; azul, laranja e verde validados em claro e escuro
 FORMATO_DATA = "%d/%m/%Y"
 ROTULOS_PONTE = {
     "valor_da_firma": "EV",
@@ -60,7 +63,22 @@ def cotacao(serie: pd.DataFrame, ticker: str) -> go.Figure:
     return figura
 
 
-def multiplo(a: AnaliseMultiplo, rotulo: str, rotulo_referencia: str) -> go.Figure:
+@dataclass(frozen=True)
+class LinhaGrupo:
+    """Referência de um grupo mês a mês (`valor` e `n`); NaN = lacuna."""
+
+    rotulo: str
+    serie: pd.DataFrame
+    cor: str
+    traco: str
+
+
+def multiplo(
+    a: AnaliseMultiplo,
+    rotulo: str,
+    rotulo_referencia: str,
+    grupos: Sequence[LinhaGrupo] = (),
+) -> go.Figure:
     """Pontos descartados em cinza, nunca apagados; fora da escala, presos à borda com ▲.
 
     A escala segue os pontos válidos: um EV/EBIT de 12.000x não pode achatar o resto. O valor
@@ -84,7 +102,29 @@ def multiplo(a: AnaliseMultiplo, rotulo: str, rotulo_referencia: str) -> go.Figu
             hovertemplate=f"%{{x|{FORMATO_DATA}}}<br>{formato_valor}<extra></extra>",
         )
     )
-    teto = float(validos.max()) * 1.1 if validos.notna().any() else 1.0
+    maximos = [float(validos.max())] if validos.notna().any() else []
+    for grupo in grupos:
+        trecho = (
+            grupo.serie[grupo.serie.index >= a.serie.index.min()] if len(a.serie) else grupo.serie
+        )
+        if trecho["valor"].notna().any():
+            maximos.append(float(trecho["valor"].max()))
+        figura.add_trace(
+            go.Scatter(
+                x=trecho.index,
+                y=trecho["valor"],
+                mode="lines",
+                name=grupo.rotulo,
+                connectgaps=False,
+                line={"color": grupo.cor, "width": 2, "dash": grupo.traco},
+                customdata=trecho["n"],
+                hovertemplate=(
+                    f"{grupo.rotulo}<br>%{{x|%m/%Y}}<br>{formato_valor}"
+                    "<br>n = %{customdata}<extra></extra>"
+                ),
+            )
+        )
+    teto = max(maximos) * 1.1 if maximos else 1.0
     if len(fora):
         verdadeiro = a.serie.reindex(fora)
         y = verdadeiro.clip(upper=teto).fillna(0.0)

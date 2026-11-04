@@ -68,6 +68,8 @@ multiplos:
   corte_p_vp: 15
   corte_ev_ebitda: 40
   corte_ev_ebit: 60
+  # Balanço mais velho que isto sai das médias de grupo da GUI (ADR 0024). `comparar` não usa.
+  defasagem_max_meses: 12
 
 # Tolerância para aceitar que duas fontes "concordam" (ver docs/decisoes/0004).
 # Preço, câmbio e market cap: diferença relativa. Taxas: diferença absoluta em decimal.

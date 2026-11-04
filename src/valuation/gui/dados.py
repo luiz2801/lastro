@@ -21,6 +21,7 @@ from valuation.saida import favoritos as fav
 from valuation.servicos import cache as sc
 from valuation.servicos import comparacao as scmp
 from valuation.servicos import empresa as emp
+from valuation.servicos import grupos as grp
 from valuation.servicos import historico_mercado as hm
 from valuation.servicos import indicadores as sind
 from valuation.servicos import resultados as res
@@ -93,6 +94,13 @@ def cadastro() -> pd.DataFrame | None:
 
 def tem_demonstracoes(cd_cvm: int) -> bool:
     return sc.caminho_demonstracoes(cd_cvm, cfg.DIR_PROCESSED).is_file()
+
+
+def ticker_tem_demonstracoes(ticker: str, cadastro_atual: pd.DataFrame) -> bool:
+    try:
+        return tem_demonstracoes(cad.empresa_por_ticker(cadastro_atual, ticker).cd_cvm)
+    except cad.ErroCadastro:
+        return False
 
 
 @st.cache_data(show_spinner=False)
@@ -212,6 +220,40 @@ def medidas(
 ) -> list[scmp.Medida]:
     """Múltiplos de hoje de um grupo, só com o que está em disco."""
     return _medidas(
+        tuple(tickers),
+        cadastro_atual,
+        base,
+        _mtime(cfg.DIR_PROCESSED / "cadastro.parquet"),
+        cfg.DIR_RAW,
+        cfg.DIR_PROCESSED,
+        cfg.DIR_EMPRESAS,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _painel(
+    tickers: tuple[str, ...],
+    _cadastro_atual: pd.DataFrame,
+    base: dt.date,
+    _chave: float,
+    dir_raw: Path,
+    dir_processed: Path,
+    dir_empresas: Path,
+) -> grp.PainelGrupo:
+    return grp.montar_painel(
+        tickers,
+        _cadastro_atual,
+        settings(),
+        base,
+        dir_raw=dir_raw,
+        dir_processed=dir_processed,
+        dir_empresas=dir_empresas,
+    )
+
+
+def painel(tickers: Sequence[str], cadastro_atual: pd.DataFrame, base: dt.date) -> grp.PainelGrupo:
+    """Múltiplos de um grupo mês a mês, só com o que está em disco."""
+    return _painel(
         tuple(tickers),
         cadastro_atual,
         base,

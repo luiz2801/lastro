@@ -94,9 +94,14 @@ def medir_de_hoje(
         return Medida(ticker, None, "sem cotação em disco")
     try:
         cap = prc.market_cap(p.empresa, pd.read_parquet(caminho), precos, base)
-        return Medida(ticker, sind.fundamentos(p, cap, settings, base, 1.0))
+        fundamentos = sind.fundamentos(p, cap, settings, base, 1.0)
     except (ErroDadosExternos, ErroContabil, ErroModelo) as e:
         return Medida(ticker, None, str(e))
+    meses = settings.multiplos.defasagem_max_meses
+    balanco = pd.Timestamp(fundamentos.data_balanco)
+    if balanco < pd.Timestamp(base) - pd.DateOffset(months=meses):
+        return Medida(ticker, None, f"balanço de {balanco:%m/%Y}, mais de {meses} meses atrás")
+    return Medida(ticker, fundamentos)
 
 
 def medir_varios(

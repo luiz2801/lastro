@@ -82,3 +82,12 @@ def test_estado_fontes_com_cache(tmp_path: Path) -> None:
     assert fontes["Preços"].idade_dias(agora) == 3
     assert fontes["CVM"].idade_dias(agora) == 10
     assert fontes["Macro"].atualizado_em is None
+
+
+def test_series_de_um_grupo_baixa_demonstracoes_so_de_quem_nao_tem() -> None:
+    comandos = atu.baixar_series_grupo(["AAAA3", "BBBB3"], ["BBBB3"])
+    assert [c[3:] for c in comandos] == [
+        ("atualizar", "--tickers", "BBBB3"),
+        ("series-varios", "AAAA3", "BBBB3"),
+    ]
+    assert [c[3:] for c in atu.baixar_series_grupo(["AAAA3"], [])] == [("series-varios", "AAAA3")]

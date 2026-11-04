@@ -402,8 +402,34 @@ def ler_divulgacoes(caminho_zip: Path, tipo: TipoDocumento, ano: int, cnpj: str)
     return primeira.reset_index()[colunas]
 
 
-def coletar_series(
+def _gravar_series(
     alvo: AlvoCVM,
+    dir_processed: Path,
+    demonstracoes: list[pd.DataFrame],
+    acoes: list[pd.DataFrame],
+    divulgacoes: list[pd.DataFrame],
+) -> None:
+    pasta = dir_processed / "cvm" / str(alvo.cd_cvm)
+    pasta.mkdir(parents=True, exist_ok=True)
+    vazio_dem = pd.DataFrame(columns=COLUNAS_DEMONSTRACOES)
+    vazio_ac = pd.DataFrame(columns=["cnpj", "fonte", "dt_refer", "versao", *COLUNAS_ACOES])
+    dem = pd.concat(
+        [d.loc[d["cnpj"] == alvo.cnpj] for d in demonstracoes if not d.empty] or [vazio_dem],
+        ignore_index=True,
+    )
+    dem.to_parquet(pasta / ARQUIVO_SERIES_ITR, index=False)
+    ac = pd.concat(
+        [a.loc[a["cnpj"] == alvo.cnpj] for a in acoes if not a.empty] or [vazio_ac],
+        ignore_index=True,
+    )
+    corrigir_escala_acoes(ac, alvo.escala_acoes).to_parquet(
+        pasta / ARQUIVO_SERIES_COMPOSICAO, index=False
+    )
+    pd.concat(divulgacoes, ignore_index=True).to_parquet(pasta / ARQUIVO_DIVULGACOES, index=False)
+
+
+def coletar_series_varios(
+    alvos: Sequence[AlvoCVM],
     ano_base: int,
     historico_anos: int,
     *,
@@ -417,17 +443,17 @@ def coletar_series(
     """Grava o que a série histórica de múltiplos precisa além da coleta normal.
 
     ITR de `PRIMEIRO_ANO_ITR_SERIES` a `ano_base - 2` (os 2 últimos anos já vêm no `coletar`), a
-    composição do capital deles e as datas de divulgação de toda DFP e ITR.
+    composição do capital deles e as datas de divulgação de toda DFP e ITR. Cada zip é lido uma vez
+    só, seja qual for o número de companhias: é a leitura deles que custa, não a separação.
     """
     anos: dict[TipoDocumento, list[int]] = {
         "DFP": list(range(ano_base - historico_anos, ano_base + 1)),
         "ITR": list(range(PRIMEIRO_ANO_ITR_SERIES, ano_base + 1)),
     }
-    pasta = dir_processed / "cvm" / str(alvo.cd_cvm)
-    pasta.mkdir(parents=True, exist_ok=True)
+    cnpjs = [a.cnpj for a in alvos]
     demonstracoes: list[pd.DataFrame] = []
     acoes: list[pd.DataFrame] = []
-    divulgacoes: list[pd.DataFrame] = []
+    divulgacoes: dict[str, list[pd.DataFrame]] = {c: [] for c in cnpjs}
     for tipo, lista in anos.items():
         for ano in lista:
             url = url_documento(tipo, ano)
@@ -446,19 +472,39 @@ def coletar_series(
                     raise
                 logger.info("%s %d ainda não publicado", tipo, ano)
                 continue
-            divulgacoes.append(ler_divulgacoes(arquivo.caminho, tipo, ano, alvo.cnpj))
+            for cnpj in cnpjs:
+                divulgacoes[cnpj].append(ler_divulgacoes(arquivo.caminho, tipo, ano, cnpj))
             if tipo == "ITR" and ano <= ano_base - 2:
-                demonstracoes.append(ler_demonstracoes(arquivo.caminho, tipo, ano, [alvo.cnpj]))
-                acoes.append(ler_composicao_capital(arquivo.caminho, tipo, ano, [alvo.cnpj]))
-    vazio_dem = pd.DataFrame(columns=COLUNAS_DEMONSTRACOES)
-    vazio_ac = pd.DataFrame(columns=["cnpj", "fonte", "dt_refer", "versao", *COLUNAS_ACOES])
-    dem = pd.concat([d for d in demonstracoes if not d.empty] or [vazio_dem], ignore_index=True)
-    dem.to_parquet(pasta / ARQUIVO_SERIES_ITR, index=False)
-    ac = pd.concat([a for a in acoes if not a.empty] or [vazio_ac], ignore_index=True)
-    corrigir_escala_acoes(ac, alvo.escala_acoes).to_parquet(
-        pasta / ARQUIVO_SERIES_COMPOSICAO, index=False
+                demonstracoes.append(ler_demonstracoes(arquivo.caminho, tipo, ano, cnpjs))
+                acoes.append(ler_composicao_capital(arquivo.caminho, tipo, ano, cnpjs))
+    for alvo in alvos:
+        _gravar_series(alvo, dir_processed, demonstracoes, acoes, divulgacoes[alvo.cnpj])
+
+
+def coletar_series(
+    alvo: AlvoCVM,
+    ano_base: int,
+    historico_anos: int,
+    *,
+    dir_raw: Path,
+    dir_processed: Path,
+    ttl: dt.timedelta,
+    sessao: SessaoHttp,
+    agora: dt.datetime,
+    forcar: bool = False,
+) -> None:
+    """`coletar_series_varios` de uma companhia só."""
+    coletar_series_varios(
+        [alvo],
+        ano_base,
+        historico_anos,
+        dir_raw=dir_raw,
+        dir_processed=dir_processed,
+        ttl=ttl,
+        sessao=sessao,
+        agora=agora,
+        forcar=forcar,
     )
-    pd.concat(divulgacoes, ignore_index=True).to_parquet(pasta / ARQUIVO_DIVULGACOES, index=False)
 
 
 def ler_composicao_serie(dir_processed: Path, cd_cvm: int) -> pd.DataFrame | None:

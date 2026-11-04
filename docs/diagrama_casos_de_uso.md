@@ -195,9 +195,9 @@ flowchart LR
 | UC17 Consultar posição e resultado | `carteira posicao` | `carteira/posicao`, `data/precos` |
 | UC18 Consultar indicadores do ativo | `indicadores [--anos N] [--explicar]` | `analise/indicadores`, `contabil/`, `modelos/multiplos`, `saida/glossario` |
 | UC16 Navegar pelo menu | `valuation` (sem comando) | `cli._menu_interativo`, `universo` |
-| UC19 Ver um ativo na GUI | `valuation gui`, `?ticker=` | `gui/`, `servicos/historico_mercado`, `servicos/comparacao`, `servicos/resultados` |
-| UC20 Atualizar pela GUI | botões "Atualizar", "Atualizar favoritas" e "Rodar valuation" | `servicos/atualizacao`, que chama `atualizar`, `series`, `rodar` e `favoritos atualizar` |
-| UC21 Baixar as séries da GUI | `series TICKER` | `servicos/historico_mercado`, `data/cvm.coletar_series`, `data/precos` |
+| UC19 Ver um ativo na GUI | `valuation gui`, `?ticker=` | `gui/`, `servicos/historico_mercado`, `servicos/comparacao`, `servicos/grupos`, `servicos/resultados` |
+| UC20 Atualizar pela GUI | botões "Atualizar", "Atualizar favoritas", "Rodar valuation" e "Baixar séries" | `servicos/atualizacao`, que chama `atualizar`, `series`, `series-varios`, `rodar` e `favoritos atualizar` |
+| UC21 Baixar as séries da GUI | `series TICKER`, `series-varios TICKERS...` | `servicos/historico_mercado`, `servicos/grupos`, `data/cvm.coletar_series_varios`, `data/precos` |
 
 ## 6. Especificação dos casos de uso principais
 

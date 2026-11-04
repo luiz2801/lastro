@@ -2,6 +2,13 @@
 
 ## [Não lançado]
 
+### Sprint GUI 2, B: médias de pares e do Ibovespa em série (ADR 0024)
+- Gráfico dos múltiplos com a referência dos pares e das empresas do Ibovespa mês a mês. O último ponto bate com a média de
+  hoje (conferido em pares de WEGE3, VALE3 e BBAS3). Lacuna com menos de `multiplos.min_pares` válidas.
+- `servicos/grupos.py`; `sm.serie_do_grupo`, `sem_mes_parcial`, `defasados`; parâmetro `multiplos.defasagem_max_meses` (12).
+  **Muda a média de hoje** de grupos com balanço defasado.
+- Comando `series-varios` e botão "Baixar séries": cada zip da CVM é lido uma vez (97 tickers em 5 min, contra cerca de 1 h).
+
 ### Sprint GUI 2, A: endividamento, liquidez e caixa (ADR 0024)
 - Aba Geral: 17 indicadores novos em grade (Hoje) e tabela com gráfico (Histórico), cada "—" com o motivo, 2 casas.
   Classes de anomalia em `an.CLASSES`. Financeiras: Basileia em "—" com o motivo. A CLI não muda.

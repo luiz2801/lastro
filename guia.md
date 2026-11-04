@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.48 — 2026-11-04**
+**Versão 1.49 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -50,12 +50,12 @@
 | Análise | `analise/{cenarios,sensibilidade,indicadores,serie_multiplos,anomalias}.py` | ✅ cenários ponderados pelo perfil, Ke/WACC implícitos e sensibilidade, FCFF e DDM; indicadores por ativo (seção 20); série histórica de múltiplos e anomalias da GUI (seção 22) |
 | Saída | `saida/{csv,arquivos,real,graficos,glossario,favoritos,formato}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG, glossário das métricas, favoritos e formatação pt-BR comum à CLI e à GUI (seção 19) |
 | Carteira | `carteira/{transacoes,arquivo,posicao}.py` | ✅ Etapas C1 e C2 do ADR 0020: transações, histórico validado, importação CSV/XLSX, posição, preço médio e resultado (seção 21); a C3 (indicadores por ativo) está em `analise/indicadores.py` e no comando `indicadores`; proventos e alocação ainda não (seção 12) |
-| Serviços | `servicos/{empresa,mercado,indicadores,resultados,atualizacao,cache,derivados,historico_mercado,comparacao}.py` | Cadastro, padronização, preços, market cap, macro, indicadores e leitura da última rodada (extraídos de `cli.py`), mais fluxos da CLI em outro processo, estado do cache e série histórica (seção 22) |
+| Serviços | `servicos/{empresa,mercado,indicadores,resultados,atualizacao,cache,derivados,historico_mercado,comparacao,grupos}.py` | Cadastro, padronização, preços, market cap, macro, indicadores e leitura da última rodada (extraídos de `cli.py`), mais fluxos da CLI em outro processo, estado do cache e série histórica (seção 22) |
 | GUI | `gui/{app,dados,estado,acoes,inicio,ativo,geral,aba_valuation,grafico}.py` | Sprint GUI 1: início, página de ativo, barra de estado, atualização a pedido e abas Geral e Valuation (seção 23) |
-| CLI | `cli.py` | `gui`, `series`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
+| CLI | `cli.py` | `gui`, `series`, `series-varios`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 805 testes (794 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 817 testes (806 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -174,6 +174,7 @@ mediana de 5a), `_resumo` (linha do `resumo.csv`), `_mostrar_valuation`. Finance
 
 | Comando | Parâmetros | O que faz | Efeito de cada parâmetro |
 |---|---|---|---|
+| `series-varios TICKERS...` | `--forcar` | Como `series`, lendo cada zip da CVM uma vez (97 tickers em 5 min; um a um, cerca de 1 h), e deixa séries e medidas no cache derivado | Ticker sem cadastro ou sem cotação vira aviso e os demais seguem (`hm.baixar_series_varios`, `grp.preparar_calculo`) |
 | `series TICKER` | `--forcar` | Baixa cotação de 10 anos de cada classe, splits e ITR antigos para os gráficos da GUI (`hm.baixar_series`, ADR 0023) | Sem cotação do próprio papel ⇒ saída 1; as demais faltas viram aviso. Não muda nada do que `rodar` lê |
 | `gui` | `--porta N` (8501) | Abre a GUI em `127.0.0.1`, sem telemetria e sem a pergunta de e-mail do Streamlit (seção 23) | Sem o grupo `gui` instalado ⇒ mensagem pedindo `uv sync --group gui` e saída 1. A CLI não importa `streamlit` |
 | `versao` | — | Imprime versão e Python | — |
@@ -592,6 +593,7 @@ proposto; `docs/backlog.md`).
 | `test_servicos_historico_mercado.py` | série de ponta a ponta à mão: P/L com data de divulgação, lacuna antes da composição, split sem degrau, avisos, ITR só em memória, `baixar_series` | `p`, `_cotacao`, `_composicao`, `_splits`, `_divulgacoes` |
 | `test_series_dados.py` | `coletar_series`, `ler_divulgacoes` (1ª versão), composição combinada, `splits` e caches sem rede | `SessaoFalsa`, `yfinance` falso em `sys.modules` |
 | `test_servicos_derivados.py` | cache em disco de séries e medidas: igual ao calculado, não recalcula, invalida com entrada alterada, base que não muda os pontos, arquivo corrompido | `raiz`, `_series`, `_medir` |
+| `test_servicos_grupos.py` | série de grupo à mão (corte fixo, mínimo de empresas, média), mês parcial, defasagem, painel com e sem série, `preparar_calculo` | `_com_serie`, `_painel` |
 | `test_servicos_comparacao.py` | pares, cortes, referência de grupo com motivos, Ibovespa por tipo, `medir_de_hoje` à mão, análise de um múltiplo (descartes, lacunas, janela) e cartões | `_fund`, `_series`, `_padronizada` |
 | `test_favoritos.py` | lista de favoritos (carga, chave inválida, ida e volta), último `resumo.csv` (pasta mais recente, `br`/`intl`, sem avisos, sem rodada), comandos `favoritos`, `adicionar`/`remover` e `atualizar` com `rodar` falso | `tmp_path`, `cli.CAMINHO_FAVORITOS`/`DIR_SAIDA` trocados |
 | `test_http.py` | cache, TTL, 304, retry, fallback | `sessao_falsa` |
@@ -1046,8 +1048,15 @@ lida sempre, e a data-base entra pelos pontos mensais, então só invalida quand
 `medir_varios` com o mesmo cache; a data-base entra pelo mês e pelo último fechamento até ela. Sem `p`, só padroniza
 se o cache não servir: é o que torna barato ler dezenas de pares. A GUI usa as versões com cache; a CLI, não.
 
+**`grupos.py`** (ADR 0024): série de um grupo só com o que está em disco. `montar_painel(tickers, cadastro, settings,
+base, ...) -> PainelGrupo(tickers, multiplos, faltam, com_cotacao)`: múltiplo -> mês x empresa, com o motivo de quem ficou
+de fora; meses de balanço defasado (`multiplos.defasagem_max_meses`) viram lacuna. `referencia_em_serie(painel, nome, tipo,
+settings)` tira o último mês se for parcial e aplica `sm.serie_do_grupo`. `preparar_calculo` preenche o cache derivado.
+`cmp.medir_de_hoje` usa a mesma defasagem.
+
 **Puros de apoio:**
-- `analise/serie_multiplos.py`: `fator_splits`, `acoes_na_base_atual` (quantidade × F(dt_refer), a data
+- `analise/serie_multiplos.py`: `serie_do_grupo(painel, classe, tipo, corte_fixo, min_empresas) -> DataFrame(valor, n)`,
+  `sem_mes_parcial`, `defasados`, `fator_splits`, `acoes_na_base_atual` (quantidade × F(dt_refer), a data
   da **composição**, não a do preço), `conferir_splits` (tolerância 5%), `pontos_mensais`,
   `datas_de_entrada` (1ª divulgação; sem ela, + 45 dias no ITR ou + 90 na DFP), `vigencia`,
   `serie_multiplo` (`mt.multiplo`, a conta do `comparar`), `cortar_periodo` (GUI-12).
@@ -1057,7 +1066,7 @@ se o cache não servir: é o que torna barato ler dezenas de pares. A GUI usa as
   m, *, ifrs16) -> (valores, motivos)`, com as fórmulas do ADR 0024. Passivos = PC + PNC, porque a conta 2 inclui o
   PL. Empréstimos zerados com despesa financeira na DRE (ALOS3, debêntures em Outras Obrigações) viram lacuna com
   `MOTIVO_DIVIDA_FORA` nos indicadores de dívida, em vez de um zero falso.
-- `data/cvm.py`: `coletar_series`, `ler_divulgacoes`, `ler_composicao_serie`, `ler_series_itr`,
+- `data/cvm.py`: `coletar_series_varios`, `coletar_series`, `ler_divulgacoes`, `ler_composicao_serie`, `ler_series_itr`,
   `ler_datas_divulgacao`, com arquivos à parte (`series_itr.parquet`, `series_composicao.parquet`,
   `divulgacoes.parquet`).
 - `data/precos.py`: `arquivos_em_cache`, `YFinanceProvider.splits`, `splits_em_cache` e `historico_em_cache` (a maior janela
@@ -1084,7 +1093,9 @@ usar o relógio e passa `agora`/`base` para baixo.
 - `geral.py`: aba Geral: cartões, cotação (GUI-12), múltiplo em série (seletor de indicador, de
   referência e janela de 10 ou 5 anos), indicadores Hoje | Histórico, endividamento, liquidez e caixa
   (grade com o motivo de cada "—"; no Histórico, tabela e gráfico anual + LTM com seletor), Basileia em "—" nas
-  financeiras e médias de comparação. Pares
+  financeiras e médias de comparação. No gráfico dos múltiplos, linhas de pares (laranja, tracejada) e do Ibovespa
+  (verde, pontilhada, só depois do botão), com "k de m em disco", quem ficou de fora e o botão "Baixar séries" (único
+  caminho de rede dessas linhas). Pares
   aparecem ao abrir; o Ibovespa só no botão, porque mede dezenas de empresas (40 s na primeira vez, com 63 empresas).
 - `aba_valuation.py`: só lê `saida/`: cenários, ponderado, preço máximo, upside, Ke implícito × hurdle,
   custo de capital, checagens, football field e ponte (Plotly, a partir dos CSVs), perfil lido do JSON.

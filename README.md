@@ -33,6 +33,7 @@ make cobertura                               # testes com cobertura por linha
 
 make gui                                     # GUI local em 127.0.0.1 (grupo opcional `gui`)
 uv run valuation series PETR4                # cotação de 10 anos, splits e ITR antigos para a GUI
+uv run valuation series-varios PRIO3 RECV3    # o mesmo para vários, lendo cada zip da CVM uma vez
 uv run valuation versao
 uv run valuation erp                         # ERP implícito do Ibovespa (grava e informa)
 uv run valuation glossario wacc             # explica uma métrica (sem argumento, lista todas)

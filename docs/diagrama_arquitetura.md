@@ -13,7 +13,7 @@ flowchart BT
     subgraph ORQ["Orquestração e interface"]
         cli["cli<br/>(typer, rich)"]
         gui["gui<br/>(streamlit, plotly)"]
-        servicos["servicos<br/>empresa, mercado, indicadores, resultados,<br/>atualizacao, cache, derivados, historico_mercado, comparacao"]
+        servicos["servicos<br/>empresa, mercado, indicadores, resultados,<br/>atualizacao, cache, derivados, historico_mercado, comparacao, grupos"]
     end
 
     subgraph APL["Aplicação (camadas de cálculo e saída)"]
