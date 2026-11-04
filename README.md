@@ -83,6 +83,45 @@ um token gratuito em brapi.dev e exporte `BRAPI_TOKEN`.
 - `referencias/`: PDFs e planilhas das companhias (fora do git; só o índice é versionado).
 - `data/`, `saida/`, `perfil/`: gerados localmente, fora do git.
 
+## APIs e fontes de dados
+
+Só fontes gratuitas, sem chave obrigatória. Cada fonte tem um adaptador em `src/valuation/data/`,
+com cache em `data/raw/` (arquivo + `.meta.json` com URL, data e hash), TTL, retry e revalidação por
+`If-Modified-Since` (`http.py`). Dado que existe em duas fontes é conferido por `validacao.cruzar`:
+a principal vence, e uma divergência além da tolerância vira aviso na saída, não erro.
+
+| Fonte | O que fornece | Endpoint | Adaptador | Conferida contra |
+|---|---|---|---|---|
+| CVM, dados abertos | cadastro, DFP, ITR, FCA (tickers e classes) e composição do capital | `dados.cvm.gov.br/dados/CIA_ABERTA` | `cvm.py`, `cadastro.py` | golden dos releases (abaixo) |
+| yfinance | histórico de preços (`Close` e `Adj Close`), Ibovespa e dólar `BRL=X` | biblioteca `yfinance` (não oficial) | `precos.py` | brapi |
+| brapi.dev | cotação e histórico; sem token só PETR4, VALE3, MGLU3 e ITUB4 (`BRAPI_TOKEN` libera o resto) | `brapi.dev/api/quote/{símbolo}` | `precos.py` | yfinance |
+| BCB, SGS | Selic (432, 11), IPCA (13522, 433), dólar PTAX (1) | `api.bcb.gov.br/dados/serie/bcdata.sgs.{código}/dados` | `macro.py` | outra série ou yfinance |
+| BCB, Focus (Olinda) | expectativas anuais de IPCA, Selic, câmbio e PIB | `olinda.bcb.gov.br/.../ExpectativasMercadoAnuais` | `macro.py` | NTN-B + IPCA do Focus (Rf) |
+| Tesouro Transparente | taxas dos títulos (NTN-F e NTN-B) para a taxa livre de risco | CKAN, `precotaxatesourodireto.csv` | `macro.py` | NTN-B + Focus (Fisher) |
+
+Pares conferidos entre si: Selic (SGS 432 × SGS 11 anualizada), IPCA 12 meses (SGS 13522 × composição
+do SGS 433), dólar (SGS 1 × `BRL=X`), Rf em BRL (NTN-F × NTN-B + IPCA do Focus) e preço (yfinance ×
+brapi, ADR 0004). A validação manual de cada URL, arquivo e série na fonte real está em
+[`docs/fontes.md`](docs/fontes.md).
+
+### Testes que validam as APIs
+
+A suíte não acessa a rede (regra em [`docs/regras/REGRAS_TESTES.md`](docs/regras/REGRAS_TESTES.md)):
+os adaptadores são testados com respostas sintéticas (`sessao_falsa`, providers falsos e amostras
+minúsculas de CSV da CVM em `tests/fixtures/cvm/`). A conferência contra a API real foi feita à mão
+e registrada em `docs/fontes.md`; o que roda em `make testes` garante que o código trata o formato e
+as falhas que ela mostrou.
+
+| Arquivo | Testes | O que valida |
+|---|---|---|
+| `test_http.py` | 10 | download grava arquivo e `.meta.json`; cache dentro do TTL não acessa a rede; TTL vencido revalida com `If-Modified-Since` (304); `forcar` ignora o cache; 404, falha de rede e retry; falha com cache vencido usa a cópia com aviso; arquivo inválido não é gravado |
+| `test_cvm.py` | 21 | URLs e anos a coletar; escala `MIL` e `UNIDADE` aplicada, escala desconhecida falha; maior `VERSAO` mantida; consolidado × individual; ITR com trimestre e acumulado; aspas literais em `DS_CONTA`; balanço sem `DT_INI`; DMPL com `COLUNA_DF`; composição do capital (escala em milhares corrigida, desdobramento preservado); `coletar` grava parquet por companhia, 404 em ano antigo e `CD_CVM` divergente |
+| `test_cadastro.py` | 19 | cadastro CVM, FCA (tickers e classes), cadastro manual, classificação financeira × não financeira, busca |
+| `test_precos.py` | 17 | yfinance (cache, cópia vencida se falhar, retry); brapi (token, histórico, mensagem de token ausente); preço validado nas duas fontes (concorda, diverge, segunda fonte fora do ar, principal fora do ar, datas diferentes); market cap multiclasse, sem tesouraria, por unit |
+| `test_macro.py` | 12 | SGS (conversão, ordenação, série vazia); Focus (última pesquisa, PIB total, PIB indisponível); Tesouro (vencimento perto de 10 anos, sem vencimento adequado, Rf manual não baixa); validação de cada dado, fonte fora do ar não derruba se a outra responde, sem nenhuma fonte é erro |
+| `test_validacao.py` | 6 | `cruzar`: tolerância relativa e absoluta, divergência mantém a principal e avisa, fonte única vira `sem_validacao`, nenhuma fonte é erro, valor manual |
+| `test_golden.py` | 149 valores | dados reais da CVM, já processados, contra números dos releases de PETR4, VALE3, WEGE3, ITUB4 e BBAS3 (receita, lucro, EBITDA, dívida, PL, ativo). Rodam sobre `data/processed/cvm/` (fora do git) e são pulados se ele não existir |
+
 ## Estado atual
 
 **Fases 0 a 10 concluídas** (seção 17 do `CLAUDE.md`); a Fase 11 (extensões) só entra se o usuário pedir.

@@ -2,6 +2,12 @@
 
 ## [Não lançado]
 
+### README: APIs e testes que as validam
+- `README.md`, seção "APIs e fontes de dados": CVM, yfinance, brapi, BCB (SGS e Focus) e Tesouro
+  Transparente, com endpoint, adaptador e a fonte usada na validação cruzada; e a tabela dos
+  testes que validam os adaptadores (`test_http`, `test_cvm`, `test_cadastro`, `test_precos`,
+  `test_macro`, `test_validacao`, `test_golden`). Só documentação.
+
 ### Golden do BBAS3 (seção 19, item 9 do `CLAUDE.md`)
 - `tests/golden/referencias.yaml`: lucro (controladora e total) de 1T25 a 4T25, 1S25, 9M25, 2025,
   1T26, 2T26 e 1S26 e PL (controladora e total) e ativo total de seis datas (31/03/2025 a
