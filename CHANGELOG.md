@@ -2,6 +2,12 @@
 
 ## [Não lançado]
 
+### Sprint GUI 1, S5: aba Valuation
+- `gui/aba_valuation.py`: cenários, valor ponderado, preço máximo de compra, upside, retorno esperado x
+  hurdle, custo de capital, checagens, football field e ponte em Plotly, lidos dos CSVs de `saida/`, sem
+  recalcular. Sem rodada, botão "Rodar valuation". O perfil vem do JSON.
+- `servicos/resultados.py`: `checagens`, `faixas_football`, `ponte_de_cenario`.
+
 ### Sprint GUI 1, S4: aba Geral
 - `gui/geral.py` e `gui/grafico.py`: cartões (preço, 52 semanas, market cap, DY), cotação com seletor de
   período, múltiplos em série com referência (mediana, média winsorizada ou simples, esta com aviso),

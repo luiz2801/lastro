@@ -14,6 +14,8 @@ import streamlit as st
 
 from valuation import config as cfg
 from valuation.data import cadastro as cad
+from valuation.perfil import ErroPerfil
+from valuation.perfil import registro as reg
 from valuation.projecao import premissas as pm
 from valuation.saida import favoritos as fav
 from valuation.servicos import cache as sc
@@ -203,6 +205,14 @@ def setor(chave: str | None) -> cfg.Setor | None:
     if chave is None:
         return None
     return cfg.carregar_setores(cfg.CAMINHO_SETORES).get(chave)
+
+
+def perfil_efetivo(hoje: dt.date) -> tuple[reg.PerfilEfetivo | None, str | None]:
+    """Perfil do JSON e sua validade, sem pedir nada; sem perfil válido, `None` e o motivo."""
+    try:
+        return reg.resolver_perfil(cfg.CAMINHO_PERFIL, hoje, None), None
+    except ErroPerfil as e:
+        return None, str(e)
 
 
 def estado_fontes(ticker: str, cd_cvm: int | None) -> list[sc.FonteCache]:

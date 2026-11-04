@@ -6,12 +6,17 @@ import datetime as dt
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+import numpy as np
 import pandas as pd
 
-from valuation.config import DIR_SAIDA, ConfigCsv
+from valuation.config import DIR_SAIDA, ConfigCsv, Settings
+from valuation.modelos import ddm
+from valuation.modelos import multiplos as mt
+from valuation.saida import arquivos as arq
 from valuation.saida import favoritos as fav
+from valuation.saida import formato as fo
 
 
 @dataclass(frozen=True)
@@ -137,3 +142,115 @@ def ultimo_resultado(
         ),
         avisos=avisos,
     )
+
+
+@dataclass(frozen=True)
+class Checagem:
+    nome: str
+    valor: str
+    ok: bool | None  # None = sem dado para conferir
+
+
+def numero(resumo: pd.Series, coluna: str) -> float:
+    """Valor numérico de uma coluna do resumo; NaN se ela não existir ou não for número."""
+    try:
+        return float(resumo.get(coluna, float("nan")))
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+def checagens(r: Resultado, settings: Settings) -> list[Checagem]:
+    """As mesmas checagens do `rodar`, relidas do `resumo.csv`."""
+
+    def compara(nome: str, menor: str, maior: str) -> Checagem:
+        a, b = numero(r.resumo, menor), numero(r.resumo, maior)
+        ok = None if pd.isna(a) or pd.isna(b) else bool(a < b)
+        return Checagem(nome, f"{fo.taxa(a)} < {fo.taxa(b)}", ok)
+
+    g = numero(r.resumo, "g")
+    teto = settings.terminal.g_nominal_max
+    limite_g = Checagem(
+        "g dentro do teto",
+        f"{fo.taxa(g)} ≤ {fo.taxa(teto)}",
+        None if pd.isna(g) else bool(g <= teto),
+    )
+    if r.modelo == "ddm":
+        vt = numero(r.resumo, "vt_sobre_valor")
+        divergencia = numero(r.resumo, "divergencia_lucro_residual")
+        return [
+            compara("g < Ke", "g", "ke"),
+            limite_g,
+            Checagem("VT / valor", fo.formatar(vt, "%"), None),
+            Checagem(
+                "Lucro residual x DDM",
+                fo.taxa(divergencia),
+                None
+                if pd.isna(divergencia)
+                else bool(abs(divergencia) <= ddm.TOLERANCIA_LUCRO_RESIDUAL),
+            ),
+        ]
+    vt = numero(r.resumo, "vt_sobre_ev")
+    alerta = settings.dcf.alerta_tv_sobre_ev
+    return [
+        compara("g < WACC", "g", "wacc"),
+        limite_g,
+        Checagem(
+            "VT / EV",
+            f"{fo.formatar(vt, '%')} (alerta acima de {alerta:.0%})",
+            None if pd.isna(vt) else bool(vt <= alerta),
+        ),
+    ]
+
+
+def faixas_football(r: Resultado, faixa_52s: tuple[float, float] | None) -> list[arq.Faixa]:
+    """Barras do football field a partir dos CSVs da rodada, como `arq.faixas_football`."""
+    nome = r.modelo.upper()
+    faixas: list[arq.Faixa] = []
+    cenarios = {
+        c: v
+        for c in ("pessimista", "base", "otimista")
+        if pd.notna(v := numero(r.resumo, f"valor_{c}"))
+    }
+    if len(cenarios) > 1:
+        faixas.append(
+            arq.Faixa(
+                f"{nome} (pess. a otim.)",
+                min(cenarios.values()),
+                max(cenarios.values()),
+                cenarios.get("base"),
+            )
+        )
+    eixo = "ke_g" if r.modelo == "ddm" else "wacc_g"
+    matriz = r.sensibilidades.get(eixo)
+    if matriz is not None:
+        valores = matriz.to_numpy(dtype=float)
+        valores = valores[np.isfinite(valores)]
+        if valores.size:
+            rotulo = "faixa Ke/g" if r.modelo == "ddm" else "faixa WACC/g"
+            faixas.append(arq.Faixa(f"{nome} ({rotulo})", valores.min(), valores.max()))
+    if r.multiplos_implicitos is not None:
+        for _, linha in r.multiplos_implicitos.iterrows():
+            baixo = numero(linha, "valor_p25")
+            alto = numero(linha, "valor_p75")
+            if pd.isna(baixo) or pd.isna(alto):
+                continue
+            mediana = numero(linha, "valor_mediana")
+            faixas.append(
+                arq.Faixa(
+                    mt.ROTULOS[cast(mt.NomeMultiplo, str(linha["multiplo"]))],
+                    min(baixo, alto),
+                    max(baixo, alto),
+                    None if pd.isna(mediana) else mediana,
+                    aviso=linha.get("confianca") == "baixa",
+                )
+            )
+    if faixa_52s is not None:
+        faixas.append(arq.Faixa("Faixa de 52 semanas", faixa_52s[0], faixa_52s[1]))
+    return faixas
+
+
+def ponte_de_cenario(r: Resultado, cenario: str) -> pd.Series | None:
+    """Itens da ponte EV -> equity de um cenário (índice = item); `None` sem a coluna."""
+    if r.ponte is None or cenario not in r.ponte.columns or "item" not in r.ponte.columns:
+        return None
+    return r.ponte.set_index("item")[cenario].astype("float64")

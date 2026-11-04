@@ -214,8 +214,10 @@ def mostrar(
         _indicadores(p, ticker, base)
         return
     _cartoes(series, base)
-    for aviso in series.avisos:
-        st.warning(aviso)
+    if series.avisos:
+        with st.expander(f"Avisos da série ({len(series.avisos)})"):
+            for aviso in series.avisos:
+                st.warning(aviso)
     _grafico_cotacao(series, base)
     _grafico_multiplos(series, base)
     _indicadores(p, ticker, base)

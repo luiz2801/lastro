@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.43 — 2026-11-04**
+**Versão 1.44 — 2026-11-04**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -51,11 +51,11 @@
 | Saída | `saida/{csv,arquivos,real,graficos,glossario,favoritos,formato}.py` | ✅ CSV e matrizes, `meta.json` (com glossário), `premissas_usadas.yaml`, `qa.json`, `historico.csv`, valores reais, gráficos PNG, glossário das métricas, favoritos e formatação pt-BR comum à CLI e à GUI (seção 19) |
 | Carteira | `carteira/{transacoes,arquivo,posicao}.py` | ✅ Etapas C1 e C2 do ADR 0020: transações, histórico validado, importação CSV/XLSX, posição, preço médio e resultado (seção 21); a C3 (indicadores por ativo) está em `analise/indicadores.py` e no comando `indicadores`; proventos e alocação ainda não (seção 12) |
 | Serviços | `servicos/{empresa,mercado,indicadores,resultados,atualizacao,cache,historico_mercado,comparacao}.py` | Cadastro, padronização, preços, market cap, macro, indicadores e leitura da última rodada (extraídos de `cli.py`), mais fluxos da CLI em outro processo, estado do cache e série histórica (seção 22) |
-| GUI | `gui/{app,dados,estado,acoes,inicio,ativo,geral,grafico}.py` | Sprint GUI 1: início, página de ativo, barra de estado, atualização a pedido e aba Geral (seção 23); aba Valuation ainda vazia |
+| GUI | `gui/{app,dados,estado,acoes,inicio,ativo,geral,aba_valuation,grafico}.py` | Sprint GUI 1: início, página de ativo, barra de estado, atualização a pedido e abas Geral e Valuation (seção 23) |
 | CLI | `cli.py` | `gui`, `series`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.700 linhas de código, 776 testes (765 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.700 linhas de código, 784 testes (773 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -998,6 +998,10 @@ diretórios) entra por parâmetro nomeado, com a constante de `config.py` como p
   ausência é normal: múltiplos (rodada sem pares) e ponte no DDM. `avisos_rodada` é a coluna `avisos`
   do `resumo.csv`.
 
+Em `resultados.py` também: `numero(resumo, coluna)` (NaN sem dado), `checagens(r, settings) ->
+[Checagem(nome, valor, ok)]` (`ok = None` sem dado, nunca aprovado por falta), `faixas_football(r,
+faixa_52s)` e `ponte_de_cenario(r, cenario)`.
+
 **`atualizacao.py`**: a atualização a pedido roda os fluxos da CLI em outro processo (`python -m
 valuation`, entrada em `valuation/__main__.py`), para valer exatamente o mesmo `atualizar`/`rodar`.
 `baixar_dados`, `rodar_valuation`, `atualizar_ativo` e `atualizar_favoritas` montam os comandos;
@@ -1060,6 +1064,10 @@ usar o relógio e passa `agora`/`base` para baixo.
 - `geral.py`: aba Geral: cartões, cotação (GUI-12), múltiplo em série (seletor de indicador, de
   referência e janela de 10 ou 5 anos), indicadores Hoje | Histórico e médias de comparação. Pares
   aparecem ao abrir; o Ibovespa só no botão, porque mede dezenas de empresas (40 s na primeira vez, com 63 empresas).
+- `aba_valuation.py`: só lê `saida/`: cenários, ponderado, preço máximo, upside, Ke implícito × hurdle,
+  custo de capital, checagens, football field e ponte (Plotly, a partir dos CSVs), perfil lido do JSON.
+  Sem rodada, botão "Rodar valuation". **Não se chama `valuation.py`:** o Streamlit põe a pasta do script
+  no `sys.path`, e o arquivo esconderia o pacote (`test_nenhum_modulo_da_gui_esconde_um_pacote`).
 - `grafico.py`: figuras Plotly. Um eixo; azul = série, cinza = fora da referência, tinta = referência e
   hoje. A escala segue os pontos válidos; descartado acima dela fica preso à borda com ▲, e o valor
   verdadeiro no tooltip. Métrica ≤ 0 (sem valor de múltiplo) aparece em 0 com ✕.

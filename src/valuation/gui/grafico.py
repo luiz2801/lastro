@@ -6,16 +6,28 @@ de referência e o valor de hoje.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import pandas as pd
 import plotly.graph_objects as go
 
 from valuation.saida import formato as fo
+from valuation.saida.arquivos import Faixa
 from valuation.servicos.historico_mercado import AnaliseMultiplo
 
 AZUL = "#2a78d6"
 CINZA = "#898781"
 TINTA = "#52514e"
 FORMATO_DATA = "%d/%m/%Y"
+ROTULOS_PONTE = {
+    "valor_da_firma": "EV",
+    "divida_bruta": "Dívida bruta",
+    "caixa_e_aplicacoes": "Caixa e aplicações",
+    "minoritarios": "Minoritários",
+    "investimentos_coligadas": "Coligadas",
+    "divida_extra": "Dívida extra",
+    "equity": "Equity",
+}
 
 
 def _layout(figura: go.Figure, titulo_y: str, formato_y: str | None = None) -> go.Figure:
@@ -118,4 +130,76 @@ def multiplo(a: AnaliseMultiplo, rotulo: str, rotulo_referencia: str) -> go.Figu
         )
     figura = _layout(figura, rotulo, formato_y)
     figura.update_yaxes(range=[0, teto])
+    return figura
+
+
+def ponte(itens: pd.Series) -> go.Figure:
+    """Cascata EV -> equity, em R$ milhões no rótulo; os totais em tinta."""
+    medidas = ["absolute", *["relative"] * (len(itens) - 2), "total"]
+    figura = go.Figure(
+        go.Waterfall(
+            x=[ROTULOS_PONTE.get(str(i), str(i)) for i in itens.index],
+            y=itens.to_numpy(),
+            measure=medidas,
+            connector={"line": {"color": CINZA, "width": 1}},
+            increasing={"marker": {"color": AZUL}},
+            decreasing={"marker": {"color": CINZA}},
+            totals={"marker": {"color": TINTA}},
+            text=[fo.formatar(float(v), "mi") for v in itens],
+            textposition="outside",
+            hovertemplate="%{x}<br>R$ %{text} mi<extra></extra>",
+        )
+    )
+    figura = _layout(figura, "R$")
+    figura.update_layout(showlegend=False)
+    return figura
+
+
+def football(faixas: Sequence[Faixa], preco: float, preco_maximo: float) -> go.Figure:
+    """Barras de valor por ação; linhas verticais do preço e do preço máximo de compra."""
+    nomes = [f"{f.rotulo} *" if f.aviso else f.rotulo for f in faixas]
+    figura = go.Figure(
+        go.Bar(
+            y=nomes,
+            x=[f.maximo - f.minimo for f in faixas],
+            base=[f.minimo for f in faixas],
+            orientation="h",
+            marker={"color": AZUL},
+            width=0.45,
+            name="Faixa de valor por ação",
+            text=[f"{fo.reais(f.minimo)} a {fo.reais(f.maximo)}" for f in faixas],
+            hovertemplate="%{y}<br>%{text}<extra></extra>",
+            textposition="none",
+        )
+    )
+    pontos = [f for f in faixas if f.ponto is not None]
+    if pontos:
+        figura.add_trace(
+            go.Scatter(
+                x=[f.ponto for f in pontos],
+                y=[f"{f.rotulo} *" if f.aviso else f.rotulo for f in pontos],
+                mode="markers",
+                name="Base ou mediana",
+                marker={"color": TINTA, "size": 9, "line": {"color": "white", "width": 2}},
+                text=[fo.reais(float(f.ponto or 0.0)) for f in pontos],
+                hovertemplate="%{y}<br>%{text}<extra></extra>",
+            )
+        )
+    for valor, rotulo, traco, ancora in (
+        (preco, "Preço", "solid", "top right"),
+        (preco_maximo, "Preço máx. de compra", "dash", "bottom right"),
+    ):
+        if pd.notna(valor):
+            figura.add_vline(
+                x=valor,
+                line={"color": TINTA, "width": 1, "dash": traco},
+                annotation_text=f"{rotulo}: {fo.reais(valor)}",
+                annotation_position=ancora,
+            )
+    figura = _layout(figura, "")
+    figura.update_layout(
+        height=max(280, 46 * len(faixas) + 90),
+        xaxis={"title": "R$ por ação", "showgrid": True},
+        yaxis={"autorange": "reversed", "title": ""},
+    )
     return figura

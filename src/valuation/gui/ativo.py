@@ -9,7 +9,7 @@ import streamlit as st
 
 from valuation.contabil import ErroContabil
 from valuation.data import cadastro as cad
-from valuation.gui import acoes, dados, estado, geral
+from valuation.gui import aba_valuation, acoes, dados, estado, geral
 from valuation.servicos import atualizacao as atu
 from valuation.universo import EmpresaUniverso
 
@@ -112,11 +112,11 @@ def mostrar(ticker: str) -> None:
             st.rerun()
         acoes.mostrar_falha(execucao)
 
-    aba_geral, valuation = st.tabs(["Geral", "Valuation"])
-    with aba_geral:
+    aba_ger, aba_val = st.tabs(["Geral", "Valuation"])
+    with aba_ger:
         if padronizada_ok is None:
             st.info("— sem dados contábeis para os indicadores.")
         else:
             geral.mostrar(ticker, padronizada_ok, cadastro, base)
-    with valuation:
-        st.info("Valuation por cenário: em construção.")
+    with aba_val:
+        aba_valuation.mostrar(ticker, agora.date(), base, padronizada_ok)

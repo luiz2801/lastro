@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from valuation.config import ConfigCsv
+from valuation.config import ConfigCsv, carregar_settings
 from valuation.saida.csv import gravar_csv, gravar_matriz
 from valuation.servicos import resultados as res
 
@@ -118,3 +118,65 @@ def test_arquivo_corrompido_vira_aviso(tmp_path: Path) -> None:
     texto = " ".join(r.avisos)
     for nome in ("qa.json", "meta.json", "wacc.csv", "sensibilidade_wacc_g.csv"):
         assert f"{nome} não pôde ser lido" in texto
+
+
+def _resumo_com(tmp_path: Path, **colunas: object) -> res.Resultado:
+    _rodada(tmp_path, **colunas)
+    r = res.ultimo_resultado("PETR4", BR, dir_saida=tmp_path)
+    assert r is not None
+    return r
+
+
+def test_checagens_dcf(tmp_path: Path) -> None:
+    r = _resumo_com(tmp_path, g=0.05, wacc=0.13, vt_sobre_ev=0.8)
+    c = {x.nome: x for x in res.checagens(r, carregar_settings())}
+    assert c["g < WACC"].ok is True
+    assert c["g < WACC"].valor == "5,00% < 13,00%"
+    assert c["g dentro do teto"].ok is True  # teto de 5%
+    assert c["VT / EV"].ok is False
+
+
+def test_checagens_sem_dado_nao_viram_ok(tmp_path: Path) -> None:
+    r = _resumo_com(tmp_path)
+    assert all(c.ok is None for c in res.checagens(r, carregar_settings()))
+
+
+def test_checagens_ddm(tmp_path: Path) -> None:
+    r = _resumo_com(tmp_path, modelo="ddm", g=0.05, ke=0.2, divergencia_lucro_residual=0.5)
+    c = {x.nome: x for x in res.checagens(r, carregar_settings())}
+    assert c["g < Ke"].ok is True
+    assert c["Lucro residual x DDM"].ok is False
+
+
+def test_faixas_football_dos_csvs(tmp_path: Path) -> None:
+    pasta = _rodada(tmp_path, valor_pessimista=10.0, valor_base=20.0, valor_otimista=30.0)
+    gravar_matriz(_matriz(), pasta / "sensibilidade_wacc_g.csv", BR)
+    implicitos = pd.DataFrame(
+        {
+            "multiplo": ["p_l", "ev_ebit"],
+            "valor_p25": [15.0, float("nan")],
+            "valor_mediana": [18.0, float("nan")],
+            "valor_p75": [12.0, float("nan")],
+            "confianca": ["baixa", "normal"],
+        }
+    )
+    gravar_csv(implicitos, pasta / "multiplos_implicitos.csv", BR)
+    r = res.ultimo_resultado("PETR4", BR, dir_saida=tmp_path)
+    assert r is not None
+    f = {x.rotulo: x for x in res.faixas_football(r, (5.0, 9.0))}
+    assert (f["DCF (pess. a otim.)"].minimo, f["DCF (pess. a otim.)"].maximo) == (10.0, 30.0)
+    assert f["DCF (pess. a otim.)"].ponto == 20.0
+    assert (f["DCF (faixa WACC/g)"].minimo, f["DCF (faixa WACC/g)"].maximo) == (90.5, 110.5)
+    assert (f["P/L"].minimo, f["P/L"].maximo, f["P/L"].aviso) == (12.0, 15.0, True)
+    assert "EV/EBIT" not in f  # sem valor implícito não há barra
+    assert f["Faixa de 52 semanas"].maximo == 9.0
+
+
+def test_ponte_de_cenario(tmp_path: Path) -> None:
+    pasta = _rodada(tmp_path)
+    _completa(pasta)
+    r = res.ultimo_resultado("PETR4", BR, dir_saida=tmp_path)
+    assert r is not None
+    itens = res.ponte_de_cenario(r, "base")
+    assert itens is not None and itens["equity"] == 1000.5
+    assert res.ponte_de_cenario(r, "otimista") is None

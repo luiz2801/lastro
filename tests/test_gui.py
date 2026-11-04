@@ -280,6 +280,100 @@ def test_comando_series_baixa_e_avisa(ambiente: Path, monkeypatch: pytest.Monkey
     assert "Séries de WEGE3 gravadas" in " ".join(resultado.output.split())
 
 
+def _rodada_dcf(raiz: Path) -> Path:
+    pasta = raiz / "saida" / "WEGE3" / "2026-10-30"
+    linha = {
+        "ticker": "WEGE3",
+        "data_base": "2026-10-30",
+        "perfil": "moderado",
+        "preco": 40.0,
+        "valor_pessimista": 30.25,
+        "valor_base": 50.5,
+        "valor_otimista": 70.75,
+        "valor_ponderado": 50.5,
+        "preco_maximo_compra": 40.4,
+        "upside": 0.2625,
+        "ke_implicito": 0.14,
+        "hurdle": 0.20,
+        "wacc": 0.13,
+        "g": 0.05,
+        "vt_sobre_ev": 0.80,
+        "avisos": "aviso gravado na rodada",
+    }
+    gravar_csv(pd.DataFrame([linha]), pasta / "resumo.csv", BR)
+    gravar_csv(
+        pd.DataFrame(
+            {
+                "item": ["valor_da_firma", "divida_bruta", "equity", "acoes", "valor_por_acao"],
+                "base": [200.0, -50.0, 150.0, 3.0, 50.0],
+            }
+        ),
+        pasta / "ponte_ev_equity.csv",
+        BR,
+    )
+    gravar_csv(
+        pd.DataFrame(
+            {
+                "componente": ["ke", "wacc", "moeda", "aviso"],
+                "valor": [0.16, 0.13, None, None],
+                "detalhe": ["", "", "BRL", "aviso do custo de capital"],
+            }
+        ),
+        pasta / "wacc.csv",
+        BR,
+    )
+    gravar_csv(pd.DataFrame({"ano": [2027], "fcff": [10.0]}), pasta / "projecao_base.csv", BR)
+    return pasta
+
+
+def test_aba_valuation_mostra_os_numeros_do_resumo(ambiente: Path) -> None:
+    _com_series(ambiente)
+    _rodada_dcf(ambiente)
+    at = _abrir("WEGE3")
+    assert not at.exception
+    metricas = _metricas(at)
+    assert metricas["Pessimista"] == "R$ 30,25"
+    assert metricas["Base"] == "R$ 50,50"
+    assert metricas["Otimista"] == "R$ 70,75"
+    assert metricas["Valor ponderado"] == "R$ 50,50"
+    assert metricas["Preço máximo de compra"] == "R$ 40,40"
+    assert metricas["Upside"] == "26,25%"
+    assert metricas["Retorno esperado x hurdle"] == "14,00% x 20,00%"
+    assert len(at.get("plotly_chart")) == 4  # cotação, múltiplo, football e ponte
+    texto = _textos(at)
+    assert "aviso gravado na rodada" in texto and "aviso do custo de capital" in texto
+    assert "qa.json não existe" in texto  # rodada incompleta avisa, sem inventar
+    checagens = next(d.value for d in at.dataframe if "Checagem" in d.value.columns)
+    resultado = dict(zip(checagens["Checagem"], checagens["Resultado"], strict=True))
+    assert resultado["g < WACC"] == "✅ ok"
+    assert resultado["VT / EV"] == "⚠️ atenção"  # 80% acima do alerta de 75%
+
+
+def test_aba_valuation_sem_rodada_oferece_o_botao(
+    ambiente: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _com_dados(ambiente)
+    at = _abrir("WEGE3")
+    assert "ainda não tem valuation" in _textos(at)
+    chamadas: list[object] = []
+
+    def registra(comandos: object, ao_ler: object = None) -> atu.Execucao:
+        chamadas.append(comandos)
+        return atu.Execucao(False, ["sem perfil"], "valuation rodar WEGE3")
+
+    monkeypatch.setattr(atu, "executar", registra)
+    at.button(key="rodar_valuation").click().run()
+    assert not at.exception
+    assert chamadas == [atu.rodar_valuation("WEGE3")]
+    assert "Falhou em `valuation rodar WEGE3`" in _textos(at)
+
+
+def test_nenhum_modulo_da_gui_esconde_um_pacote() -> None:
+    """O Streamlit põe a pasta do script no `sys.path`: `gui/valuation.py` esconderia o pacote."""
+    nomes = {a.stem for a in Path(APP).parent.glob("*.py")}
+    assert not nomes & {"valuation", "streamlit", "plotly", "pandas", "numpy"}
+
+
 def test_gui_sem_dependencia_de_terminal() -> None:
     pasta = Path(APP).parent
     for arquivo in pasta.rglob("*.py"):
