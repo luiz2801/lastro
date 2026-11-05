@@ -1156,7 +1156,7 @@ usar o relógio e passa `agora`/`base` para baixo.
   nas falhas), sempre com o perfil da rodada do ativo; o Ibovespa só usa o que já existe. Sem rodada, botão "Rodar valuation".
   **Não se chama `valuation.py`:** o Streamlit põe a pasta do script
   no `sys.path`, e o arquivo esconderia o pacote (`test_nenhum_modulo_da_gui_esconde_um_pacote`).
-- `cartoes.py`: `CSS` (injetado em `app.py`; fundos translúcidos para valer nos dois temas), `cartao`, `secao`, `selo`,
+- `cartoes.py`: `secao` é um `<details>` aberto por padrão (o clique no título minimiza). `CSS` (injetado em `app.py`; fundos translúcidos para valer nos dois temas), `cartao`, `secao`, `selo`,
   `selos`, `texto_com_sinal` e `faixa_de_preco`. Só montam HTML (`st.html`) com todo texto escapado; nenhuma conta.
 - `grafico.py`: figuras Plotly. Visual Gráficos da aba Valuation: `retorno_contra_hurdle`, `montagem_custo` e `comparacao_taxas` (ativo azul, pares laranja, setor CVM roxo, Ibovespa verde). `indicador` desenha o histórico anual + LTM: fora da referência com ✕ cinza,
   marcado com contorno. Um eixo; azul = série, cinza = fora da referência, tinta = referência e

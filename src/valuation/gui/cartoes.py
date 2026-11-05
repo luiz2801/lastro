@@ -15,7 +15,18 @@ from valuation.saida import formato as fo
 
 CSS = """<style>
 .lc-sec{border-left:3px solid #c9a56b;padding-left:14px;margin:0 0 22px 0}
-.lc-sec h3{margin:0 0 12px 0;font-size:1.2rem;font-weight:600;letter-spacing:-.01em}
+.lc-sec summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;
+  margin:0 0 12px -17px;padding-left:17px;user-select:none}
+.lc-sec summary::-webkit-details-marker{display:none}
+.lc-sec summary::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;transform:rotate(-45deg);
+  transition:transform .15s;opacity:.6;flex:none}
+.lc-sec[open]>summary::before{transform:rotate(45deg)}
+.lc-sec summary:hover::before{opacity:1}
+.lc-sec summary:focus-visible{outline:2px solid #c9a56b;outline-offset:2px;border-radius:4px}
+.lc-sec:not([open]){padding-bottom:0}
+.lc-sec:not([open])>summary{margin-bottom:0}
+.lc-sec h3{margin:0;font-size:1.2rem;font-weight:600;letter-spacing:-.01em}
 .lc-sec .lc-nota{margin:8px 0 0 0;font-size:.8rem;opacity:.7}
 .lc-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
 .lc-cart{background:rgba(128,128,128,.12);border:1px solid rgba(128,128,128,.28);border-radius:12px;
@@ -130,10 +141,11 @@ def sub(rotulo: str, valor: str) -> tuple[str, str]:
 
 
 def secao(titulo: str, cartoes: Sequence[str], nota: str = "") -> str:
+    """Seção que o clique no título minimiza (`<details>`, sem JavaScript); abre por padrão."""
     aviso = f'<p class="lc-nota">{escape(nota)}</p>' if nota else ""
     return (
-        f'<section class="lc-sec"><h3>{escape(titulo)}</h3>'
-        f'<div class="lc-grade">{"".join(cartoes)}</div>{aviso}</section>'
+        f'<details class="lc-sec" open><summary><h3>{escape(titulo)}</h3></summary>'
+        f'<div class="lc-grade">{"".join(cartoes)}</div>{aviso}</details>'
     )
 
 
