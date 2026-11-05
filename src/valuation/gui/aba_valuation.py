@@ -257,9 +257,9 @@ def _situacao_dos_grupos(c: Comparacao, ticker: str, setor_nome: str | None) -> 
 # ---------------------------------------------------------------------------------------------
 
 
-def _vs_preco(valor: float, preco: float) -> tuple[str, str]:
+def _vs_preco(valor: float, preco: float) -> str:
     diferenca = valor / preco - 1 if pd.notna(valor) and pd.notna(preco) and preco else float("nan")
-    return "vs. preço", cartoes.texto_com_sinal(diferenca)
+    return f"{cartoes.texto_com_sinal(diferenca)} vs. preço"
 
 
 def _cartoes_valor(r: res.Resultado) -> list[str]:
@@ -276,19 +276,19 @@ def _cartoes_valor(r: res.Resultado) -> list[str]:
             rotulo,
             fo.reais(res.numero(resumo, coluna)),
             ajuda=AJUDAS[ajuda],
-            subs=[_vs_preco(res.numero(resumo, coluna), preco)],
+            nota=_vs_preco(res.numero(resumo, coluna), preco),
             destaque=destaque,
         )
         for rotulo, coluna, ajuda, destaque in itens
     ]
-    saida.append(cartoes.cartao("Preço da rodada", fo.reais(preco)))
+    saida.append(cartoes.cartao("Preço da rodada", fo.reais(preco), nota="Fechamento da data-base"))
     maximo = res.numero(resumo, "preco_maximo_compra")
     saida.append(
         cartoes.cartao(
-            "Preço máximo de compra",
+            "Preço máximo",
             fo.reais(maximo),
             ajuda=AJUDAS["maximo"],
-            subs=[_vs_preco(maximo, preco)],
+            nota=_vs_preco(maximo, preco),
         )
     )
     return saida
@@ -327,6 +327,11 @@ def _cartoes_decisao(r: res.Resultado, c: Comparacao | None) -> list[str]:
             if sinal
             else cartoes.TRACO,
             bruto=True,
+            nota=escape(
+                "Compra rebaixada pela confiança"
+                if rebaixada
+                else criterio[:1].upper() + criterio[1:]
+            ),
             ajuda=ajuda_sinal,
         ),
         cartoes.cartao(
@@ -335,6 +340,7 @@ def _cartoes_decisao(r: res.Resultado, c: Comparacao | None) -> list[str]:
             if confianca
             else cartoes.TRACO,
             bruto=True,
+            nota=escape("; ".join(motivos) if motivos else "Sem restrições"),
             ajuda="; ".join(motivos)
             if motivos
             else "Sem erro de QA, VT/valor no limite, pares e R² do beta suficientes.",
@@ -343,27 +349,29 @@ def _cartoes_decisao(r: res.Resultado, c: Comparacao | None) -> list[str]:
             "Upside",
             cartoes.texto_com_sinal(res.numero(resumo, "upside")),
             bruto=True,
+            nota="Valor ponderado contra o preço",
             subs=_subs_valuation(c, "upside"),
         ),
         cartoes.cartao(
-            "Retorno esperado x hurdle",
+            "Retorno x hurdle",
             fo.taxa(ke_implicito),
             pequeno=f"x {fo.taxa(hurdle)}",
             ajuda=AJUDAS["retorno"],
-            subs=[
-                ("Diferença", cartoes.texto_com_sinal(diferenca)),
-                *_subs_valuation(c, "ke_implicito"),
-            ],
+            nota=f"{cartoes.texto_com_sinal(diferenca)} contra o mínimo do perfil",
+            subs=_subs_valuation(c, "ke_implicito"),
         ),
         cartoes.cartao(
             "Preço teto Bazin",
             fo.reais(res.numero(resumo, "preco_teto_bazin")),
+            nota=escape(f"Dividendo médio ÷ yield de {fo.formatar(yield_minimo, '%', 2)}"),
             ajuda="Dividendo médio por ação dos últimos exercícios (DFC) / yield mínimo de "
             f"{fo.formatar(yield_minimo, '%', 2)}. Informativo: a recomendação usa o preço "
             "máximo de compra do perfil.",
         ),
         cartoes.cartao(
-            "Dividendo médio por ação", fo.reais(res.numero(resumo, "dividendo_por_acao_bazin"))
+            "Dividendo médio",
+            fo.reais(res.numero(resumo, "dividendo_por_acao_bazin")),
+            nota="Por ação, nos últimos exercícios",
         ),
     ]
 

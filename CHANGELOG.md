@@ -8,6 +8,7 @@
 - "Comparar com setor e mercado": linhas Pares, Setor CVM e Ibovespa em cada cartão (beta, Ke, Kd, WACC, g, upside, retorno
   esperado, VT e os múltiplos P/L, EV/EBITDA, EV/EBIT, P/VP e DY), pela estatística escolhida na aba Geral.
   `servicos/comparacao_valuation.py` lê só as rodadas em disco; upside, retorno e VT só contam rodadas do mesmo perfil.
+- Cartões mais compactos: rótulo em caixa alta, linha de apoio sob o valor (vs. preço, critério, motivos), faixa lateral dourada.
 - Botões para rodar os pares e o setor CVM que ainda não têm rodada (`atu.rodar_varios`, `atu.rodar_setor`), com o perfil da
   rodada do ativo. Gráficos novos: retorno esperado × hurdle, montagem do Ke e do WACC, ativo × grupos.
 

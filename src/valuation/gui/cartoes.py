@@ -14,25 +14,27 @@ import pandas as pd
 from valuation.saida import formato as fo
 
 CSS = """<style>
-.lc-sec{border-left:3px solid currentColor;padding-left:12px;margin:0 0 18px 0}
-.lc-sec h3{margin:0 0 10px 0;font-size:1.25rem;font-weight:600}
+.lc-sec{border-left:3px solid #c9a56b;padding-left:14px;margin:0 0 22px 0}
+.lc-sec h3{margin:0 0 12px 0;font-size:1.2rem;font-weight:600;letter-spacing:-.01em}
 .lc-sec .lc-nota{margin:8px 0 0 0;font-size:.8rem;opacity:.7}
-.lc-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:8px}
-.lc-cart{background:rgba(128,128,128,.12);border:1px solid rgba(128,128,128,.28);border-radius:10px;
-  padding:11px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.lc-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.lc-cart{background:rgba(128,128,128,.12);border:1px solid rgba(128,128,128,.28);border-radius:12px;
+  padding:14px 14px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .lc-cart.lc-destaque{background:rgba(128,128,128,.22)}
 .lc-cart.lc-larga{grid-column:span 2}
-.lc-rot{display:flex;justify-content:space-between;gap:6px;font-size:.9rem;font-weight:500;opacity:.75}
+.lc-rot{display:flex;justify-content:space-between;gap:6px;font-size:.82rem;font-weight:500;
+  opacity:.7;text-transform:uppercase;letter-spacing:.04em}
 .lc-q{width:15px;height:15px;border-radius:50%;border:1px solid currentColor;font-size:10px;
   line-height:13px;text-align:center;flex:none;cursor:help}
-.lc-val{font-size:1.4rem;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.lc-val{font-size:1.55rem;font-weight:600;line-height:1.25;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .lc-val small{font-size:.8rem;font-weight:500;opacity:.7}
-.lc-subs{display:flex;flex-direction:column;gap:3px;border-top:1px solid rgba(128,128,128,.28);
-  padding-top:7px;font-size:.8rem}
+.lc-obs{font-size:.78rem;opacity:.75;line-height:1.35}
+.lc-subs{margin-top:auto;display:flex;flex-direction:column;gap:3px;font-size:.8rem;
+  border-top:1px solid rgba(128,128,128,.28);padding-top:8px}
 .lc-subs div{display:flex;justify-content:space-between;gap:8px}
 .lc-subs span{opacity:.7}.lc-subs b{font-weight:700;font-variant-numeric:tabular-nums}
 .lc-pos{color:#1a9e6f}.lc-neg{color:#d14b3f}
-.lc-selo{display:inline-flex;border-radius:99px;padding:2px 10px;font-size:.85rem;font-weight:600;
+.lc-selo{display:inline-flex;border-radius:99px;padding:3px 14px;font-size:.95rem;font-weight:600;
   width:max-content}
 .lc-ok{background:rgba(26,158,111,.18);color:#1a9e6f}
 .lc-warn{background:rgba(217,115,13,.2);color:#d9730d}
@@ -97,6 +99,7 @@ def cartao(
     *,
     bruto: bool = False,
     pequeno: str = "",
+    nota: str = "",
     ajuda: str = "",
     subs: Sequence[tuple[str, str]] = (),
     destaque: bool = False,
@@ -105,6 +108,7 @@ def cartao(
     """Um cartão: rótulo (com ? e tooltip), valor grande e, opcionalmente, linhas de apoio.
 
     `valor` é texto puro, escapado aqui; com `bruto=True` já é HTML montado por este módulo.
+    `nota` é uma linha pequena sob o valor, em HTML já seguro (use `escape`).
     `subs` são pares (rótulo, valor) já formatados em texto puro.
     """
     classes = "lc-cart" + (" lc-destaque" if destaque else "") + (" lc-larga" if larga else "")
@@ -113,9 +117,10 @@ def cartao(
     extra = f" <small>{escape(pequeno)}</small>" if pequeno else ""
     linhas = "".join(f"<div><span>{escape(a)}</span><b>{b}</b></div>" for a, b in subs)
     bloco = f'<div class="lc-subs">{linhas}</div>' if subs else ""
+    obs = f'<div class="lc-obs">{nota}</div>' if nota else ""
     return (
         f'<div class="{classes}"><div class="lc-rot"><span>{escape(rotulo)}</span>{q}</div>'
-        f'<div class="lc-val">{corpo}{extra}</div>{bloco}</div>'
+        f'<div class="lc-val">{corpo}{extra}</div>{obs}{bloco}</div>'
     )
 
 
