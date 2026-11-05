@@ -311,3 +311,131 @@ def football(
         yaxis={"autorange": "reversed", "title": ""},
     )
     return figura
+
+
+ROXO = "#8a63c9"  # setor CVM
+CORES_GRUPO = {"Ativo": AZUL, "Pares": LARANJA, "Setor CVM": ROXO, "Ibovespa": VERDE}
+
+
+def retorno_contra_hurdle(ke_implicito: float, hurdle: float) -> go.Figure:
+    """Retorno que o preço embute contra o mínimo do perfil, na mesma régua."""
+    figura = go.Figure()
+    validos = [v for v in (ke_implicito, hurdle) if pd.notna(v)]
+    for nome, valor, cor, simbolo in (
+        ("Preço embute", ke_implicito, AZUL, "circle"),
+        ("Exigido pelo perfil", hurdle, TINTA, "line-ns"),
+    ):
+        if pd.notna(valor):
+            figura.add_trace(
+                go.Scatter(
+                    x=[valor],
+                    y=[""],
+                    mode="markers+text",
+                    name=nome,
+                    marker={
+                        "color": cor,
+                        "size": 18 if simbolo == "circle" else 26,
+                        "symbol": simbolo,
+                        "line": {"color": cor, "width": 3},
+                    },
+                    text=[f"{nome}: {fo.taxa(valor)}"],
+                    textposition="top center" if simbolo == "circle" else "bottom center",
+                    hovertemplate=f"{nome}<br>%{{x:.2%}}<extra></extra>",
+                )
+            )
+    figura.update_layout(
+        height=190,
+        margin={"l": 8, "r": 8, "t": 8, "b": 8},
+        separators=",.",
+        showlegend=False,
+        xaxis={
+            "tickformat": ".0%",
+            "showgrid": True,
+            "zeroline": False,
+            "range": [min(validos) - 0.06, max(validos) + 0.06] if validos else None,
+        },
+        yaxis={"visible": False},
+    )
+    return figura
+
+
+def montagem_custo(
+    rf: float,
+    beta: float,
+    erp: float,
+    ke: float,
+    wacc: float,
+    kd_liquido: float,
+    peso_equity: float,
+) -> go.Figure:
+    """Barras empilhadas: Ke = Rf + β x ERP e, quando há dívida, WACC = Ke·E + Kd líq.·D."""
+    barras: list[tuple[str, str, float, str]] = []
+    if pd.notna(rf) and pd.notna(beta) and pd.notna(erp):
+        barras += [
+            ("Ke", "Rf", rf, CINZA),
+            ("Ke", "β x ERP", beta * erp, AZUL),
+        ]
+    if pd.notna(wacc) and pd.notna(ke) and pd.notna(kd_liquido) and pd.notna(peso_equity):
+        barras += [
+            ("WACC", "Ke x peso do equity", ke * peso_equity, AZUL),
+            ("WACC", "Kd líquido x peso da dívida", wacc - ke * peso_equity, LARANJA),
+        ]
+    figura = go.Figure()
+    for parte in dict.fromkeys(b[1] for b in barras):
+        itens = {b[0]: b for b in barras if b[1] == parte}
+        figura.add_trace(
+            go.Bar(
+                y=["Ke", "WACC"],
+                x=[itens[k][2] if k in itens else None for k in ("Ke", "WACC")],
+                name=parte,
+                orientation="h",
+                marker={"color": next(iter(itens.values()))[3]},
+                text=[fo.taxa(itens[k][2]) if k in itens else "" for k in ("Ke", "WACC")],
+                textposition="inside",
+                hovertemplate=f"{parte}<br>%{{x:.2%}}<extra></extra>",
+            )
+        )
+    figura.update_layout(
+        barmode="stack",
+        height=250,
+        margin={"l": 8, "r": 8, "t": 64, "b": 8},
+        separators=",.",
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "x": 0},
+        xaxis={"tickformat": ".0%", "showgrid": True},
+        yaxis={"autorange": "reversed", "title": ""},
+    )
+    return figura
+
+
+def comparacao_taxas(linhas: Sequence[tuple[str, dict[str, float]]]) -> go.Figure:
+    """Um ponto por grupo em cada indicador em %: ativo, pares, setor CVM e Ibovespa."""
+    figura = go.Figure()
+    for grupo, cor in CORES_GRUPO.items():
+        rotulos = [r for r, v in linhas if pd.notna(v.get(grupo, float("nan")))]
+        valores = [v[grupo] for r, v in linhas if pd.notna(v.get(grupo, float("nan")))]
+        if not valores:
+            continue
+        figura.add_trace(
+            go.Scatter(
+                x=valores,
+                y=rotulos,
+                mode="markers",
+                name=grupo,
+                marker={
+                    "color": cor,
+                    "size": 14 if grupo == "Ativo" else 11,
+                    "symbol": "diamond" if grupo == "Ativo" else "circle",
+                    "line": {"color": "white", "width": 1},
+                },
+                hovertemplate=f"{grupo}<br>%{{y}}: %{{x:.2%}}<extra></extra>",
+            )
+        )
+    figura.update_layout(
+        height=max(240, 62 * len(linhas) + 90),
+        margin={"l": 8, "r": 8, "t": 8, "b": 8},
+        separators=",.",
+        legend={"orientation": "h", "y": 1.12, "x": 0},
+        xaxis={"tickformat": ".0%", "showgrid": True, "zeroline": True},
+        yaxis={"autorange": "reversed", "title": "", "showgrid": True},
+    )
+    return figura

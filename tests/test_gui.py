@@ -333,34 +333,114 @@ def _rodada_dcf(raiz: Path) -> Path:
     return pasta
 
 
+def _html(at: AppTest) -> str:
+    return "".join(str(e.value) for e in at.get("html"))
+
+
 def test_aba_valuation_mostra_os_numeros_do_resumo(ambiente: Path) -> None:
     _com_series(ambiente)
     _rodada_dcf(ambiente)
     at = _abrir("WEGE3")
     assert not at.exception
-    metricas = _metricas(at)
-    assert metricas["Pessimista"] == "R$ 30,25"
-    assert metricas["Base"] == "R$ 50,50"
-    assert metricas["Otimista"] == "R$ 70,75"
-    assert metricas["Valor ponderado"] == "R$ 50,50"
-    assert metricas["Preço máximo de compra"] == "R$ 40,40"
-    assert metricas["Upside"] == "26,25%"
-    assert metricas["Retorno esperado x hurdle"] == "14,00% x 20,00%"
+    html = _html(at)
+    for esperado in (
+        "R$ 30,25",  # pessimista
+        "R$ 50,50",  # base e ponderado
+        "R$ 70,75",
+        "R$ 40,40",  # preço máximo de compra
+        "+26,25%",  # upside
+        "14,00% <small>x 20,00%</small>",  # retorno esperado x hurdle
+        "R$ 35,00",  # Bazin
+        "R$ 2,10",
+    ):
+        assert esperado in html, esperado
     # Preço 40 <= preço máximo 40,40, mas Ke implícito 14% < hurdle 20%: manter (ADR 0025).
-    assert metricas["Recomendação"] == "Manter"
-    assert metricas["Confiança"] == "Baixa"
-    assert metricas["Preço teto Bazin"] == "R$ 35,00"
-    assert metricas["Dividendo médio por ação"] == "R$ 2,10"
-    recomendacao = next(m for m in at.metric if m.label == "Recomendação")
-    assert "Ke implícito 14,00% abaixo do hurdle 20,00%" in recomendacao.help
+    assert ">Manter</span>" in html and ">Baixa</span>" in html
+    assert "Ke implícito 14,00% abaixo do hurdle 20,00%" in html  # critério no tooltip
+    assert "g &lt; WACC" in html and "VT / EV" in html and ">Atenção</span>" in html  # 80% > 75%
+    assert "Setor CVM" not in html  # sem comparar, os cartões ficam só com o ativo
     assert len(at.get("plotly_chart")) == 4  # cotação, múltiplo, football e ponte
     texto = _textos(at)
     assert "aviso gravado na rodada" in texto and "aviso do custo de capital" in texto
     assert "qa.json não existe" in texto  # rodada incompleta avisa, sem inventar
-    checagens = next(d.value for d in at.dataframe if "Checagem" in d.value.columns)
-    resultado = dict(zip(checagens["Checagem"], checagens["Resultado"], strict=True))
-    assert resultado["g < WACC"] == "✅ ok"
-    assert resultado["VT / EV"] == "⚠️ atenção"  # 80% acima do alerta de 75%
+
+
+def _par_com_rodada(raiz: Path, ticker: str, perfil: str, ke: float) -> None:
+    pasta = raiz / "saida" / ticker / "2026-10-30"
+    linha = {
+        "ticker": ticker,
+        "data_base": "2026-10-30",
+        "perfil": perfil,
+        "ke": ke,
+        "wacc": ke - 0.03,
+        "g": 0.05,
+        "upside": 0.5,
+    }
+    gravar_csv(pd.DataFrame([linha]), pasta / "resumo.csv", BR)
+
+
+def test_comparar_poe_setor_e_mercado_nos_cartoes(
+    ambiente: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (ambiente / "universo.csv").write_text(
+        UNIVERSO
+        + "ROMI3;Máquinas, Equipamentos, Veículos e Peças;nao_financeira\n"
+        + "TUPY3;Máquinas, Equipamentos, Veículos e Peças;nao_financeira\n"
+        + "PETR4;Petróleo e Gás;nao_financeira\n",
+        encoding="utf-8",
+    )
+    _com_series(ambiente)
+    _rodada_dcf(ambiente)
+    _par_com_rodada(ambiente, "ROMI3", "moderado", 0.18)
+    _par_com_rodada(ambiente, "TUPY3", "arrojado", 0.22)  # outro perfil: fora do upside
+    _par_com_rodada(ambiente, "PETR4", "moderado", 0.20)
+    at = _abrir("WEGE3")
+    at.toggle(key="comparar_valuation").set_value(True).run()
+    assert not at.exception
+    html = _html(at)
+    # Setor CVM = ROMI3 e TUPY3: Ke (não depende do perfil) é a mediana de 0,18 e 0,22.
+    assert "Setor CVM (n = 2)" in html and "20,00%" in html
+    # Upside só conta rodadas do mesmo perfil (moderado): ROMI3.
+    assert "Setor CVM (n = 1)" in html and "50,00%" in html
+    assert "Ibovespa (n = 3)" in html  # ROMI3, TUPY3 e PETR4 (sem o próprio ativo)
+    assert "Pares (n = 0)" in html  # WEGE3 não tem setor de pares no YAML de teste
+    assert "mesmo perfil do ativo" in _textos(at)
+
+
+def test_visuais_alternativos_mostram_os_mesmos_numeros(ambiente: Path) -> None:
+    _com_series(ambiente)
+    _rodada_dcf(ambiente)
+    at = _abrir("WEGE3")
+    at.radio(key="visual_valuation").set_value("Faixa de preço").run()
+    assert not at.exception
+    html = _html(at)
+    assert "lc-escala" in html and "R$ 40,40" in html and "Preço máximo" in html
+    at.radio(key="visual_valuation").set_value("Gráficos").run()
+    assert not at.exception
+    assert len(at.get("plotly_chart")) >= 5  # cotação, múltiplo, retorno, custo, football, ponte
+
+
+def test_rodar_quem_falta_chama_a_cli_com_o_perfil_da_rodada(
+    ambiente: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (ambiente / "universo.csv").write_text(
+        UNIVERSO + "ROMI3;Máquinas, Equipamentos, Veículos e Peças;nao_financeira\n",
+        encoding="utf-8",
+    )
+    _com_series(ambiente)
+    _rodada_dcf(ambiente)
+    at = _abrir("WEGE3")
+    at.toggle(key="comparar_valuation").set_value(True).run()
+    chamadas: list[object] = []
+
+    def registra(comandos: object, ao_ler: object = None) -> atu.Execucao:
+        chamadas.append(comandos)
+        return atu.Execucao(True)
+
+    monkeypatch.setattr(atu, "executar", registra)
+    at.button(key="rodar_setor").click().run()
+    assert not at.exception
+    assert chamadas == [atu.rodar_setor("MAQUINAS_EQUIPAMENTOS_VEICULOS_E_PECAS", "moderado")]
 
 
 def test_aba_valuation_sem_rodada_oferece_o_botao(

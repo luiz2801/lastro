@@ -348,6 +348,11 @@ flowchart TD
   F --> K{"Rodada em saida/?"}
   K -->|não| K1["Botão Rodar valuation"]
   K -->|sim| L["Aba Valuation: lê os CSVs, sem recalcular"]
+  L --> L1["Visual: Cartões, Faixa de preço ou Gráficos"]
+  L --> L2{"Comparar com setor e mercado?"}
+  L2 -->|sim| L3["Lê as rodadas em saida/ e os múltiplos em disco de pares, setor CVM e Ibovespa"]
+  L3 --> L4{"Falta rodada?"}
+  L4 -->|sim| L5["Botões Rodar os pares / Rodar o setor CVM: rodar e rodar-setor, em outro processo"]
   L --> R{"Perfil da sessão difere da rodada?"}
   R -->|sim| R1["Aviso e botão Rodar com perfil X: rodar --perfil, em outro processo"]
   M["Botão Atualizar"] --> N["Outro processo: atualizar + series + rodar"]

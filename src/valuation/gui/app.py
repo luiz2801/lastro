@@ -8,7 +8,7 @@ import streamlit as st
 
 from valuation.config import ErroConfiguracao
 from valuation.data.cadastro import normalizar_ticker
-from valuation.gui import ativo, inicio, navegacao, pagina_perfil
+from valuation.gui import ativo, cartoes, inicio, navegacao, pagina_perfil
 
 # O `st.metric` corta o que não cabe com reticências, e número pela metade engana: quebra a linha.
 CSS_CARTOES = """<style>
@@ -24,6 +24,7 @@ CSS_CARTOES = """<style>
 def principal() -> None:
     st.set_page_config(page_title="Lastro — valuation", page_icon="📈", layout="wide")
     st.markdown(CSS_CARTOES, unsafe_allow_html=True)
+    st.markdown(cartoes.CSS, unsafe_allow_html=True)
     ticker = st.query_params.get("ticker")
     try:
         navegacao.mostrar()

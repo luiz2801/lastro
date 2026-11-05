@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.54 — 2026-11-05**
+**Versão 1.55 — 2026-11-05**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -55,7 +55,7 @@
 | CLI | `cli.py` | `gui`, `series`, `series-varios`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.900 linhas de código, 855 testes (844 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.900 linhas de código, 865 testes (854 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -592,8 +592,9 @@ proposto; `docs/backlog.md`).
 | `test_indicadores.py` | históricos à mão, `balanco_e_caixa` à mão (cada razão, sem arrendamento, denominador ≤ 0 e conta ausente com o motivo, dívida fora dos empréstimos) | `M`, `_balanco` |
 | `test_formato.py` | texto pt-BR de cada função de `saida/formato.py`, sem dado = "—" | — |
 | `test_servicos_resultados.py` | sem rodada, pasta só com `wacc.csv`, rodada completa em `br` e `intl` com os gravadores reais, pasta mais recente, rodada incompleta, DDM sem ponte, arquivo corrompido | `_rodada`, `_completa` |
-| `test_gui.py` | `AppTest` sem rede: início (vazio, favoritas do cache), fora do universo, holding, ativo com cache, ativo sem cache (erro visível e uma tentativa, ou baixa e abre), botão Atualizar; `valuation gui` sem Streamlit e só em 127.0.0.1 | `ambiente`, `_com_dados`, `atu.executar` trocado (falha o teste se chamado sem pedido) |
-| `test_servicos_atualizacao.py` | comandos da CLI, `executar` (linhas ao vivo, para na falha, comando inexistente) e `estado_fontes` | subprocessos triviais |
+| `test_gui.py` | `AppTest` sem rede: início (vazio, favoritas do cache), fora do universo, holding, ativo com cache, ativo sem cache (erro visível e uma tentativa, ou baixa e abre), botão Atualizar, aba Valuation (cartões, três visuais, comparação com setor e mercado, botão de rodar o setor); `valuation gui` sem Streamlit e só em 127.0.0.1 | `ambiente`, `_com_dados`, `atu.executar` trocado (falha o teste se chamado sem pedido) |
+| `test_servicos_comparacao_valuation.py` | leitura de rodada, mediana à mão, filtro por perfil e por modelo, grupos (pares, setor CVM, Ibovespa) | rodadas sintéticas em `tmp_path` |
+| `test_servicos_atualizacao.py` | comandos da CLI, `rodar_varios`, `rodar_setor`, `executar` (linhas ao vivo, para na falha, comando inexistente) e `estado_fontes` | subprocessos triviais |
 | `test_serie_multiplos.py` | F(c), base de hoje, `conferir_splits`, pontos mensais, divulgação e fallback, vigência sem olhar o futuro, múltiplos à mão com lacunas, Log-IQR, corte fixo, Tukey, marcação e referências à mão | `_composicao`, `_fund`, `_serie` |
 | `test_servicos_historico_mercado.py` | série de ponta a ponta à mão: P/L com data de divulgação, lacuna antes da composição, split sem degrau, avisos, ITR só em memória, `baixar_series` | `p`, `_cotacao`, `_composicao`, `_splits`, `_divulgacoes` |
 | `test_series_dados.py` | `coletar_series`, `ler_divulgacoes` (1ª versão), composição combinada, `splits` e caches sem rede | `SessaoFalsa`, `yfinance` falso em `sys.modules` |
@@ -1038,7 +1039,7 @@ faixa_52s)` e `ponte_de_cenario(r, cenario)`.
 
 **`atualizacao.py`**: a atualização a pedido roda os fluxos da CLI em outro processo (`python -m
 valuation`, entrada em `valuation/__main__.py`), para valer exatamente o mesmo `atualizar`/`rodar`.
-`baixar_dados`, `baixar_series_grupo`, `rodar_valuation(ticker, perfil=None)`, `atualizar_ativo` e `atualizar_favoritas` montam os comandos;
+`baixar_dados`, `baixar_series_grupo`, `rodar_valuation(ticker, perfil=None)`, `rodar_varios(tickers, sem_demonstracoes, perfil)`, `rodar_setor(setor, perfil)`, `atualizar_ativo` e `atualizar_favoritas` montam os comandos;
 `executar(comandos, ao_ler) -> Execucao(ok, saida, falhou_em)` para no primeiro que falhar e nunca
 levanta por falha do comando.
 
@@ -1071,6 +1072,14 @@ nova invalidar sozinha), o settings, o cadastro e a `assinatura` (caminho, mtime
 lida sempre, e a data-base entra pelos pontos mensais, então só invalida quando muda um ponto. `cmp.medir_com_cache` é
 `medir_varios` com o mesmo cache; a data-base entra pelo mês e pelo último fechamento até ela. Sem `p`, só padroniza
 se o cache não servir: é o que torna barato ler dezenas de pares. A GUI usa as versões com cache; a CLI, não.
+
+**`comparacao_valuation.py`** (ADR 0026): valuation do ativo contra grupos, só com rodadas em `saida/` (`resumo.csv` e
+`wacc.csv`, sem rede). `INDICADORES` (beta, Ke, Kd, WACC, g, upside, retorno esperado, VT/EV ou VT/valor; os três últimos
+**dependem do perfil**), `ler_rodada(s)` -> `RodadaLida`, `referencia_valuation(rodadas, indicador, perfil, modelo, tipo)` ->
+`ReferenciaValuation(valor, n, sem_rodada, outro_perfil, anomalas)` (mesmo filtro de anomalias e mesma estatística dos gráficos;
+só entra quem tem o mesmo modelo e, nos indicadores do perfil, o mesmo perfil do ativo) e `grupos_de_comparacao` (pares
+= `scmp.tickers_pares`; setor CVM = universo com o mesmo `setor_cvm` e tipo de modelo; Ibovespa = universo do mesmo tipo, sem
+holdings e sem o próprio ativo).
 
 **`favoritas.py`**: `adicionar(ticker, universo, caminho)` (fora do universo ⇒ `ErroConfiguracao`) e `remover(ticker,
 caminho)`, sobre `saida/favoritos.py`. Sem rede: a página do ativo baixa o que faltar ao abrir.
@@ -1130,15 +1139,26 @@ usar o relógio e passa `agora`/`base` para baixo.
   (verde, pontilhada, só depois do botão), com "k de m em disco", quem ficou de fora e o botão "Baixar séries" (único
   caminho de rede dessas linhas). Pares
   aparecem ao abrir; o Ibovespa só no botão, porque mede dezenas de empresas (40 s na primeira vez, com 63 empresas).
-- `aba_valuation.py`: só lê `saida/`: cenários, ponderado, preço máximo, upside, Ke implícito × hurdle, recomendação
-  (critério no tooltip, por `fo.criterio_recomendacao`), confiança com os motivos, preço teto de Bazin e dividendo médio
-  (rodada anterior ao ADR 0025 mostra "—"), linha do Bazin no football field,
-  custo de capital, checagens, football field e ponte (Plotly, a partir dos CSVs), perfil do JSON ou da sessão. O
+- `aba_valuation.py`: só lê `saida/`, em **três visuais** sobre os mesmos números (ADR 0026), escolhidos por um `st.radio`
+  (`visual_valuation`): **Cartões** (principal: Valor por ação, Decisão, Custo de capital, Múltiplos de mercado, Checagens,
+  football field e ponte), **Faixa de preço** (faixa com a escala dos cenários, preço e preço máximo, e blocos compactos) e
+  **Gráficos** (retorno esperado × hurdle, montagem do Ke/WACC, ativo × grupos, cascata da ponte). Cenários, ponderado, preço
+  máximo, upside, Ke implícito × hurdle, recomendação (critério no tooltip, por `fo.criterio_recomendacao`), confiança com os
+  motivos, preço teto de Bazin e dividendo médio (rodada anterior ao ADR 0025 mostra "—"), perfil do JSON ou da sessão. O
   ponderado **não é refeito na tela**: o perfil muda o horizonte, e este, o valor de cada cenário. Override diferente da
   rodada mostra "Rodar com perfil X" (`rodar --perfil`), que sobrescreve a pasta do dia.
-  Sem rodada, botão "Rodar valuation". **Não se chama `valuation.py`:** o Streamlit põe a pasta do script
+  **Comparar com setor e mercado** (`st.toggle` `comparar_valuation`): cada cartão ganha linhas "Pares / Setor CVM /
+  Ibovespa (n = k)" com a referência escolhida na aba Geral (`referencia_serie`). Valuation (beta, Ke, Kd, WACC, g, upside,
+  retorno esperado, VT) vem das rodadas já em `saida/` (`servicos/comparacao_valuation.py`); múltiplos (P/L, EV/EBITDA, EV/EBIT,
+  P/VP, DY), das medidas em disco (`dados.medidas`, a mesma conta da aba Geral). A primeira leitura do Ibovespa leva dezenas de
+  segundos (depois, cache). O expansor "Rodar o valuation de quem falta" tem "Rodar os N pares sem rodada" (`atu.rodar_varios`,
+  que baixa antes quem não tem demonstrações e para na primeira falha) e "Rodar o setor CVM" (`atu.rodar_setor`, que continua
+  nas falhas), sempre com o perfil da rodada do ativo; o Ibovespa só usa o que já existe. Sem rodada, botão "Rodar valuation".
+  **Não se chama `valuation.py`:** o Streamlit põe a pasta do script
   no `sys.path`, e o arquivo esconderia o pacote (`test_nenhum_modulo_da_gui_esconde_um_pacote`).
-- `grafico.py`: figuras Plotly. `indicador` desenha o histórico anual + LTM: fora da referência com ✕ cinza,
+- `cartoes.py`: `CSS` (injetado em `app.py`; fundos translúcidos para valer nos dois temas), `cartao`, `secao`, `selo`,
+  `selos`, `texto_com_sinal` e `faixa_de_preco`. Só montam HTML (`st.html`) com todo texto escapado; nenhuma conta.
+- `grafico.py`: figuras Plotly. Visual Gráficos da aba Valuation: `retorno_contra_hurdle`, `montagem_custo` e `comparacao_taxas` (ativo azul, pares laranja, setor CVM roxo, Ibovespa verde). `indicador` desenha o histórico anual + LTM: fora da referência com ✕ cinza,
   marcado com contorno. Um eixo; azul = série, cinza = fora da referência, tinta = referência e
   hoje. A escala segue os pontos válidos; descartado acima dela fica preso à borda com ▲, e o valor
   verdadeiro no tooltip. Métrica ≤ 0 (sem valor de múltiplo) aparece em 0 com ✕.

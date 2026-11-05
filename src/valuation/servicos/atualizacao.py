@@ -38,6 +38,25 @@ def rodar_valuation(ticker: str, perfil: str | None = None) -> list[Comando]:
     return [comando("rodar", ticker, "--perfil", perfil)]
 
 
+def rodar_varios(
+    tickers: Sequence[str], sem_demonstracoes: Sequence[str], perfil: str | None
+) -> list[Comando]:
+    """`rodar` de cada empresa (com o mesmo perfil), baixando antes o que não tem demonstrações."""
+    comandos: list[Comando] = []
+    for ticker in tickers:
+        if ticker in sem_demonstracoes:
+            comandos += baixar_dados(ticker)
+        comandos += rodar_valuation(ticker, perfil)
+    return comandos
+
+
+def rodar_setor(setor: str, perfil: str | None) -> list[Comando]:
+    """`rodar-setor`: continua nas empresas que falham, ao contrário de uma fila de `rodar`."""
+    if perfil is None:
+        return [comando("rodar-setor", setor)]
+    return [comando("rodar-setor", setor, "--perfil", perfil)]
+
+
 def atualizar_ativo(ticker: str) -> list[Comando]:
     return [*baixar_dados(ticker), *rodar_valuation(ticker)]
 

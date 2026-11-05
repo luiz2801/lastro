@@ -2,6 +2,15 @@
 
 ## [Não lançado]
 
+### Aba Valuation em cartões, com comparação por setor e mercado (ADR 0026)
+- Aba Valuation redesenhada em três visuais (Cartões, Faixa de preço, Gráficos), com os números de antes; as tabelas de custo de
+  capital e checagens viraram cartões. Cartões em HTML (`gui/cartoes.py`), no estilo das referências do usuário.
+- "Comparar com setor e mercado": linhas Pares, Setor CVM e Ibovespa em cada cartão (beta, Ke, Kd, WACC, g, upside, retorno
+  esperado, VT e os múltiplos P/L, EV/EBITDA, EV/EBIT, P/VP e DY), pela estatística escolhida na aba Geral.
+  `servicos/comparacao_valuation.py` lê só as rodadas em disco; upside, retorno e VT só contam rodadas do mesmo perfil.
+- Botões para rodar os pares e o setor CVM que ainda não têm rodada (`atu.rodar_varios`, `atu.rodar_setor`), com o perfil da
+  rodada do ativo. Gráficos novos: retorno esperado × hurdle, montagem do Ke e do WACC, ativo × grupos.
+
 ### Etapa 5: preço teto de Bazin e recomendação (ADR 0025)
 - `analise/decisao.py` (puro): `teto_bazin` (média dos dividendos e JCP pagos nos últimos 5 exercícios ÷ ações ÷ 6%,
   informativo), `motivos_baixa_confianca` e `recomendar`: compra se preço ≤ preço máximo de compra e Ke implícito ≥

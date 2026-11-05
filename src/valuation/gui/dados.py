@@ -20,6 +20,7 @@ from valuation.projecao import premissas as pm
 from valuation.saida import favoritos as fav
 from valuation.servicos import cache as sc
 from valuation.servicos import comparacao as scmp
+from valuation.servicos import comparacao_valuation as scv
 from valuation.servicos import empresa as emp
 from valuation.servicos import grupos as grp
 from valuation.servicos import historico_mercado as hm
@@ -79,6 +80,19 @@ def _resultado(
 
 def resultado(ticker: str) -> res.Resultado | None:
     return _resultado(ticker, _mtime_resumo(ticker), cfg.DIR_SAIDA, settings().csv)
+
+
+@st.cache_data(show_spinner=False)
+def _rodadas(
+    tickers: tuple[str, ...], _chave: tuple[float, ...], dir_saida: Path, config: cfg.ConfigCsv
+) -> dict[str, scv.RodadaLida | None]:
+    return scv.ler_rodadas(tickers, config, dir_saida)
+
+
+def rodadas(tickers: Sequence[str]) -> dict[str, scv.RodadaLida | None]:
+    """Última rodada em disco de cada empresa (resumo e wacc); `None` sem rodada. Sem rede."""
+    chave = tuple(_mtime_resumo(t) for t in tickers)
+    return _rodadas(tuple(tickers), chave, cfg.DIR_SAIDA, settings().csv)
 
 
 @st.cache_data(show_spinner=False)

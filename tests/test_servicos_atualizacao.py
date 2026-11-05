@@ -24,6 +24,27 @@ def test_comandos_chamam_a_cli_pelo_mesmo_interpretador() -> None:
     assert [c[3:] for c in favoritas] == [("series", "PETR4"), ("favoritos", "atualizar")]
 
 
+def test_rodar_varios_baixa_antes_so_de_quem_nao_tem_demonstracoes() -> None:
+    comandos = atu.rodar_varios(["AAAA3", "BBBB3"], ["BBBB3"], "moderado")
+    assert [c[3:] for c in comandos] == [
+        ("rodar", "AAAA3", "--perfil", "moderado"),
+        ("atualizar", "--tickers", "BBBB3"),
+        ("series", "BBBB3"),
+        ("rodar", "BBBB3", "--perfil", "moderado"),
+    ]
+    assert atu.rodar_varios(["AAAA3"], [], None)[0][3:] == ("rodar", "AAAA3")
+
+
+def test_rodar_setor_passa_o_perfil_quando_ha() -> None:
+    assert atu.rodar_setor("BANCOS", "arrojado")[0][3:] == (
+        "rodar-setor",
+        "BANCOS",
+        "--perfil",
+        "arrojado",
+    )
+    assert atu.rodar_setor("BANCOS", None)[0][3:] == ("rodar-setor", "BANCOS")
+
+
 def test_executar_entrega_cada_linha_e_junta_stderr() -> None:
     vistas: list[str] = []
     codigo = "import sys; print('a'); print('b', file=sys.stderr)"
