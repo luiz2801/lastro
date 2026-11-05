@@ -237,6 +237,38 @@ TERMOS: tuple[Termo, ...] = (
         "Positivo indica preço abaixo do valor justo do modelo; não é previsão de preço.",
     ),
     _T(
+        "preco_teto_bazin",
+        "Teto Bazin",
+        "Preço teto de Bazin",
+        "Perfil e decisão",
+        "Maior preço que ainda rende o yield mínimo de dividendos, pela regra de Décio Bazin.",
+        "Média dos dividendos e JCP pagos (DFC) nos últimos exercícios (5, padrão) / ações / "
+        "yield mínimo (6%, padrão)",
+        "Informativo e só para pagadoras: ignora crescimento e risco. A recomendação usa o "
+        "preço máximo de compra do perfil.",
+    ),
+    _T(
+        "recomendacao",
+        "Recomendação",
+        "Recomendação do modelo",
+        "Perfil e decisão",
+        "Leitura do preço contra o valor justo e o retorno mínimo do perfil.",
+        "Compra: preço <= preço máximo e Ke implícito >= hurdle; venda: preço > valor "
+        "ponderado; manter: o resto",
+        "Confiança baixa rebaixa a compra para manter. Estudo pessoal, não é recomendação de "
+        "investimento.",
+    ),
+    _T(
+        "confianca",
+        "Confiança",
+        "Confiança do resultado",
+        "Perfil e decisão",
+        "Se o resultado tem sinais de fragilidade nos dados ou no modelo.",
+        "Baixa com erro de QA, VT acima do alerta, menos pares que o mínimo ou R² do beta "
+        "abaixo do mínimo",
+        "Com confiança baixa, revise os motivos antes de usar o valor.",
+    ),
+    _T(
         "lucro_residual",
         "Lucro residual",
         "Lucro residual",
@@ -628,6 +660,9 @@ LEGENDA_DCF = (
     "ke_implicito",
     "wacc_implicito",
     "hurdle",
+    "preco_teto_bazin",
+    "recomendacao",
+    "confianca",
 )
 LEGENDA_DDM = (
     "ke",
@@ -644,6 +679,9 @@ LEGENDA_DDM = (
     "upside",
     "ke_implicito",
     "hurdle",
+    "preco_teto_bazin",
+    "recomendacao",
+    "confianca",
 )
 LEGENDA_MULTIPLOS = ("ltm", "p25_p75")
 LEGENDA_WACC = ("rf", "erp", "beta", "ke", "kd", "wacc")

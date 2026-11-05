@@ -13,6 +13,7 @@ from typer.testing import CliRunner
 from conftest import DIR_FIXTURES_CVM, SessaoFalsa
 from sintetico import dfp_banco, dfp_completa, juntar
 from valuation import __version__, cli
+from valuation.analise import decisao as dec
 from valuation.cli import app
 from valuation.config import ConfigErp, Settings, carregar_settings
 from valuation.data import cadastro as cad
@@ -498,6 +499,15 @@ def test_rodar_financeira(mercado_banco: Path, caminho_perfil: Path) -> None:
         0.25 * r["valor_pessimista"] + 0.5 * r["valor_base"] + 0.25 * r["valor_otimista"]
     )
     assert r["pvp_justificado"] == pytest.approx((22 / 90 - 0.05) / (r["ke"] - 0.05))
+    # Bazin: dividendos de 11 em 2024 e 2025 (só 2 dos 5 exercícios), 90 ações, yield de 6%.
+    assert r["dividendo_por_acao_bazin"] == pytest.approx(11 / 90)
+    assert r["preco_teto_bazin"] == pytest.approx(11 / 90 / 0.06)
+    assert r["yield_minimo_bazin"] == 0.06
+    assert "Teto de Bazin com 2 de 5 exercícios" in r["avisos"]
+    # Preço R$ 10 acima do valor ponderado: venda; sem pares, confiança baixa.
+    assert r["valor_ponderado"] < r["preco"]
+    assert (r["recomendacao"], r["recomendacao_modelo"]) == ("venda", "venda")
+    assert (r["confianca"], r["motivos_confianca"]) == ("baixa", "sem pares medidos")
     projecao = ler_csv_br(pasta / "projecao_base.csv")
     assert projecao["ano"].iloc[0] == 2026
     assert projecao["pl_inicial"].iloc[0] == 100
@@ -506,6 +516,9 @@ def test_rodar_financeira(mercado_banco: Path, caminho_perfil: Path) -> None:
     texto = " ".join(resultado.output.split())
     assert "DDM — WEGE3" in texto
     assert "preço máximo de compra para o perfil moderado" in texto
+    assert "Preço teto de Bazin: R$ 2,04" in texto
+    assert "Recomendação (perfil moderado): VENDA" in texto
+    assert "Confiança baixa: sem pares medidos." in texto
 
 
 def _sem_bordas(saida: str) -> str:
@@ -675,6 +688,21 @@ def test_rodar(mercado_falso: Path, caminho_perfil: Path) -> None:
     texto = " ".join(resultado.output.split())
     assert "preço máximo de compra para o perfil moderado" in texto
     assert "não é recomendação" in texto
+    # DFP sintética sem dividendos: teto de Bazin indefinido, com aviso, e "—" no terminal.
+    assert pd.isna(r["preco_teto_bazin"]) and pd.isna(r["dividendo_por_acao_bazin"])
+    assert "Teto de Bazin indefinido" in r["avisos"]
+    assert "Preço teto de Bazin: — (sem dividendo médio positivo)." in texto
+    esperado = dec.recomendar(
+        preco=r["preco"],
+        valor_ponderado=r["valor_ponderado"],
+        preco_maximo_compra=r["preco_maximo_compra"],
+        ke_implicito=None if pd.isna(r["ke_implicito"]) else r["ke_implicito"],
+        hurdle=r["hurdle"],
+        motivos_confianca=("sem pares medidos",),
+    )
+    assert (r["recomendacao"], r["recomendacao_modelo"]) == (esperado.sinal, esperado.sinal_modelo)
+    assert (r["confianca"], r["motivos_confianca"]) == ("baixa", "sem pares medidos")
+    assert f"Recomendação (perfil moderado): {esperado.sinal.upper()}" in texto
 
     meta = json.loads((pasta / "meta.json").read_text("utf-8"))
     assert meta["ticker"] == "WEGE3"

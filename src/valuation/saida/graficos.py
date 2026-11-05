@@ -96,9 +96,10 @@ def football_field(
     caminho: Path,
     ticker: str,
     perfil: str,
+    preco_bazin: float | None = None,
 ) -> Path:
-    """Barras horizontais de valor por ação por método, com o preço atual e o preço máximo de
-    compra do perfil como linhas verticais."""
+    """Barras horizontais de valor por ação por método, com o preço atual, o preço máximo de
+    compra do perfil e, se houver, o preço teto de Bazin como linhas verticais."""
     n = len(faixas)
     fig, topo = _figura(
         9.5,
@@ -138,20 +139,26 @@ def football_field(
             )
     ax.axvline(preco, color=LARANJA, linewidth=2)
     ax.axvline(preco_maximo, color=VERDE_AGUA, linewidth=2, linestyle="--")
-    todos = [v for f in faixas for v in (f.minimo, f.maximo)] + [preco, preco_maximo]
+    linhas = [preco, preco_maximo]
+    legenda = [
+        Patch(color=AZUL, label="Faixa do método"),
+        Patch(color=LARANJA, label=f"Preço atual ({reais(preco)})"),
+        Patch(color=VERDE_AGUA, label=f"Preço máximo de compra ({reais(preco_maximo)})"),
+    ]
+    if preco_bazin is not None and np.isfinite(preco_bazin):
+        ax.axvline(preco_bazin, color=AMARELO, linewidth=2, linestyle="-.")
+        linhas.append(preco_bazin)
+        legenda.append(Patch(color=AMARELO, label=f"Preço teto Bazin ({reais(preco_bazin)})"))
+    todos = [v for f in faixas for v in (f.minimo, f.maximo)] + linhas
     lo, hi = min(todos), max(todos)
     folga = (hi - lo) * 0.12 or 1.0
     ax.set_xlim(min(0.0, lo - folga) if lo < 0 else max(0.0, lo - folga), hi + folga)
     ax.set_ylim(n - 0.5, -0.5)
     ax.legend(
-        handles=[
-            Patch(color=AZUL, label="Faixa do método"),
-            Patch(color=LARANJA, label=f"Preço atual ({reais(preco)})"),
-            Patch(color=VERDE_AGUA, label=f"Preço máximo de compra ({reais(preco_maximo)})"),
-        ],
+        handles=legenda,
         loc="upper center",
         bbox_to_anchor=(0.5, -0.09),
-        ncol=3,
+        ncol=len(legenda),
         frameon=False,
         fontsize=8,
         labelcolor=TINTA_2,

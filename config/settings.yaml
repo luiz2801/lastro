@@ -100,3 +100,10 @@ perfil:
     pesos_cenarios: {pessimista: 0.15, base: 0.50, otimista: 0.35}
     horizonte_anos: 10
     hurdle_spread_selic: 0.07
+
+# Preço teto de Bazin (ADR 0025), informativo ao lado do preço máximo de compra do perfil:
+# média dos dividendos + JCP pagos (DFC) nos últimos `bazin_anos` exercícios / ações atuais /
+# `bazin_yield_minimo`. Os 6% são a regra de Bazin, não dado de mercado.
+preco_teto:
+  bazin_yield_minimo: 0.06
+  bazin_anos: 5

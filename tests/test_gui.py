@@ -295,6 +295,13 @@ def _rodada_dcf(raiz: Path) -> Path:
         "upside": 0.2625,
         "ke_implicito": 0.14,
         "hurdle": 0.20,
+        "preco_teto_bazin": 35.0,
+        "dividendo_por_acao_bazin": 2.1,
+        "yield_minimo_bazin": 0.06,
+        "recomendacao": "manter",
+        "recomendacao_modelo": "manter",
+        "confianca": "baixa",
+        "motivos_confianca": "VT de 80% do valor, acima do alerta de 75%",
         "wacc": 0.13,
         "g": 0.05,
         "vt_sobre_ev": 0.80,
@@ -339,6 +346,13 @@ def test_aba_valuation_mostra_os_numeros_do_resumo(ambiente: Path) -> None:
     assert metricas["Preço máximo de compra"] == "R$ 40,40"
     assert metricas["Upside"] == "26,25%"
     assert metricas["Retorno esperado x hurdle"] == "14,00% x 20,00%"
+    # Preço 40 <= preço máximo 40,40, mas Ke implícito 14% < hurdle 20%: manter (ADR 0025).
+    assert metricas["Recomendação"] == "Manter"
+    assert metricas["Confiança"] == "Baixa"
+    assert metricas["Preço teto Bazin"] == "R$ 35,00"
+    assert metricas["Dividendo médio por ação"] == "R$ 2,10"
+    recomendacao = next(m for m in at.metric if m.label == "Recomendação")
+    assert "Ke implícito 14,00% abaixo do hurdle 20,00%" in recomendacao.help
     assert len(at.get("plotly_chart")) == 4  # cotação, múltiplo, football e ponte
     texto = _textos(at)
     assert "aviso gravado na rodada" in texto and "aviso do custo de capital" in texto
@@ -464,6 +478,17 @@ def test_grafico_com_linhas_de_grupo_sem_rede() -> None:
     nomes = [t.name for t in figura.data]
     assert "Pares" in nomes
     assert figura.layout.yaxis.range[1] == pytest.approx(55.0)  # a linha entra na escala
+
+
+def test_football_com_e_sem_teto_de_bazin() -> None:
+    from valuation.gui import grafico
+    from valuation.saida.arquivos import Faixa
+
+    faixas = [Faixa("DCF", 8.0, 15.0, 11.0)]
+    sem = grafico.football(faixas, 12.0, 9.0)
+    com = grafico.football(faixas, 12.0, 9.0, 20.0)
+    assert len(sem.layout.shapes) == 2 and len(com.layout.shapes) == 3
+    assert "Preço teto Bazin: R$ 20,00" in [a.text for a in com.layout.annotations]
 
 
 def test_busca_na_barra_lateral_abre_o_ativo_e_nao_prende_o_usuario(ambiente: Path) -> None:

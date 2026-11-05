@@ -56,6 +56,17 @@ def test_todos_os_graficos_geram_png(tmp_path: Path) -> None:
             perfil="moderado",
         )
     )
+    assert _png(
+        gr.football_field(
+            faixas,
+            preco=12.0,
+            preco_maximo=9.0,
+            preco_bazin=25.0,  # fora das faixas: o eixo se estende até a linha
+            caminho=tmp_path / "f_bazin.png",
+            ticker="X",
+            perfil="moderado",
+        )
+    )
     cen = {"pessimista": _cenario(8.0), "base": _cenario(11.0), "otimista": _cenario(15.0)}
     assert _png(
         gr.cascata_ponte(

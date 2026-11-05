@@ -137,15 +137,27 @@ flowchart TD
         perfilWeight --> calcTeto["Aplicar Margem de Segurança do Perfil -> Preço Teto de Compra"]
         calcTeto --> sensAnalise["Gerar Matrizes de Sensibilidade (WACC x g, Margem x Crescimento ou ROE x Ke)"]
         sensAnalise --> implRates["Calcular Retornos Implícitos na Cotação Atual (Ke implícito vs Taxa Hurdle)"]
+        implRates --> calcBazin["Preço Teto de Bazin: média dos dividendos pagos de 5 exercícios / ações / 6% (informativo, ADR 0025)"]
+        calcBazin --> calcConfianca["QA + Confiança: baixa se erro de QA, VT/EV acima do alerta, pares abaixo do mínimo ou R² do beta baixo"]
+        calcConfianca --> checkVenda{"Preço > valor justo ponderado?"}
+        checkVenda -- "Sim" --> recVenda["Recomendação: VENDA"]
+        checkVenda -- "Não" --> checkCompra{"Preço <= preço máximo de compra e Ke implícito >= hurdle?"}
+        checkCompra -- "Não" --> recManter["Recomendação: MANTER"]
+        checkCompra -- "Sim" --> checkConf{"Confiança baixa?"}
+        checkConf -- "Sim (rebaixa)" --> recManter
+        checkConf -- "Não" --> recCompra["Recomendação: COMPRA"]
+        recVenda --> joinRec[["Join: Recomendação com Confiança e Motivos"]]
+        recManter --> joinRec
+        recCompra --> joinRec
     end
 
     %% -------------------------------------------------------------
     %% RAIA 6: SAÍDA & DECISÃO
     %% -------------------------------------------------------------
     subgraph LANE_OUTPUT ["6. Exportação de Artefatos & Relatório"]
-        implRates --> exportCSVs["Gravar Artefatos CSV em saida/{TICKER}/{data_base}/ (resumo, wacc, projecao, ponte, sensibilidade)"]
+        joinRec --> exportCSVs["Gravar Artefatos CSV em saida/{TICKER}/{data_base}/ (resumo, wacc, projecao, ponte, sensibilidade)"]
         exportCSVs --> complementos["Gravar historico.csv, qa.json, valores_reais.csv (IPCA do Focus), premissas_usadas.yaml, gráficos PNG (salvo --sem-graficos) e meta.json"]
-        complementos --> printTerminal["Exibir Relatório Educacional no Terminal (Preço Atual vs Preço Justo Ponderado vs Preço Teto)"]
+        complementos --> printTerminal["Exibir Relatório Educacional no Terminal (Preço Atual vs Preço Justo Ponderado vs Preço Máximo vs Teto de Bazin, Recomendação e Confiança)"]
         printTerminal --> endSuccess
     end
 ```
@@ -206,20 +218,24 @@ flowchart TD
 - **Análise Estocástica e Perfil do Investidor:**
   - Geração de 3 cenários: Base, Otimista (+1 DP) e Pessimista (-1 DP).
   - Ponderação dos cenários pelas probabilidades subjetivas do perfil do investidor.
-  - Dedução da Margem de Segurança específica do perfil para determinação do **Preço Teto de Compra**.
+  - Dedução da Margem de Segurança específica do perfil para determinação do **Preço Máximo de Compra**.
   - Matrizes de sensibilidade bidimensionais ($WACC \times g$, $\text{Margem} \times \text{Crescimento}$, $ROE \times K_e$).
   - Cálculo de retornos implícitos no preço atual de mercado ($K_e$ implícito vs Hurdle Rate).
+- **Preço teto e recomendação (`src/valuation/analise/decisao.py`, ADR 0025):**
+  - **Preço teto de Bazin** (informativo): média dos dividendos e JCP pagos (DFC) nos últimos 5 exercícios encerrados ÷ ações em circulação ÷ yield mínimo de 6% (`settings.preco_teto`).
+  - **Recomendação**: venda se o preço supera o valor justo ponderado; compra se o preço está até o preço máximo de compra **e** o $K_e$ implícito atinge o hurdle; manter no resto.
+  - **Confiança**: baixa com erro de QA, VT/EV (ou VT/valor) acima do alerta, menos pares que o mínimo ou R² do beta abaixo do mínimo; confiança baixa rebaixa a compra para manter. O QA roda antes do `resumo.csv` por isso.
 
 ### Raia 6: Saída, Relatórios & Decisão
 - **Artefatos Gravados em disco (`saida/{TICKER}/{data_base}/`):**
-  - `resumo.csv`: Resumo executivo de múltiplos, premissas, valor intrínseco e preço teto.
+  - `resumo.csv`: Resumo executivo de múltiplos, premissas, valor intrínseco, preço máximo de compra, preço teto de Bazin, recomendação, confiança e motivos.
   - `wacc.csv`: Abertura completa dos componentes de taxa de desconto e capital.
   - `projecao_{cenario}.csv`: Demonstrações projetadas ano a ano até a perpetuidade.
   - `ponte_ev_equity.csv`: Conciliação minuciosa dos itens da ponte patrimonial.
   - `sensibilidade_*.csv`: Tabelas completas de estresse de parâmetros.
   - `historico.csv`, `qa.json`, `valores_reais.csv` (fluxos e valor terminal deflacionados pelo IPCA do Focus) e `premissas_usadas.yaml`.
   - `meta.json`: versão e commit do código, perfil, moeda, fontes (URL, data e sha256 da CVM), hash das contas padronizadas, avisos e o glossário das métricas (`glossario`); gravado por último.
-  - Gráficos PNG (omitidos com `--sem-graficos`): `football_field`, `ponte_ev_equity` (só DCF), `sensibilidade_heatmap*`, `historico_vs_projecao` e `composicao_valor`.
+  - Gráficos PNG (omitidos com `--sem-graficos`): `football_field` (com as linhas do preço, do preço máximo de compra e do teto de Bazin), `ponte_ev_equity` (só DCF), `sensibilidade_heatmap*`, `historico_vs_projecao` e `composicao_valor`.
 - **Terminal:** Apresentação formatada das recomendações e métricas de valuation com destaques visuais. `--explicar` (em `wacc`, `comparar` e `rodar`) acrescenta a legenda dos termos mostrados; `valuation glossario [TERMO]` explica qualquer métrica. `valuation erp` (fora do `rodar`) mede o universo, calcula o ERP implícito do Ibovespa e grava `data/processed/erp_implicito.json`, lido pelo Ke quando `custo_capital.erp.fonte = implicito_ibovespa`.
 
 ---

@@ -23,6 +23,7 @@ from rich.table import Table
 
 from valuation import __version__
 from valuation.analise import cenarios as cen
+from valuation.analise import decisao as dec
 from valuation.analise import sensibilidade as sens
 from valuation.carteira import ErroCarteira
 from valuation.carteira import arquivo as carteira_arq
@@ -1856,6 +1857,110 @@ def _ronic(p: emp.Padronizada, settings: Settings, historico: pd.DataFrame) -> d
     return dcf.resolver_ronic(escolha, roic_historico=float(roic.median()) if len(roic) else None)
 
 
+def _verificar_qa(p: emp.Padronizada, settings: Settings) -> qa_mod.ResultadoQA:
+    return qa_mod.verificar(
+        p.selecionadas,
+        p.contas,
+        p.plano,
+        ticker=p.premissas.ticker,
+        moeda=p.moeda,
+        historico_anos=settings.historico_anos,
+    )
+
+
+@dataclass(frozen=True)
+class _Decisao:
+    """Preço teto de Bazin e recomendação de uma rodada (ADR 0025)."""
+
+    teto: dec.TetoBazin
+    recomendacao: dec.Recomendacao
+
+
+def _decidir(
+    r: cen.ResultadoCenarios,  # type: ignore[type-arg]
+    settings: Settings,
+    *,
+    dividendos: pd.Series,
+    acoes: float,
+    cambio: float,
+    resultado_qa: qa_mod.ResultadoQA,
+    vt_sobre_valor: float,
+    multiplos: mt.ResultadoMultiplos | None,
+    beta: bt.ResultadoBeta,
+) -> _Decisao:
+    """Teto de Bazin sobre os dividendos dos exercícios encerrados e a recomendação do perfil."""
+    cfg = settings.preco_teto
+    teto = dec.teto_bazin(
+        dividendos,
+        anos=cfg.bazin_anos,
+        acoes=acoes,
+        cambio=cambio,
+        yield_minimo=cfg.bazin_yield_minimo,
+    )
+    motivos = dec.motivos_baixa_confianca(
+        erros_qa=len(resultado_qa.erros),
+        vt_sobre_valor=vt_sobre_valor,
+        alerta_vt=settings.dcf.alerta_tv_sobre_ev,
+        n_pares=len(multiplos.pares) if multiplos else None,
+        min_pares=settings.multiplos.min_pares,
+        r2_beta=beta.r2 if beta.metodo == "regressao" else None,
+        min_r2=settings.custo_capital.beta.min_r2_aviso,
+    )
+    recomendacao = dec.recomendar(
+        preco=r.preco,
+        valor_ponderado=r.valor_ponderado,
+        preco_maximo_compra=r.preco_maximo_compra,
+        ke_implicito=r.ke_implicito,
+        hurdle=r.hurdle,
+        motivos_confianca=motivos,
+    )
+    return _Decisao(teto, recomendacao)
+
+
+def _colunas_decisao(d: _Decisao) -> dict[str, object]:
+    rec = d.recomendacao
+    return {
+        "preco_teto_bazin": d.teto.valor,
+        "dividendo_por_acao_bazin": d.teto.dividendo_por_acao,
+        "yield_minimo_bazin": d.teto.yield_minimo,
+        "recomendacao": rec.sinal,
+        "recomendacao_modelo": rec.sinal_modelo,
+        "confianca": rec.confianca,
+        "motivos_confianca": " | ".join(rec.motivos_confianca),
+    }
+
+
+def _mostrar_decisao(d: _Decisao, r: cen.ResultadoCenarios) -> None:  # type: ignore[type-arg]
+    teto = d.teto
+    if teto.valor is None:
+        console.print("Preço teto de Bazin: — (sem dividendo médio positivo).")
+    else:
+        anos = f"{teto.exercicios[0]} a {teto.exercicios[-1]}"
+        console.print(
+            f"Preço teto de Bazin: [bold]{fo.reais(teto.valor)}[/] (dividendo médio de "
+            f"{fo.reais(teto.dividendo_por_acao or 0.0)} por ação em {anos} / yield mínimo de "
+            f"{fo.pct(teto.yield_minimo)}); preço {fo.reais(r.preco)}."
+        )
+    rec = d.recomendacao
+    criterio = fo.criterio_recomendacao(
+        rec.sinal_modelo,
+        preco=r.preco,
+        valor_ponderado=r.valor_ponderado,
+        preco_maximo=r.preco_maximo_compra,
+        ke_implicito=r.ke_implicito,
+        hurdle=r.hurdle,
+    )
+    confianca = f"Confiança {rec.confianca}"
+    if rec.motivos_confianca:
+        confianca += f": {'; '.join(rec.motivos_confianca)}"
+    if rec.rebaixada:
+        confianca += "; a compra do modelo foi rebaixada para manter"
+    console.print(
+        f"Recomendação (perfil {r.perfil.perfil}): [bold]{fo.sinal(rec.sinal).upper()}[/] — "
+        f"{criterio}. {confianca}."
+    )
+
+
 def _resumo(
     ticker: str,
     base: dt.date,
@@ -1867,6 +1972,7 @@ def _resumo(
     multiplos: mt.ResultadoMultiplos | None,
     g_saida: float | None,
     avisos: list[str],
+    decisao: _Decisao,
 ) -> pd.DataFrame:
     """Linha única de `resumo.csv` (seção 13 do CLAUDE.md)."""
     av = r.avaliacoes[referencia]
@@ -1889,6 +1995,7 @@ def _resumo(
         "upside": r.upside,
         "ke_implicito": r.ke_implicito,
         "hurdle": r.hurdle,
+        **_colunas_decisao(decisao),
         "wacc_implicito": r.wacc_implicito,
         "wacc": cc.wacc,
         "ke": cc.ke.ke,
@@ -2218,6 +2325,18 @@ def rodar(
             passo_crescimento=s.crescimento_passo,
             faixa_crescimento=s.crescimento_faixa,
         )
+        resultado_qa = _verificar_qa(p, settings)
+        decisao = _decidir(
+            r,
+            settings,
+            dividendos=historico["dividendos_pagos"],
+            acoes=float(av_ref.ponte.itens.acoes),
+            cambio=dados.cambio,
+            resultado_qa=resultado_qa,
+            vt_sobre_valor=av_ref.dcf.tv_sobre_ev,
+            multiplos=multiplos,
+            beta=cc.beta,
+        )
     except ValueError as e:
         raise _erro(f"--data-base inválida: {e}") from e
     except (
@@ -2287,9 +2406,20 @@ def rodar(
         *(multiplos.avisos if multiplos else ()),
         *m.avisos,
         *sugestoes.avisos,
+        *decisao.teto.avisos,
     ]
     resumo = _resumo(
-        p.premissas.ticker, base, efetivo, p.moeda, cc, r, referencia, multiplos, g_saida, avisos
+        p.premissas.ticker,
+        base,
+        efetivo,
+        p.moeda,
+        cc,
+        r,
+        referencia,
+        multiplos,
+        g_saida,
+        avisos,
+        decisao,
     )
     gravar_csv(resumo, raiz / "resumo.csv", settings.csv, fmt)
     avisos += _gravar_complementos(
@@ -2317,11 +2447,14 @@ def rodar(
         ticker_preco=normalizado if normalizado in m.precos else next(iter(m.precos)),
         avisos=avisos,
         cambio=av_ref.cambio,
+        resultado_qa=resultado_qa,
+        preco_bazin=decisao.teto.valor,
     )
 
     for aviso in avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
     console.print(cen.mensagem(r, normalizado))
+    _mostrar_decisao(decisao, r)
     if execucao.explicar:
         _legenda((*gl.LEGENDA_DCF, *(gl.legenda_multiplos(multiplos.nomes) if multiplos else ())))
     console.print("Estudo pessoal; não é recomendação de investimento.")
@@ -2420,6 +2553,8 @@ def _gravar_complementos(
     ticker_preco: str,
     avisos: list[str],
     cambio: float,
+    resultado_qa: qa_mod.ResultadoQA,
+    preco_bazin: float | None,
 ) -> list[str]:
     """Arquivos da Fase 9: `historico.csv`, `qa.json`, `valores_reais.csv`,
     `premissas_usadas.yaml`, gráficos e `meta.json`. Devolve avisos novos (QA, 52 semanas, IPCA)."""
@@ -2429,14 +2564,6 @@ def _gravar_complementos(
     try:
         anual, ltm = _metricas_com_ltm(p, settings)
         gravar_csv(arq.tabela_historico(anual, ltm), raiz / "historico.csv", settings.csv, fmt)
-        resultado_qa = qa_mod.verificar(
-            p.selecionadas,
-            p.contas,
-            p.plano,
-            ticker=ticker,
-            moeda=p.moeda,
-            historico_anos=settings.historico_anos,
-        )
     except (ErroContabil, ErroModelo) as erro:
         raise _erro(str(erro)) from erro
     qa_mod.gravar(resultado_qa, raiz / "qa.json")
@@ -2488,6 +2615,7 @@ def _gravar_complementos(
             ),
             preco=r.preco,
             preco_maximo=r.preco_maximo_compra,
+            preco_bazin=preco_bazin,
             caminho=raiz / "football_field.png",
             ticker=ticker,
             perfil=r.perfil.perfil,
@@ -2592,7 +2720,7 @@ def _rodar_financeira(
     ticker = p.premissas.ticker
     try:
         parametros = parametros_do_perfil(e.efetivo.perfil, settings.perfil)
-        _, sugestoes = _sugerir_financeira(p, settings, e.base)
+        historico, sugestoes = _sugerir_financeira(p, settings, e.base)
         horizonte, origem = _horizonte(p.premissas, settings, e.hoje, e.override)
         anos = pf.anos_projetados(e.base, horizonte)
         resolvidas = pf.resolver(p.premissas.projecao_ddm, sugestoes, anos=anos)
@@ -2639,6 +2767,18 @@ def _rodar_financeira(
             faixa_roe=s.roe_faixa,
             passo_ke=s.wacc_passo,
             faixa_ke=s.wacc_faixa,
+        )
+        resultado_qa = _verificar_qa(p, settings)
+        decisao = _decidir(
+            r,
+            settings,
+            dividendos=historico["dividendos_pagos"],
+            acoes=dados.acoes,
+            cambio=1.0,
+            resultado_qa=resultado_qa,
+            vt_sobre_valor=r.avaliacoes[e.referencia].ddm.vt_sobre_valor,
+            multiplos=multiplos,
+            beta=cc.beta,
         )
     except (
         ErroConfiguracao,
@@ -2689,8 +2829,9 @@ def _rodar_financeira(
         *(multiplos.avisos if multiplos else ()),
         *m.avisos,
         *sugestoes.avisos,
+        *decisao.teto.avisos,
     ]
-    resumo = _resumo_financeira(ticker, e, cc, r, multiplos, avisos)
+    resumo = _resumo_financeira(ticker, e, cc, r, multiplos, avisos, decisao)
     gravar_csv(resumo, raiz / "resumo.csv", settings.csv, fmt)
     avisos += _gravar_complementos(
         raiz,
@@ -2717,10 +2858,13 @@ def _rodar_financeira(
         ticker_preco=ticker if ticker in m.precos else next(iter(m.precos)),
         avisos=avisos,
         cambio=1.0,
+        resultado_qa=resultado_qa,
+        preco_bazin=decisao.teto.valor,
     )
     for aviso in avisos:
         console.print(f"[yellow]Aviso:[/] {aviso}")
     console.print(cen.mensagem(r, ticker))
+    _mostrar_decisao(decisao, r)
     if e.explicar:
         _legenda((*gl.LEGENDA_DDM, *(gl.legenda_multiplos(multiplos.nomes) if multiplos else ())))
     console.print("Estudo pessoal; não é recomendação de investimento.")
@@ -2790,6 +2934,7 @@ def _resumo_financeira(
     r: cen.ResultadoCenarios[ddm.AvaliacaoDDM],
     multiplos: mt.ResultadoMultiplos | None,
     avisos: list[str],
+    decisao: _Decisao,
 ) -> pd.DataFrame:
     """Linha única de `resumo.csv` de uma financeira (DDM)."""
     av = r.avaliacoes[e.referencia]
@@ -2813,6 +2958,7 @@ def _resumo_financeira(
         "upside": r.upside,
         "ke_implicito": r.ke_implicito,
         "hurdle": r.hurdle,
+        **_colunas_decisao(decisao),
         "ke": cc.ke.ke,
         "g": d.g,
         "roe_longo_prazo": d.roe_longo_prazo,

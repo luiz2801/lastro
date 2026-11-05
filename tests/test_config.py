@@ -82,3 +82,17 @@ def test_erp_campo_desconhecido_falha(tmp_path: Path) -> None:
     caminho.write_text(yaml.safe_dump(original), encoding="utf-8")
     with pytest.raises(ErroConfiguracao, match="extra"):
         carregar_settings(caminho)
+
+
+def test_preco_teto_do_repositorio_e_padrao(tmp_path: Path) -> None:
+    pt = carregar_settings().preco_teto
+    assert (pt.bazin_yield_minimo, pt.bazin_anos) == (0.06, 5)
+    original = carregar_settings().model_dump(mode="json")
+    del original["preco_teto"]
+    caminho = tmp_path / "settings.yaml"
+    caminho.write_text(yaml.safe_dump(original), encoding="utf-8")
+    assert carregar_settings(caminho).preco_teto.bazin_yield_minimo == 0.06
+    original["preco_teto"] = {"bazin_yield_minimo": 0.0}
+    caminho.write_text(yaml.safe_dump(original), encoding="utf-8")
+    with pytest.raises(ErroConfiguracao, match="bazin_yield_minimo"):
+        carregar_settings(caminho)

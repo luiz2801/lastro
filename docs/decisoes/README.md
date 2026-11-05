@@ -35,6 +35,7 @@ Itens `[DECIDIDO]` não mudam por ADR sem o aval do usuário (regra 7 do `CLAUDE
 | [0023](0023-serie-historica-de-multiplos.md) | Série de múltiplos da GUI: lacuna antes de 31/03/2020 (sem quantidade de ações na CVM), market cap com F na data da composição, 1ª divulgação, ITR de 2019 em diante em arquivos à parte, cortes fixos e anomalias só na GUI | 6.1, 11.4 | aceito |
 | [0024](0024-sprint-gui-2.md) | Sprint GUI 2: fórmulas e classes dos indicadores novos (`passivo_total` da CVM inclui o PL), médias de grupo em série por corte mensal, Ibovespa com a carteira de hoje, cache derivado em disco, balanço defasado fora das médias, consolidado zerado usa o individual, navegação, favoritas e perfil na tela | 7.5, 7.6, 8.1, 11.4, 14 | aceito |
 | [0018](0018-erp-implicito-do-ibovespa.md) | ERP implícito do Ibovespa: dividendos agregados, Focus (PIB + IPCA) em 5 anos e g perpétuo pelo CAGR histórico (teto 5%), sem convergência, faixa ±1 p.p., erro fora de [0%, 15%], `valuation erp` grava o JSON lido pelo Ke; em 30/10/2026 o ERP deu −4,2% (padrão segue manual) | 10.2 | aceito |
+| [0025](0025-preco-teto-e-recomendacao.md) | Preço teto de Bazin (média de 5 exercícios dos dividendos e JCP pagos ÷ ações ÷ 6%, informativo) ao lado do preço máximo do perfil; recomendação compra (preço ≤ preço máximo e Ke implícito ≥ hurdle), venda (preço > valor ponderado) ou manter; confiança baixa (QA, VT/EV, pares, R² do beta) rebaixa a compra | 8.4, 12, 13 | aceito |
 
 ## Quando escrever um ADR
 

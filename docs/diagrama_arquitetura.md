@@ -18,7 +18,7 @@ flowchart BT
 
     subgraph APL["Aplicação (camadas de cálculo e saída)"]
         saida["saida<br/>csv, graficos, arquivos,<br/>real, glossario, favoritos"]
-        analise["analise<br/>cenarios, sensibilidade, indicadores,<br/>serie_multiplos, anomalias"]
+        analise["analise<br/>cenarios, decisao, sensibilidade, indicadores,<br/>serie_multiplos, anomalias"]
         modelos["modelos<br/>dcf, ddm, ponte, multiplos"]
         projecao["projecao<br/>premissas, sugestor,<br/>projetor, financeira, escrita"]
         custo["custo_capital<br/>beta, capm, kd, wacc,<br/>erp_implicito"]

@@ -250,8 +250,11 @@ def ponte(itens: pd.Series) -> go.Figure:
     return figura
 
 
-def football(faixas: Sequence[Faixa], preco: float, preco_maximo: float) -> go.Figure:
-    """Barras de valor por ação; linhas verticais do preço e do preço máximo de compra."""
+def football(
+    faixas: Sequence[Faixa], preco: float, preco_maximo: float, preco_bazin: float = float("nan")
+) -> go.Figure:
+    """Barras de valor por ação; linhas verticais do preço, do preço máximo de compra e, se houver,
+    do preço teto de Bazin."""
     nomes = [f"{f.rotulo} *" if f.aviso else f.rotulo for f in faixas]
     figura = go.Figure(
         go.Bar(
@@ -285,6 +288,7 @@ def football(faixas: Sequence[Faixa], preco: float, preco_maximo: float) -> go.F
     for valor, rotulo, traco, altura in (
         (preco, "Preço", "solid", 1.0),
         (preco_maximo, "Preço máx. de compra", "dash", 1.07),
+        (preco_bazin, "Preço teto Bazin", "dashdot", 1.14),
     ):
         if pd.notna(valor):
             figura.add_vline(x=valor, line={"color": TINTA, "width": 1, "dash": traco})
@@ -298,10 +302,11 @@ def football(faixas: Sequence[Faixa], preco: float, preco_maximo: float) -> go.F
                 text=f"{rotulo}: {fo.reais(valor)}",
             )
     figura = _layout(figura, "")
+    com_bazin = bool(pd.notna(preco_bazin))
     figura.update_layout(
         height=max(280, 46 * len(faixas) + 130),
-        margin={"l": 8, "r": 8, "t": 76, "b": 8},
-        legend={"orientation": "h", "y": 1.2, "x": 0},
+        margin={"l": 8, "r": 8, "t": 100 if com_bazin else 76, "b": 8},
+        legend={"orientation": "h", "y": 1.27 if com_bazin else 1.2, "x": 0},
         xaxis={"title": "R$ por ação", "showgrid": True},
         yaxis={"autorange": "reversed", "title": ""},
     )

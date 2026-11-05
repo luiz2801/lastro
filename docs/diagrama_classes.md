@@ -659,6 +659,21 @@ classDiagram
     class ParametrosPerfil
     class PremissasResolvidas
     class PremissasFinanceiras
+    class TetoBazin {
+        +valor: float?
+        +dividendo_por_acao: float?
+        +exercicios: tuple
+        +yield_minimo: float
+        +avisos: tuple
+    }
+    class Recomendacao {
+        +sinal: Sinal
+        +sinal_modelo: Sinal
+        +confianca: Confianca
+        +motivos_confianca: tuple
+        +ke_atende_hurdle: bool?
+        +rebaixada() bool
+    }
 
     CustoCapital *-- ResultadoBeta : beta
     CustoCapital *-- CustoCapitalProprio : ke
@@ -685,8 +700,10 @@ classDiagram
     AvaliacaoDDM ..|> Avaliada
     ResultadoCenarios "1" o-- "1..3" Avaliada : avaliacoes por cenario
     ResultadoCenarios o-- ParametrosPerfil : perfil
+    ResultadoCenarios ..> Recomendacao : decisao.recomendar(preço, ponderado, preço máximo, Ke implícito, hurdle)
 ```
 
+- `TetoBazin` e `Recomendacao` (`analise/decisao.py`, ADR 0025) saem de funções puras sobre o histórico de dividendos e sobre o `ResultadoCenarios`; a CLI os junta em `_Decisao` e grava as colunas no `resumo.csv`.
 - `ResultadoCenarios` é **genérico** no tipo da avaliação (`Avaliada`): o mesmo código pondera cenários de DCF e de DDM. Com os três cenários os pesos são os do perfil; com um só (`--cenario X`), 1.
 - `ItensPonte` é compartilhado pela ponte do DCF e pelos múltiplos: o EV dos múltiplos é o **inverso** da ponte (`Fundamentos.ev`).
 - Moeda: tudo fica na moeda de reporte até `valor_por_acao`, que sai em BRL (`cambio`). `CustoCapitalFinanceira` não tem Kd nem estrutura: financeiras só têm Ke.
@@ -863,7 +880,7 @@ classDiagram
     _Execucao o-- PerfilEfetivo : efetivo
 ```
 
-- As classes `_Execucao`, `_Padronizada`, `_Mercado`, `_Par` e `_Comparaveis` são **privadas de `cli.py`**: agrupam o que o comando `rodar` carrega entre as etapas. Nenhuma camada inferior as conhece.
+- As classes `_Execucao`, `_Padronizada`, `_Mercado`, `_Par`, `_Comparaveis` e `_Decisao` (teto de Bazin e recomendação) são **privadas de `cli.py`**: agrupam o que o comando `rodar` carrega entre as etapas. Nenhuma camada inferior as conhece.
 - `CenarioSaida` uniformiza DCF e DDM para a camada de saída (`ponte` só existe no DCF).
 - Classes da carteira: `Transacao` (C1) e `Posicao`, `Preco`, `LinhaCarteira` e `ResumoCarteira` (C2, `carteira/posicao.py`, puras). A Etapa C3 (`analise/indicadores.py`) é só de funções puras sobre `DataFrame` e `Fundamentos`, sem classe nova. As etapas C4 a C6 (proventos, alocação, tela) ainda não existem (ADR 0020).
 

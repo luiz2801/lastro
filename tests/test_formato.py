@@ -60,3 +60,43 @@ def test_preco_curto_taxa_e_pct() -> None:
     assert fo.taxa(NAN) == "sem solução"
     assert fo.pct(0.123) == "12,3%"
     assert fo.pct(None) == "—"
+
+
+def test_sinal_da_recomendacao() -> None:
+    assert [fo.sinal(s) for s in ("compra", "manter", "venda")] == ["Compra", "Manter", "Venda"]
+    assert fo.sinal(NAN) == "—"  # rodada anterior à coluna
+
+
+@pytest.mark.parametrize(
+    ("sinal", "preco", "ke", "esperado"),
+    [
+        ("venda", 120.0, 0.25, "preço R$ 120,00 acima do valor justo ponderado R$ 100,00"),
+        (
+            "compra",
+            70.0,
+            0.25,
+            "preço R$ 70,00 até o preço máximo de compra R$ 80,00 e Ke implícito 25,00% no "
+            "mínimo igual ao hurdle 20,00%",
+        ),
+        (
+            "manter",
+            90.0,
+            0.25,
+            "preço R$ 90,00 entre o preço máximo de compra R$ 80,00 e o valor justo ponderado "
+            "R$ 100,00",
+        ),
+        ("manter", 70.0, None, "preço R$ 70,00 até o preço máximo, mas Ke implícito sem solução"),
+        ("manter", 70.0, NAN, "preço R$ 70,00 até o preço máximo, mas Ke implícito sem solução"),
+        (
+            "manter",
+            70.0,
+            0.15,
+            "preço R$ 70,00 até o preço máximo, mas Ke implícito 15,00% abaixo do hurdle 20,00%",
+        ),
+    ],
+)
+def test_criterio_recomendacao(sinal: str, preco: float, ke: float | None, esperado: str) -> None:
+    texto = fo.criterio_recomendacao(
+        sinal, preco=preco, valor_ponderado=100.0, preco_maximo=80.0, ke_implicito=ke, hurdle=0.20
+    )
+    assert texto == esperado

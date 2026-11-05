@@ -168,7 +168,7 @@ Pilotos: PETR4, VALE3 e WEGE3.
   winsorização, quartis, aviso de poucos pares e de escala implausível; valor implícito do alvo;
   beta por comparáveis, estrutura-alvo do setor, minoritários pelo P/VP e g implícito no múltiplo
   de saída; `valuation comparar TICKER` e múltiplos no `rodar`.
-- **Testes**: 593 (582 passam, 11 golden pulados por motivo declarado; sem `data/`, os golden também são pulados), mypy strict e ruff limpos.
+- **Testes**: 855 (844 passam, 11 golden pulados por motivo declarado; sem `data/`, os golden também são pulados), mypy strict e ruff limpos.
 - **Universo**: `config/universo_ibovespa.csv` com os 76 ativos da carteira de 30/10/26 da B3;
   `valuation atualizar --tudo` baixa os dados de todos (holdings só avisam).
 - **Financeiras** (Fase 10): plano de contas de bancos e seguradoras (25 companhias
@@ -182,6 +182,10 @@ Pilotos: PETR4, VALE3 e WEGE3.
   `qa.json`, `historico.csv`, `valores_reais.csv` (deflacionado pelo IPCA do Focus) e cinco gráficos
   PNG em PT-BR (football field, cascata da ponte, heatmaps de sensibilidade, histórico × projeção,
   composição do valor); `--sem-graficos` suprime os PNG.
+- **Preço teto e recomendação** (Etapa 5, ADR 0025): `rodar` mostra e grava o preço teto de Bazin
+  (média de 5 exercícios dos dividendos pagos ÷ ações ÷ 6%, informativo) e a recomendação compra,
+  manter ou venda pelo preço máximo de compra e pelo hurdle do perfil, com a confiança e os motivos.
+  Confiança baixa rebaixa a compra para manter. Estudo pessoal, não é recomendação de investimento.
 - **GUI local** (Sprint GUI 1, ADR 0022 e 0023): `uv sync --group gui && uv run valuation gui` abre
   `http://127.0.0.1:8501`. Barra lateral com busca, favoritas e perfil do investidor na tela; por ativo, cotação,
   múltiplos em série com a média dos pares e do Ibovespa, tratamento de anomalias, indicadores de endividamento, liquidez e
@@ -194,6 +198,9 @@ Pilotos: PETR4, VALE3 e WEGE3.
   31/03/2020, com o fator de split na data da composição e o LTM a partir da 1ª divulgação.
 - **Sprint GUI 2 (ADR 0024):** fórmulas dos indicadores novos, médias de grupo por corte mensal, Ibovespa com a carteira de
   hoje (viés de sobrevivência), cache derivado em disco e período sem consolidado com valor usando o individual.
+- **Preço teto e recomendação (ADR 0025):** preço teto de Bazin (média de 5 exercícios dos dividendos pagos ÷ ações ÷
+  6%), só informativo, ao lado do preço máximo de compra do perfil; recomendação compra, manter ou venda pelo preço
+  máximo e pelo hurdle, com a compra rebaixada para manter quando a confiança é baixa.
 
 Detalhe e motivos nos ADRs ([índice](docs/decisoes/README.md)).
 

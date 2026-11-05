@@ -13,7 +13,7 @@ sequenceDiagram
     participant PRJ as projecao<br/>(sugestor, projetor)
     participant CC as custo_capital<br/>(beta, capm, kd, wacc)
     participant MOD as modelos<br/>(dcf, ponte, multiplos)
-    participant ANA as analise<br/>(cenarios, sensibilidade)
+    participant ANA as analise<br/>(cenarios, sensibilidade, decisao)
     participant OUT as saida<br/>(csv, graficos, arquivos)
 
     U->>CLI: valuation rodar PETR4 [--cenario --perfil --data-base]
@@ -82,12 +82,16 @@ sequenceDiagram
     ANA-->>CLI: matrizes de sensibilidade
     CLI->>MOD: dcf.g_implicito(EV/EBITDA mediano dos pares)
     MOD-->>CLI: g de saída (checagem do terminal)
+    CLI->>CLI: _verificar_qa (qa.verificar, antes do resumo)
+    CLI->>ANA: decisao.teto_bazin(dividendos de 5 exercícios, ações, câmbio, 6%)
+    CLI->>ANA: decisao.motivos_baixa_confianca + decisao.recomendar
+    ANA-->>CLI: teto de Bazin, recomendação, confiança e motivos (ADR 0025)
 
     CLI-->>U: tabelas rich no terminal (valuation, projeção, múltiplos, sensibilidade)
     CLI->>OUT: gravar CSVs (wacc, projecao_*, ponte, sensibilidade, multiplos, resumo)
-    CLI->>OUT: _gravar_complementos (historico, qa.json, valores_reais,<br/>premissas_usadas.yaml, gráficos PNG, meta.json por último)
+    CLI->>OUT: _gravar_complementos (historico, qa.json, valores_reais,<br/>premissas_usadas.yaml, gráficos PNG com o teto de Bazin, meta.json por último)
     OUT-->>CLI: saida/TICKER/AAAA-MM-DD/
-    CLI-->>U: avisos, aviso de não ser recomendação, caminho gravado
+    CLI-->>U: avisos, teto de Bazin, recomendação e confiança,<br/>aviso de não ser recomendação, caminho gravado
 ```
 
 ## Notas

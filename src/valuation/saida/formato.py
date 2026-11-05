@@ -64,3 +64,41 @@ def taxa(valor: float | None) -> str:
 
 def pct(valor: float | None) -> str:
     return "—" if valor is None else f"{valor * 100:.1f}%".replace(".", ",")
+
+
+ROTULOS_SINAL = {"compra": "Compra", "manter": "Manter", "venda": "Venda"}
+
+
+def sinal(valor: object) -> str:
+    """Rótulo da recomendação de `resumo.csv`; rodada antiga, sem a coluna, dá "—"."""
+    return ROTULOS_SINAL.get(str(valor), "—")
+
+
+def criterio_recomendacao(
+    sinal_modelo: str,
+    *,
+    preco: float,
+    valor_ponderado: float,
+    preco_maximo: float,
+    ke_implicito: float | None,
+    hurdle: float,
+) -> str:
+    """Por que o modelo deu o sinal (antes do rebaixamento pela confiança; ADR 0025)."""
+    if sinal_modelo == "venda":
+        return f"preço {reais(preco)} acima do valor justo ponderado {reais(valor_ponderado)}"
+    if sinal_modelo == "compra":
+        return (
+            f"preço {reais(preco)} até o preço máximo de compra {reais(preco_maximo)} e Ke "
+            f"implícito {taxa(ke_implicito)} no mínimo igual ao hurdle {taxa(hurdle)}"
+        )
+    if preco > preco_maximo:
+        return (
+            f"preço {reais(preco)} entre o preço máximo de compra {reais(preco_maximo)} e o "
+            f"valor justo ponderado {reais(valor_ponderado)}"
+        )
+    if ke_implicito is None or pd.isna(ke_implicito):
+        return f"preço {reais(preco)} até o preço máximo, mas Ke implícito sem solução"
+    return (
+        f"preço {reais(preco)} até o preço máximo, mas Ke implícito {taxa(ke_implicito)} "
+        f"abaixo do hurdle {taxa(hurdle)}"
+    )

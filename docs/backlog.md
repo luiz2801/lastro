@@ -35,7 +35,7 @@ Depois, nesta ordem:
    do Kd na Rf muda o valor em até 18% (Kd histórico cru de 7,8% contra 14,87%): o Kd histórico
    mistura juros em dólar com variação cambial. Precisa de um valor escolhido pelo usuário.
 3. ✅ **ERP implícito do Ibovespa em BRL** (ADR 0018, implementado; resultado de 30/10/2026: −4,2%, então o padrão segue `manual`): ver abaixo.
-4. Demais itens desta página (outras empresas, preço teto, explicação de métricas, GUI, recomendação).
+4. Demais itens desta página (outras empresas, ✅ preço teto e recomendação (ADR 0025), explicação de métricas, GUI).
 
 ## ERP implícito do Ibovespa em BRL
 
@@ -620,7 +620,9 @@ Estado (2026-11-04): E, A, B, C e D entregues. Pendências:
 
 ## Métrica de preço teto
 
-Definir antes de implementar qual "preço teto" se quer:
+✅ Feito em 2026-11-05 (ADR 0025): os dois, com rótulos distintos. O preço máximo de compra do perfil é a
+referência da recomendação; o teto de Bazin (média de 5 exercícios dos dividendos pagos ÷ ações ÷ 6%) é informativo,
+no `resumo.csv`, na CLI, no football field (PNG e GUI) e na aba Valuation. Opções que estavam em aberto:
 
 - **Preço teto de Bazin**: dividendos por ação médios (ex.: últimos 3 a 5 anos) / dividend yield
   mínimo exigido (Bazin usa 6%). Usa `dividendos_pagos` do histórico e a quantidade de ações; o
@@ -778,6 +780,10 @@ Quando a Fase 11 for iniciada, avaliar a implementação de simulação Monte Ca
 
 ## Recomendação (compra / venda)
 
+✅ Feito em 2026-11-05 (ADR 0025): compra se preço ≤ preço máximo de compra e Ke implícito ≥ hurdle;
+venda se preço > valor justo ponderado; manter no resto. Confiança baixa (erro de QA, VT/EV acima do alerta, pares
+abaixo do mínimo, R² do beta baixo) rebaixa a compra para manter. Rascunho original:
+
 - Definir os critérios: por exemplo, faixas de upside contra o preço teto/preço máximo, retorno
   esperado contra o hurdle do perfil e confiança (avisos de QA, poucos pares, VT/EV alto).
 - Manter o aviso de que é uso pessoal e não constitui recomendação de investimento.
@@ -840,7 +846,7 @@ Baixo custo marginal: só adicionar YAMLs; o motor já está pronto.
 
 *Entrega:* cobertura prática do universo prioritário do usuário.
 
-### Etapa 5 — Preço teto e recomendação básica
+### Etapa 5 — ✅ Preço teto e recomendação básica (feito: ADR 0025, `analise/decisao.py`; Bazin e recomendação no `rodar`, no `resumo.csv` e na GUI)
 
 Agrupa dois itens relacionados; exige decisão de negócio antes de codar.
 

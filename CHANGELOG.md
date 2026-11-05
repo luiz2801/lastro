@@ -2,6 +2,20 @@
 
 ## [Não lançado]
 
+### Etapa 5: preço teto de Bazin e recomendação (ADR 0025)
+- `analise/decisao.py` (puro): `teto_bazin` (média dos dividendos e JCP pagos nos últimos 5 exercícios ÷ ações ÷ 6%,
+  informativo), `motivos_baixa_confianca` e `recomendar`: compra se preço ≤ preço máximo de compra e Ke implícito ≥
+  hurdle; venda se preço > valor justo ponderado; manter no resto. Confiança baixa (erro de QA, VT/EV acima do alerta,
+  pares abaixo do mínimo, R² do beta baixo) rebaixa a compra para manter. Regras decididas pelo usuário.
+- `rodar` (DCF e DDM): linhas do teto de Bazin e da recomendação no terminal; `resumo.csv` ganha `preco_teto_bazin`,
+  `dividendo_por_acao_bazin`, `yield_minimo_bazin`, `recomendacao`, `recomendacao_modelo`, `confianca` e
+  `motivos_confianca`. O QA passa a rodar antes do resumo (mesmo `qa.json`). Avisos novos quando a janela do Bazin tem
+  menos de 5 exercícios ou não há dividendos.
+- Football field (PNG e GUI) com a linha do teto de Bazin; aba Valuation com cartões de recomendação (critério no
+  tooltip), confiança (motivos), teto de Bazin e dividendo médio. Rodada antiga mostra "—".
+- `settings.yaml > preco_teto` (`bazin_yield_minimo: 0.06`, `bazin_anos: 5`); três verbetes no glossário
+  (`preco_teto_bazin`, `recomendacao`, `confianca`) nas legendas do `rodar`; `fo.sinal` e `fo.criterio_recomendacao`.
+
 ### Sprint GUI 2: fechamento (ADR 0024)
 - Cartão de 52 semanas dividido em mínimo e máximo: o `st.metric` cortava "R$ mín / R$ máx".
 - Aba Valuation: cartões quebram a linha em vez de cortar (o hurdle sumia em "19,93% x 20,…"), em toda a GUI; custo de capital

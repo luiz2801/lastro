@@ -96,6 +96,62 @@ def _cenarios(r: res.Resultado) -> None:
         f"{fo.taxa(res.numero(resumo, 'ke_implicito'))} x {fo.taxa(res.numero(resumo, 'hurdle'))}",
         help="Ke implícito no preço contra o retorno mínimo exigido pelo perfil (Selic + spread).",
     )
+    _decisao(r)
+
+
+def _texto(resumo: pd.Series, coluna: str) -> str:
+    valor = resumo.get(coluna)
+    return "" if valor is None or pd.isna(valor) else str(valor)
+
+
+def _decisao(r: res.Resultado) -> None:
+    """Recomendação, confiança e preço teto de Bazin (ADR 0025); rodada antiga mostra "—"."""
+    resumo = r.resumo
+    sinal = _texto(resumo, "recomendacao")
+    modelo = _texto(resumo, "recomendacao_modelo")
+    motivos = [m for m in _texto(resumo, "motivos_confianca").split(" | ") if m]
+    criterio = (
+        fo.criterio_recomendacao(
+            modelo,
+            preco=res.numero(resumo, "preco"),
+            valor_ponderado=res.numero(resumo, "valor_ponderado"),
+            preco_maximo=res.numero(resumo, "preco_maximo_compra"),
+            ke_implicito=res.numero(resumo, "ke_implicito"),
+            hurdle=res.numero(resumo, "hurdle"),
+        )
+        if modelo
+        else "rodada anterior à recomendação: rode de novo."
+    )
+    rebaixada = sinal == "manter" and modelo == "compra"
+    colunas = st.columns(4)
+    colunas[0].metric(
+        "Recomendação",
+        fo.sinal(sinal),
+        help=f"Critério: {criterio}."
+        + (" Compra rebaixada para manter pela confiança baixa." if rebaixada else ""),
+    )
+    confianca = _texto(resumo, "confianca")
+    colunas[1].metric(
+        "Confiança",
+        confianca.capitalize() if confianca else "—",
+        help="; ".join(motivos)
+        if motivos
+        else "Sem erro de QA, VT/valor no limite, pares e R² do beta suficientes.",
+    )
+    yield_minimo = res.numero(resumo, "yield_minimo_bazin")
+    colunas[2].metric(
+        "Preço teto Bazin",
+        fo.reais(res.numero(resumo, "preco_teto_bazin")),
+        help="Dividendo médio por ação dos últimos exercícios (DFC) / yield mínimo de "
+        f"{fo.formatar(yield_minimo, '%', 2)}. Informativo: a recomendação usa o preço máximo "
+        "de compra do perfil.",
+    )
+    colunas[3].metric(
+        "Dividendo médio por ação",
+        fo.reais(res.numero(resumo, "dividendo_por_acao_bazin")),
+    )
+    if rebaixada:
+        st.caption(f"Compra rebaixada para manter: {'; '.join(motivos)}.")
 
 
 def _custo_capital(r: res.Resultado) -> None:
@@ -163,7 +219,8 @@ def _football(
         return
     preco = res.numero(r.resumo, "preco")
     maximo = res.numero(r.resumo, "preco_maximo_compra")
-    st.plotly_chart(grafico.football(faixas, preco, maximo), key="grafico_football")
+    bazin = res.numero(r.resumo, "preco_teto_bazin")
+    st.plotly_chart(grafico.football(faixas, preco, maximo, bazin), key="grafico_football")
     if any(f.aviso for f in faixas):
         st.caption("* Múltiplo de baixa confiança: menos pares válidos do que o mínimo.")
 

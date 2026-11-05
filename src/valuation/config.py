@@ -199,6 +199,13 @@ class ConfigPerfil(_Modelo):
     arrojado: ParametrosPerfilConfig
 
 
+class ConfigPrecoTeto(_Modelo):
+    """Preço teto de Bazin (ADR 0025): dividendo médio por ação / yield mínimo."""
+
+    bazin_yield_minimo: float = Field(default=0.06, gt=0, lt=1)
+    bazin_anos: int = Field(default=5, ge=1, le=20)
+
+
 class Settings(_Modelo):
     versao: Literal[1]
     data_base: Literal["hoje"] | dt.date
@@ -214,6 +221,7 @@ class Settings(_Modelo):
     multiplos: ConfigMultiplos
     validacao_cruzada: ValidacaoCruzada
     perfil: ConfigPerfil
+    preco_teto: ConfigPrecoTeto = Field(default_factory=ConfigPrecoTeto)
 
     def resolver_data_base(self, hoje: dt.date) -> dt.date:
         """Data-base efetiva. `hoje` vem de quem chama (CLI), nunca de `date.today()` aqui."""
