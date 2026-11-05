@@ -1124,7 +1124,7 @@ usar o relógio e passa `agora`/`base` para baixo.
 - `dados.py`: `st.cache_data` sobre `servicos/` (séries e medidas pelas versões com cache em disco), com o **mtime dos arquivos na chave**. Lê os caminhos
   de `config` na hora da chamada (os testes trocam `cfg.DIR_*`). `invalidar()` limpa tudo.
 - `estado.py`: barra de estado (data-base, idade de cada fonte, expansor de avisos).
-- `acoes.py`: `executar(rotulo, comandos)` num `st.status`, com as últimas linhas ao vivo; falha fica
+- `acoes.py`: `executar(rotulo, comandos)` num `st.status` só com o aviso "Carregando…" (sem o log ao vivo); falha fica
   na tela (`mostrar_falha`) e o cache é invalidado ao fim.
 - `navegacao.py`: barra lateral de todas as páginas: busca no universo com o nome do cadastro, Início, Perfil e "Perfil
   nesta sessão" (`override()`, nunca grava). A escolha da busca é tratada em callback, que esvazia o campo: sem isso,

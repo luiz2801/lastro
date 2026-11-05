@@ -11,16 +11,13 @@ from valuation.servicos import atualizacao as atu
 
 
 def executar(rotulo: str, comandos: Sequence[atu.Comando]) -> atu.Execucao:
-    """Roda `comandos` num `st.status`. A falha fica na tela, sem derrubar a página."""
+    """Roda `comandos` num `st.status` só com um aviso de que está carregando (sem o log ao vivo).
+
+    A falha fica na tela, com as últimas linhas da saída, sem derrubar a página.
+    """
     with st.status(rotulo, expanded=True) as painel:
-        area = st.empty()
-        linhas: list[str] = []
-
-        def ao_ler(linha: str) -> None:
-            linhas.append(linha)
-            area.code("\n".join(linhas[-15:]), language=None)
-
-        execucao = atu.executar(comandos, ao_ler)
+        st.write("Carregando… isso pode levar alguns minutos.")
+        execucao = atu.executar(comandos)
         if execucao.ok:
             painel.update(label=f"{rotulo}: concluído", state="complete", expanded=False)
         else:
