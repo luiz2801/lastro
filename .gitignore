@@ -37,3 +37,6 @@ build/
 
 # Relatórios das companhias baixados (PDFs grandes; só os valores conferidos vão para o git)
 /relatorios/
+
+# Páginas salvas de referências de terceiros (Investidor10, Status Invest): não versionar
+/inpiracao/
