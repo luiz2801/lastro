@@ -2,6 +2,13 @@
 
 ## [Não lançado]
 
+### Payout por exercício na aba Dividendos
+- Aba Dividendos: gráfico e tabela do payout (dividendos e JCP pagos da DFC ÷ lucro da controladora) dos exercícios encerrados,
+  com a mediana dos pares que têm demonstrações em disco (`n` no hover), lista dos pares sem payout e botão "Baixar
+  demonstrações dos pares". Lucro não positivo fica em lacuna. Em não financeiras, linha de dividendos ausente conta como zero
+  (contrato de `nf.metricas`); nas financeiras é lacuna. `prv.payout_anual`, `sprv.payout_por_ano`/`payout_do_grupo`,
+  `atu.baixar_demonstracoes`. Corrigido o "-0,0%" que a métrica produzia com dividendo zero.
+
 ### Dividendos: comparação com os pares do setor
 - Aba Dividendos: gráfico do dividend yield por ano do ativo contra a **mediana dos pares do setor** (mesmo método: DPA do Yahoo
   ÷ Adj Close; `n` por ano; ano corrente parcial). Só entram os pares com proventos em disco; botão "Baixar proventos dos pares"

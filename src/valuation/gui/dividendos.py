@@ -56,8 +56,70 @@ def _contra_pares(ticker: str, p: emp.Padronizada, base: dt.date) -> None:
             acoes.mostrar_falha(execucao)
 
 
+def _payout(ticker: str, p: emp.Padronizada, cadastro: pd.DataFrame, base: dt.date) -> None:
+    st.subheader("Payout por exercício")
+    historico = sprv.payout_por_ano(p, dados.settings(), base, ANOS)
+    if historico["payout"].notna().any():
+        setor = dados.setor(p.premissas.pares.setor)
+        pares = scmp.tickers_pares(p.premissas, p.empresa.tickers, setor)
+        grupo = dados.payout_grupo(pares, cadastro, base, ANOS) if pares else None
+        com_pares = grupo is not None and bool(grupo.por_empresa)
+        st.plotly_chart(
+            grafico.payout_por_ano(
+                historico["payout"], grupo.serie if grupo and com_pares else None, ticker
+            ),
+            width="stretch",
+        )
+        st.caption(
+            "Payout = dividendos e JCP pagos (DFC) ÷ lucro da controladora; exercícios encerrados "
+            "até a data-base. Lucro não positivo fica em lacuna; em não financeiras, exercício "
+            "sem a linha de dividendos na DFC conta como zero."
+        )
+        if com_pares and grupo is not None:
+            st.caption(
+                f"Mediana de {len(grupo.por_empresa)} de {len(pares)} pares com demonstrações "
+                "em disco (n por ano ao passar o mouse)."
+            )
+        _pares_sem_demonstracoes(grupo, cadastro)
+    else:
+        st.info(f"{TRACO} {ticker} sem payout calculável (sem dividendo ou lucro não positivo).")
+    tabela = pd.DataFrame(
+        {
+            "Exercício": [str(a) for a in historico.index],
+            "Dividendos pagos (R$ mi)": [
+                fo.formatar(v, "mi", 1) for v in historico["dividendos_pagos"]
+            ],
+            "Lucro da controladora (R$ mi)": [
+                fo.formatar(v, "mi", 1) for v in historico["lucro_controladora"]
+            ],
+            "Payout": [fo.formatar(v, "%", 1) for v in historico["payout"]],
+        }
+    ).iloc[::-1]
+    st.dataframe(tabela, hide_index=True, width="stretch")
+
+
+def _pares_sem_demonstracoes(grupo: sprv.PayoutDoGrupo | None, cadastro: pd.DataFrame) -> None:
+    if grupo is None or not grupo.faltam:
+        return
+    with st.expander(f"Pares sem payout ({len(grupo.faltam)})"):
+        for par, razao in grupo.faltam.items():
+            st.write(f"{par}: {razao}")
+    sem_dados = [t for t in grupo.faltam if not dados.ticker_tem_demonstracoes(t, cadastro)]
+    if sem_dados and st.button("Baixar demonstrações dos pares", key="baixar_demonstracoes_pares"):
+        execucao = acoes.executar(
+            "Baixando demonstrações dos pares", atu.baixar_demonstracoes(sem_dados)
+        )
+        if execucao.ok:
+            st.rerun()
+        acoes.mostrar_falha(execucao)
+
+
 def mostrar(
-    ticker: str, series: hm.SeriesMercado | None, base: dt.date, p: emp.Padronizada
+    ticker: str,
+    series: hm.SeriesMercado | None,
+    base: dt.date,
+    p: emp.Padronizada,
+    cadastro: pd.DataFrame,
 ) -> None:
     dividendos = hm.dividendos_em_disco(ticker, dir_raw=cfg.DIR_RAW)
     if series is None or dividendos is None:
@@ -95,6 +157,7 @@ def mostrar(
     st.dataframe(tabela, hide_index=True, width="stretch")
 
     _contra_pares(ticker, p, base)
+    _payout(ticker, p, cadastro, base)
 
     st.subheader("Proventos por data ex")
     ate_base = dividendos[dividendos.index <= pd.Timestamp(base)]

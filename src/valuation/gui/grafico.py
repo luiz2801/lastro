@@ -489,3 +489,31 @@ def yield_contra_pares(ativo: pd.Series, grupo: pd.DataFrame, ticker: str) -> go
     figura = _layout(figura, "Dividend yield", ".0%")
     figura.update_layout(hovermode="x")
     return figura
+
+
+def payout_por_ano(ativo: pd.Series, grupo: pd.DataFrame | None, ticker: str) -> go.Figure:
+    """Payout por exercício: o ativo (azul) e, se houver, a mediana dos pares (laranja)."""
+    figura = go.Figure()
+    figura.add_trace(
+        go.Bar(
+            x=[str(a) for a in ativo.index],
+            y=ativo,
+            name=ticker,
+            marker={"color": AZUL},
+            hovertemplate="%{x}<br>%{y:.1%}<extra></extra>",
+        )
+    )
+    if grupo is not None:
+        figura.add_trace(
+            go.Bar(
+                x=[str(a) for a in grupo.index],
+                y=grupo["valor"],
+                name="Mediana dos pares",
+                marker={"color": LARANJA},
+                customdata=grupo["n"],
+                hovertemplate="%{x}<br>%{y:.1%} (n = %{customdata:.0f})<extra></extra>",
+            )
+        )
+    figura = _layout(figura, "Payout", ".0%")
+    figura.update_layout(barmode="group", hovermode="x")
+    return figura

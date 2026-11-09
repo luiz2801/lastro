@@ -25,6 +25,7 @@ from valuation.servicos import empresa as emp
 from valuation.servicos import grupos as grp
 from valuation.servicos import historico_mercado as hm
 from valuation.servicos import indicadores as sind
+from valuation.servicos import proventos as sprv
 from valuation.servicos import resultados as res
 from valuation.universo import EmpresaUniverso, carregar_universo
 
@@ -241,6 +242,40 @@ def medidas(
         cfg.DIR_RAW,
         cfg.DIR_PROCESSED,
         cfg.DIR_EMPRESAS,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _payout_grupo(
+    tickers: tuple[str, ...],
+    _cadastro_atual: pd.DataFrame,
+    base: dt.date,
+    anos: int,
+    _chave: tuple[float, ...],
+    dir_processed: Path,
+    dir_empresas: Path,
+) -> sprv.PayoutDoGrupo:
+    return sprv.payout_do_grupo(
+        tickers,
+        _cadastro_atual,
+        settings(),
+        base,
+        anos,
+        dir_processed=dir_processed,
+        dir_empresas=dir_empresas,
+    )
+
+
+def payout_grupo(
+    tickers: Sequence[str], cadastro_atual: pd.DataFrame, base: dt.date, anos: int
+) -> sprv.PayoutDoGrupo:
+    """Payout por ano de um grupo, só do que está em disco; a chave leva o mtime de cada par."""
+    chave = tuple(
+        [_mtime(cfg.DIR_PROCESSED / "cadastro.parquet")]
+        + [_mtime(p) for p in sorted((cfg.DIR_PROCESSED / "cvm").glob("*/demonstracoes.parquet"))]
+    )
+    return _payout_grupo(
+        tuple(tickers), cadastro_atual, base, anos, chave, cfg.DIR_PROCESSED, cfg.DIR_EMPRESAS
     )
 
 

@@ -128,5 +128,5 @@ def mostrar(ticker: str) -> None:
             st.info("— sem dados contábeis para a série de mercado.")
         else:
             dividendos.mostrar(
-                ticker, dados.series(padronizada_ok, ticker, base), base, padronizada_ok
+                ticker, dados.series(padronizada_ok, ticker, base), base, padronizada_ok, cadastro
             )

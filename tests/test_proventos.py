@@ -5,12 +5,20 @@ import sys
 import types
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
+from sintetico import dfp_completa, juntar
 from valuation.analise import proventos as prv
+from valuation.config import carregar_settings
+from valuation.contabil import ErroContabil
+from valuation.contabil import padronizacao as pad
 from valuation.data import precos as prc
+from valuation.data.cadastro import ClasseAcao, Empresa
 from valuation.data.precos import ErroPrecos
+from valuation.projecao import premissas as pm
+from valuation.servicos import empresa as emp
 from valuation.servicos import proventos as sprv
 
 AGORA = dt.datetime(2026, 11, 4, 12, tzinfo=dt.UTC)
@@ -151,3 +159,85 @@ def test_yield_do_grupo_so_com_o_que_esta_em_disco(tmp_path: Path) -> None:
     assert g.faltam == {"BBBB3": "sem proventos em disco", "CCCC3": "sem cotação em disco"}
     assert g.serie["valor"].tolist() == pytest.approx([0.1, 0.2])  # 1/10 em 2025; 2/10 em 2026
     assert g.serie["n"].tolist() == [1, 1]
+
+
+def test_payout_anual_a_mao() -> None:
+    nan = float("nan")
+    metricas = pd.DataFrame(
+        {
+            "dividendos_pagos": [50.0, 30.0, nan, 40.0, 10.0],
+            "lucro_liquido_controladora": [100.0, -20.0, 80.0, 40.0, 25.0],
+        },
+        index=[2021, 2022, 2023, 2024, 2025],
+    )
+    t = prv.payout_anual(metricas, dt.date(2025, 6, 30), 3)  # 2025 ainda não encerrou
+    assert t.index.tolist() == [2022, 2023, 2024]
+    assert pd.isna(t.loc[2022, "payout"])  # lucro <= 0
+    assert pd.isna(t.loc[2023, "payout"])  # dividendo ausente não vira zero
+    assert t.loc[2024, "payout"] == pytest.approx(1.0)  # payout acima de 100% é válido
+    with pytest.raises(ValueError):
+        prv.payout_anual(metricas, dt.date(2025, 6, 30), 0)
+
+
+def _padronizada(ticker: str = "XXXX3") -> emp.Padronizada:
+    empresa = Empresa(
+        cnpj="1",
+        cd_cvm=1234,
+        razao_social="X",
+        nome_comercial="X",
+        setor_cvm="s",
+        tipo_modelo="nao_financeira",
+        escala_acoes=1,
+        classes=(ClasseAcao(ticker, "ON"),),
+    )
+    premissas = pm.premissas_padrao(ticker, "nao_financeira", empresa.tickers)
+    plano = pad.carregar_mapeamento(tipo="nao_financeira")
+    pago = {"DFC": {"6.03.05": ("Dividendos e Juros sobre o Capital Próprio Pagos", -11)}}
+    dados = juntar(dfp_completa(2024, **pago), dfp_completa(2025, **pago))
+    selecionadas = pad.selecionar_reapresentacoes(dados, consolidado=True)
+    contas = pad.padronizar(selecionadas, plano, ticker=ticker)
+    return emp.Padronizada(empresa, plano, selecionadas, contas, "BRL", premissas, Path("x.yaml"))
+
+
+def test_payout_do_ativo_a_mao_sobre_a_dfp_sintetica() -> None:
+    t = sprv.payout_por_ano(_padronizada(), carregar_settings(), dt.date(2026, 10, 30), 5)
+    assert t.index.tolist() == [2024, 2025]
+    # 11 de dividendos e 9 de lucro da controladora
+    assert t.loc[2025, "dividendos_pagos"] == pytest.approx(11.0)
+    assert t.loc[2025, "payout"] == pytest.approx(11.0 / 9.0)
+
+
+def test_payout_do_grupo_separa_quem_nao_tem_demonstracoes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def padronizar(ticker: str, *_: object, **__: object) -> emp.Padronizada:
+        if ticker == "SEM3":
+            raise ErroContabil("sem demonstrações")
+        return _padronizada(ticker)
+
+    monkeypatch.setattr(sprv.emp, "padronizar", padronizar)
+    g = sprv.payout_do_grupo(
+        ["COM3", "SEM3"], pd.DataFrame(), carregar_settings(), dt.date(2026, 10, 30), 5
+    )
+    assert list(g.por_empresa) == ["COM3"]
+    assert g.faltam == {"SEM3": "sem demonstrações"}
+    assert g.serie["valor"].tolist() == pytest.approx([11.0 / 9.0, 11.0 / 9.0])
+    assert g.serie["n"].tolist() == [1, 1]
+
+
+def test_sem_linha_de_dividendos_o_payout_de_nao_financeira_e_zero() -> None:
+    """Contrato atual de `nf.metricas`: `dividendos_pagos` ausente conta como 0, não como NaN."""
+    sem = _padronizada()
+    sem = emp.Padronizada(
+        sem.empresa,
+        sem.plano,
+        sem.selecionadas,
+        sem.contas[sem.contas["conta_padrao"] != "dividendos_pagos"],
+        sem.moeda,
+        sem.premissas,
+        sem.caminho_premissas,
+    )
+    t = sprv.payout_por_ano(sem, carregar_settings(), dt.date(2026, 10, 30), 5)
+    assert t["payout"].tolist() == [0.0, 0.0]
+    assert not np.signbit(t["payout"]).any()  # nada de -0,0 na tela
+    assert not np.signbit(t["dividendos_pagos"]).any()

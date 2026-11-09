@@ -32,6 +32,11 @@ def baixar_series_grupo(tickers: Sequence[str], sem_demonstracoes: Sequence[str]
     return [*comandos, comando("series-varios", *tickers)]
 
 
+def baixar_demonstracoes(tickers: Sequence[str]) -> list[Comando]:
+    """`atualizar` das demonstrações da CVM de várias empresas de uma vez."""
+    return [comando("atualizar", "--tickers", ",".join(tickers))]
+
+
 def baixar_proventos(tickers: Sequence[str], anos: int) -> list[Comando]:
     """`proventos` de cada empresa: baixa (e cacheia) proventos e cotação, sem demonstrações."""
     return [comando("proventos", t, "--anos", str(anos)) for t in tickers]

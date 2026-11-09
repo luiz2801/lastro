@@ -71,9 +71,9 @@ def dpa_12m(
 
 
 def mediana_do_grupo(yields: dict[str, pd.Series]) -> pd.DataFrame:
-    """Mediana do dividend yield por ano entre as empresas do grupo.
+    """Mediana de um indicador por ano (dividend yield, payout) entre as empresas do grupo.
 
-    `yields`: ticker -> yield por ano (índice = ano; NaN = sem dado). Colunas: `valor` (NaN se
+    `yields`: ticker -> valor por ano (índice = ano; NaN = sem dado). Colunas: `valor` (NaN se
     nenhuma empresa tem o ano) e `n` (empresas com yield no ano). Ano parcial entra como qualquer
     outro: o corrente fica abaixo do anual para todos.
     """
@@ -81,5 +81,36 @@ def mediana_do_grupo(yields: dict[str, pd.Series]) -> pd.DataFrame:
         return pd.DataFrame({"valor": [], "n": []}, index=pd.Index([], name="ano"), dtype="float64")
     tabela = pd.DataFrame(yields).sort_index()
     saida = pd.DataFrame({"valor": tabela.median(axis=1), "n": tabela.count(axis=1)})
+    saida.index.name = "ano"
+    return saida
+
+
+COLUNAS_PAYOUT = ["dividendos_pagos", "lucro_controladora", "payout"]
+
+
+def payout_anual(metricas: pd.DataFrame, data_base: dt.date, anos: int) -> pd.DataFrame:
+    """Payout dos últimos `anos` exercícios encerrados (31/12) até a data-base.
+
+    `metricas`: saída anual de `nf.metricas`/`fin.metricas` (índice = ano), com
+    `dividendos_pagos` (positivo = saída, dividendos e JCP da DFC) e `lucro_liquido_controladora`.
+    Payout = dividendos pagos ÷ lucro da controladora; NaN se o lucro é ≤ 0 ou se não há dividendo
+    informado (NaN não vira zero). Índice = ano (int), crescente.
+    """
+    if anos < 1:
+        raise ValueError("anos deve ser >= 1")
+    encerrados = [int(a) for a in metricas.index if dt.date(int(a), 12, 31) <= data_base]
+    metricas = metricas.copy()
+    metricas.index = pd.Index([int(a) for a in metricas.index])
+    recorte = metricas.loc[encerrados[-anos:]]
+    # `+ 0.0` troca o -0,0 (zero negado na métrica) por 0,0, para a tela não mostrar "-0,0%"
+    dividendos = recorte["dividendos_pagos"].astype("float64") + 0.0
+    lucro = recorte["lucro_liquido_controladora"].astype("float64")
+    saida = pd.DataFrame(
+        {
+            "dividendos_pagos": dividendos,
+            "lucro_controladora": lucro,
+            "payout": (dividendos / lucro).where(lucro > 0),
+        }
+    )
     saida.index.name = "ano"
     return saida

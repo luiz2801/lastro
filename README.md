@@ -190,7 +190,7 @@ Pilotos: PETR4, VALE3 e WEGE3.
 - **GUI local** (Sprint GUI 1, ADR 0022 e 0023): `uv sync --group gui && uv run valuation gui` abre
   `http://127.0.0.1:8501`. Barra lateral com busca, favoritas e perfil do investidor na tela; por ativo, cotação,
   múltiplos em série com a média dos pares e do Ibovespa, tratamento de anomalias, indicadores de endividamento, liquidez e
-  caixa, o valuation do último `rodar` e a aba Dividendos (DPA e yield por ano, total de 12 meses, proventos por data ex e yield contra a mediana dos pares do setor; yfinance, sem JCP nem data de pagamento). Abrir não usa rede; a abertura leva menos de 1 s de cálculo com o cache em disco. Múltiplos em série só desde 31/03/2020, porque a CVM não publica a quantidade de ações antes.
+  caixa, o valuation do último `rodar` e a aba Dividendos (DPA e yield por ano, total de 12 meses, proventos por data ex e yield e payout contra a mediana dos pares do setor; yfinance para os proventos, sem JCP nem data de pagamento). Abrir não usa rede; a abertura leva menos de 1 s de cálculo com o cache em disco. Múltiplos em série só desde 31/03/2020, porque a CVM não publica a quantidade de ações antes.
 - **Ainda não**: o que está na seção 12 do `guia.md` (Fase 11, extensões).
 
 ## Decisões que completam ou divergem do `CLAUDE.md`

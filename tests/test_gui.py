@@ -245,7 +245,7 @@ def test_aba_dividendos_mostra_dpa_por_ano_sem_rede(ambiente: Path) -> None:
     _com_dividendos(ambiente)
     at = _abrir("WEGE3")
     assert not at.exception
-    assert len(at.get("plotly_chart")) == 3  # cotação, múltiplos e DPA por ano
+    assert len(at.get("plotly_chart")) == 4  # cotação, múltiplos, DPA por ano e payout
     anos = next(d.value for d in at.dataframe if "Dividend yield" in d.value.columns)
     linha_2025 = anos[anos["Ano"] == "2025"].iloc[0]
     assert linha_2025["DPA"] == "R$ 1,50"
@@ -258,7 +258,7 @@ def test_aba_dividendos_sem_proventos_em_disco_orienta_a_atualizar(ambiente: Pat
     at = _abrir("WEGE3")
     assert not at.exception
     assert "sem proventos de WEGE3 em disco" in _textos(at)
-    assert len(at.get("plotly_chart")) == 2
+    assert len(at.get("plotly_chart")) == 2  # sem proventos, a aba nem chega ao payout
 
 
 def _com_par(raiz: Path) -> None:
@@ -286,7 +286,7 @@ def test_aba_dividendos_compara_com_a_mediana_dos_pares(ambiente: Path) -> None:
     )
     at = _abrir("WEGE3")
     assert not at.exception
-    assert len(at.get("plotly_chart")) == 4  # + yield do ativo contra os pares
+    assert len(at.get("plotly_chart")) == 5  # + yield do ativo contra os pares
     assert "Mediana de 1 de 1 pares" in " ".join(c.value for c in at.caption)
 
 
@@ -305,11 +305,43 @@ def test_aba_dividendos_par_sem_proventos_oferece_o_botao_e_chama_a_cli(
     monkeypatch.setattr(atu, "executar", registra)
     at = _abrir("WEGE3")
     assert not at.exception
-    assert len(at.get("plotly_chart")) == 3  # sem par com proventos, sem a comparação
+    assert len(at.get("plotly_chart")) == 4  # sem par com proventos, sem a comparação
     botao = next(b for b in at.button if b.label == "Baixar proventos dos pares")
     botao.click().run()
     assert pedidos
     assert pedidos[0] == atu.baixar_proventos(["PAR3"], 10)
+
+
+def test_aba_dividendos_mostra_payout_por_exercicio(ambiente: Path) -> None:
+    _com_series(ambiente)
+    _com_dividendos(ambiente)
+    at = _abrir("WEGE3")
+    assert not at.exception
+    tabela = next(d.value for d in at.dataframe if "Payout" in d.value.columns)
+    assert tabela["Exercício"].tolist() == ["2025", "2024"]  # mais recente primeiro
+    assert tabela["Lucro da controladora (R$ mi)"].tolist() == ["0,0", "0,0"]
+    assert tabela["Payout"].tolist() == ["0,0%", "0,0%"]  # a DFP sintética não paga dividendos
+
+
+def test_aba_dividendos_par_sem_demonstracoes_oferece_baixar_e_chama_a_cli(
+    ambiente: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _com_series(ambiente)
+    _com_dividendos(ambiente)
+    _com_par(ambiente)
+    pedidos: list[object] = []
+
+    def registra(comandos: object, ao_ler: object = None) -> atu.Execucao:
+        pedidos.append(comandos)
+        return atu.Execucao(ok=False, saida=[], falhou_em="x")
+
+    monkeypatch.setattr(atu, "executar", registra)
+    at = _abrir("WEGE3")
+    assert not at.exception
+    assert any(e.label.startswith("Pares sem payout (1)") for e in at.expander)
+    botao = next(b for b in at.button if b.label == "Baixar demonstrações dos pares")
+    botao.click().run()
+    assert pedidos == [atu.baixar_demonstracoes(["PAR3"])]
 
 
 def test_seletores_trocam_sem_rede(ambiente: Path) -> None:

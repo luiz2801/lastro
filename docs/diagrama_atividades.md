@@ -345,6 +345,21 @@ flowchart TD
   X -->|proventos --anos 10 de cada um| C
 ```
 
+O **payout** da mesma aba vem da DFP já padronizada, sem rede:
+
+```mermaid
+flowchart TD
+  D[(demonstracoes.parquet de cada empresa)] --> M[nf.metricas ou fin.metricas anuais]
+  M --> O[prv.payout_anual: dividendos pagos ÷ lucro da controladora, exercícios encerrados]
+  O --> A[Payout do ativo]
+  D --> G[sprv.payout_do_grupo: padroniza cada par em disco]
+  G --> B[prv.mediana_do_grupo: mediana e n]
+  A --> C[Gráfico e tabela de payout]
+  B --> C
+  G -->|par sem demonstrações| X[Lista dos que faltam + botão Baixar demonstrações dos pares]
+  X -->|atualizar --tickers| D
+```
+
 ## GUI: abrir um ativo (ADR 0022 e 0023)
 
 Abrir a página só lê o que está em disco. A rede vem do clique, ou do caso de ativo sem nenhum cache.

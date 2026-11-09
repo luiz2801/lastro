@@ -14,8 +14,14 @@ from pathlib import Path
 import pandas as pd
 
 from valuation.analise import proventos as prv
-from valuation.config import DIR_RAW
+from valuation.config import DIR_EMPRESAS, DIR_PROCESSED, DIR_RAW, ErroConfiguracao, Settings
+from valuation.contabil import ErroContabil
+from valuation.contabil import financeiras as fin
+from valuation.contabil import nao_financeiras as nf
+from valuation.contabil import periodos as per
+from valuation.data import cadastro as cad
 from valuation.data import precos as prc
+from valuation.servicos import empresa as emp
 
 
 @dataclass(frozen=True)
@@ -52,3 +58,53 @@ def yield_do_grupo(
         else:
             por_empresa[ticker] = serie
     return YieldDoGrupo(prv.mediana_do_grupo(por_empresa), por_empresa, faltam)
+
+
+def payout_por_ano(
+    p: emp.Padronizada, settings: Settings, base: dt.date, anos: int
+) -> pd.DataFrame:
+    """Dividendos pagos, lucro da controladora e payout dos últimos `anos` exercícios encerrados."""
+    largo = per.anual(p.contas)
+    if p.plano.tipo == "financeira":
+        metricas = fin.metricas(largo)
+    else:
+        metricas = nf.metricas(
+            largo, aliquota_nominal=settings.impostos.aliquota_nominal, ajustes=p.ajustes
+        )
+    return prv.payout_anual(metricas, base, anos)
+
+
+@dataclass(frozen=True)
+class PayoutDoGrupo:
+    serie: pd.DataFrame  # índice = ano; `valor` (mediana) e `n`
+    por_empresa: dict[str, pd.Series] = field(default_factory=dict)
+    faltam: dict[str, str] = field(default_factory=dict)  # ticker -> motivo
+
+
+def payout_do_grupo(
+    tickers: Sequence[str],
+    cadastro: pd.DataFrame,
+    settings: Settings,
+    base: dt.date,
+    anos: int,
+    *,
+    dir_processed: Path = DIR_PROCESSED,
+    dir_empresas: Path = DIR_EMPRESAS,
+) -> PayoutDoGrupo:
+    """Payout por ano de cada empresa com demonstrações em disco; as demais vão para `faltam`."""
+    por_empresa: dict[str, pd.Series] = {}
+    faltam: dict[str, str] = {}
+    for ticker in tickers:
+        try:
+            p = emp.padronizar(
+                ticker, cadastro, dir_processed=dir_processed, dir_empresas=dir_empresas
+            )
+            tabela = payout_por_ano(p, settings, base, anos)
+        except (ErroContabil, ErroConfiguracao, cad.ErroCadastro) as e:
+            faltam[ticker] = str(e)
+            continue
+        if tabela["payout"].notna().any():
+            por_empresa[ticker] = tabela["payout"]
+        else:
+            faltam[ticker] = "sem payout calculável (dividendos ausentes ou lucro não positivo)"
+    return PayoutDoGrupo(prv.mediana_do_grupo(por_empresa), por_empresa, faltam)
