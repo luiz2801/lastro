@@ -258,6 +258,9 @@ def test_baixar_series_outras_faltas_viram_aviso(
         def splits(self, _: str) -> pd.Series:
             raise prc.ErroPrecos("sem splits")
 
+        def dividendos(self, _: str) -> pd.Series:
+            raise prc.ErroPrecos("sem proventos")
+
     coletas: list[object] = []
     monkeypatch.setattr(hm.prc, "YFinanceProvider", Provedor)
     monkeypatch.setattr(hm.cvm, "coletar_series", lambda *a, **k: coletas.append(a))
@@ -265,6 +268,7 @@ def test_baixar_series_outras_faltas_viram_aviso(
     assert [a.split(":")[0] for a in avisos] == [
         "XXXX4 sem histórico de cotação",
         "XXXX3 sem lista de splits",
+        "XXXX3 sem lista de proventos",
     ]
     assert pedidos[0] == ("XXXX3.SA", dt.date(2016, 4, 30), BASE)  # historico_anos = 10
     assert len(coletas) == 1

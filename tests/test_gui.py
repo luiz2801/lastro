@@ -233,6 +233,34 @@ def test_aba_geral_mostra_cartoes_e_graficos_do_cache(ambiente: Path) -> None:
     assert "A CVM só publica a quantidade de ações" in _textos(at)  # lacuna com o motivo
 
 
+def _com_dividendos(raiz: Path) -> None:
+    indice = pd.DatetimeIndex(["2025-03-10", "2025-09-10", "2026-03-10"], name="data")
+    pd.DataFrame({"valor": [1.0, 0.5, 2.0]}, index=indice).to_parquet(
+        raiz / "raw" / "precos" / "dividendos_WEGE3.SA.parquet"
+    )
+
+
+def test_aba_dividendos_mostra_dpa_por_ano_sem_rede(ambiente: Path) -> None:
+    _com_series(ambiente)
+    _com_dividendos(ambiente)
+    at = _abrir("WEGE3")
+    assert not at.exception
+    assert len(at.get("plotly_chart")) == 3  # cotação, múltiplos e DPA por ano
+    anos = next(d.value for d in at.dataframe if "Dividend yield" in d.value.columns)
+    linha_2025 = anos[anos["Ano"] == "2025"].iloc[0]
+    assert linha_2025["DPA"] == "R$ 1,50"
+    assert linha_2025["Proventos"] == 2
+    assert linha_2025["Dividend yield"] == "15,00%"  # 1,50 / Adj Close de 10
+
+
+def test_aba_dividendos_sem_proventos_em_disco_orienta_a_atualizar(ambiente: Path) -> None:
+    _com_series(ambiente)
+    at = _abrir("WEGE3")
+    assert not at.exception
+    assert "sem proventos de WEGE3 em disco" in _textos(at)
+    assert len(at.get("plotly_chart")) == 2
+
+
 def test_seletores_trocam_sem_rede(ambiente: Path) -> None:
     _com_series(ambiente)
     at = _abrir("WEGE3")

@@ -53,6 +53,16 @@ def test_dpa_anual_sem_proventos_e_anos_invalido() -> None:
         prv.dpa_anual(vazio, _historico(), dt.date(2026, 10, 1), 0)
 
 
+def test_dpa_12m_janela_aberta_no_inicio_e_fechada_na_data_base() -> None:
+    datas = ["2025-10-01", "2025-10-02", "2026-10-01", "2026-10-02"]
+    div = pd.Series([1.0, 2.0, 4.0, 8.0], index=pd.DatetimeIndex(datas))
+    dpa, y = prv.dpa_12m(div, _historico(), dt.date(2026, 10, 1))
+    assert dpa == 2.0 + 4.0  # 2025-10-01 fica fora (janela aberta); 2026-10-02 é futuro
+    assert y == pytest.approx(6.0 / 30.0)  # último adj_close até a data-base
+    vazio = pd.DataFrame({"adj_close": []}, index=pd.DatetimeIndex([]))
+    assert pd.isna(prv.dpa_12m(div, vazio, dt.date(2026, 10, 1))[1])
+
+
 def _yf_falso(monkeypatch: pytest.MonkeyPatch, dividendos: object) -> list[str]:
     chamadas: list[str] = []
 

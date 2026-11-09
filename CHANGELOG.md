@@ -2,6 +2,12 @@
 
 ## [Não lançado]
 
+### Aba Dividendos na GUI
+- Nova aba "Dividendos" na página do ativo: cartões de DPA e dividend yield dos últimos 12 meses, barras do DPA por ano
+  (ano corrente parcial), tabela por ano e por data ex. Só lê o disco; yield sobre `Adj Close`, como no comando.
+- `series TICKER` (e, por ele, Atualizar) passa a baixar os proventos; falha vira aviso. `dpa_12m` em `analise/proventos.py`,
+  `dividendos_em_cache` em `data/precos.py`, `hm.dividendos_em_disco`.
+
 ### Proventos por ano (`valuation proventos`)
 - `YFinanceProvider.dividendos` (cache com TTL, cópia vencida em falha) e `analise/proventos.py` (`dpa_anual`, puro).
 - Comando `proventos TICKER [--anos N] [--data-base] [--forcar]`: DPA e dividend yield por ano-calendário (DPA = soma das datas

@@ -439,3 +439,24 @@ def comparacao_taxas(linhas: Sequence[tuple[str, dict[str, float]]]) -> go.Figur
         yaxis={"autorange": "reversed", "title": "", "showgrid": True},
     )
     return figura
+
+
+def dpa_anual(tabela: pd.DataFrame) -> go.Figure:
+    """Barras do DPA por ano-calendário; o ano parcial em cinza."""
+    parcial = tabela["parcial"].to_numpy(dtype=bool)
+    figura = go.Figure(
+        go.Bar(
+            x=[str(a) for a in tabela.index],
+            y=tabela["dpa"],
+            marker={"color": [CINZA if p else AZUL for p in parcial]},
+            customdata=[
+                [n, "parcial" if p else "ano fechado"]
+                for n, p in zip(tabela["n_proventos"], parcial, strict=True)
+            ],
+            hovertemplate="%{x} (%{customdata[1]})<br>R$ %{y:,.2f} em %{customdata[0]} provento(s)"
+            "<extra></extra>",
+        )
+    )
+    figura = _layout(figura, "R$ por ação")
+    figura.update_layout(showlegend=False)
+    return figura

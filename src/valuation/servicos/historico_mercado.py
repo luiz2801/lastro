@@ -137,6 +137,10 @@ def _baixar_precos(
         yf.splits(prc.simbolo_yahoo(ticker))
     except ErroDadosExternos as e:
         avisos.append(f"{ticker} sem lista de splits: {e}")
+    try:
+        yf.dividendos(prc.simbolo_yahoo(ticker))
+    except ErroDadosExternos as e:
+        avisos.append(f"{ticker} sem lista de proventos: {e}")
 
 
 def baixar_series_varios(
@@ -190,6 +194,11 @@ def _contas_da_serie(p: Padronizada, dir_processed: Path) -> pd.DataFrame:
     consolidado = bool(p.selecionadas["consolidado"].any())
     selecionadas = pad.selecionar_reapresentacoes(demonstracoes, consolidado=consolidado)
     return pad.padronizar(selecionadas, p.plano, ticker=p.premissas.ticker)
+
+
+def dividendos_em_disco(ticker: str, *, dir_raw: Path = DIR_RAW) -> pd.Series | None:
+    """Proventos por data ex do papel que estão em disco, sem rede; `None` se nunca baixados."""
+    return prc.dividendos_em_cache(prc.simbolo_yahoo(ticker), _dir_precos(dir_raw))
 
 
 def _precos_em_cache(

@@ -10,7 +10,7 @@ import streamlit as st
 from valuation import config as cfg
 from valuation.contabil import ErroContabil
 from valuation.data import cadastro as cad
-from valuation.gui import aba_valuation, acoes, dados, estado, geral
+from valuation.gui import aba_valuation, acoes, dados, dividendos, estado, geral
 from valuation.servicos import atualizacao as atu
 from valuation.servicos import favoritas as sfav
 from valuation.universo import EmpresaUniverso
@@ -115,7 +115,7 @@ def mostrar(ticker: str) -> None:
             st.rerun()
         acoes.mostrar_falha(execucao)
 
-    aba_ger, aba_val = st.tabs(["Geral", "Valuation"])
+    aba_ger, aba_val, aba_div = st.tabs(["Geral", "Valuation", "Dividendos"])
     with aba_ger:
         if padronizada_ok is None:
             st.info("— sem dados contábeis para os indicadores.")
@@ -123,3 +123,8 @@ def mostrar(ticker: str) -> None:
             geral.mostrar(ticker, padronizada_ok, cadastro, base)
     with aba_val:
         aba_valuation.mostrar(ticker, agora.date(), base, padronizada_ok)
+    with aba_div:
+        if padronizada_ok is None:
+            st.info("— sem dados contábeis para a série de mercado.")
+        else:
+            dividendos.mostrar(ticker, dados.series(padronizada_ok, ticker, base), base)

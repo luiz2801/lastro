@@ -243,6 +243,12 @@ def _ler_dividendos(caminho: Path) -> pd.Series:
     return pd.read_parquet(caminho)["valor"]
 
 
+def dividendos_em_cache(simbolo: str, dir_cache: Path) -> pd.Series | None:
+    """Proventos já gravados, sem rede e sem olhar o TTL; `None` se nunca foram baixados."""
+    caminho = _caminho_dividendos(simbolo, dir_cache)
+    return _ler_dividendos(caminho) if caminho.is_file() else None
+
+
 def _caminho_splits(simbolo: str, dir_cache: Path) -> Path:
     return dir_cache / f"splits_{_nome_arquivo(simbolo)}.parquet"
 

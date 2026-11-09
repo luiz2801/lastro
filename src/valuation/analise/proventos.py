@@ -52,3 +52,19 @@ def dpa_anual(
     tabela = pd.DataFrame.from_dict(linhas, orient="index", columns=COLUNAS)
     tabela.index.name = "ano"
     return tabela
+
+
+def dpa_12m(
+    dividendos: pd.Series, historico: pd.DataFrame, data_base: dt.date
+) -> tuple[float, float]:
+    """DPA dos 12 meses até a data-base (datas ex em (base menos 12 meses, base]) e o yield.
+
+    O yield divide pelo último `adj_close` até a data-base (igual ao fechamento, pois não há
+    dividendo posterior); NaN sem histórico.
+    """
+    base = pd.Timestamp(data_base)
+    inicio = base - pd.DateOffset(years=1)
+    dpa = float(dividendos[(dividendos.index > inicio) & (dividendos.index <= base)].sum())
+    ate = historico.loc[historico.index <= base, "adj_close"].dropna()
+    preco = float(ate.iloc[-1]) if not ate.empty else float("nan")
+    return dpa, (dpa / preco if preco > 0 else float("nan"))
