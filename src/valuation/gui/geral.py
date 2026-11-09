@@ -322,10 +322,12 @@ def _comparacao(
 ) -> None:
     st.subheader("Médias de comparação (valor de hoje)")
     tipo = cast(an.Referencia, st.session_state.get("referencia_serie", "mediana"))
-    setor = dados.setor(p.premissas.pares.setor)
-    tickers = scmp.tickers_pares(p.premissas, p.empresa.tickers, setor)
+    conjunto = dados.pares(p)
+    tickers = conjunto.tickers
     if not tickers:
-        st.info(f"{TRACO} {series.ticker} sem pares definidos (`pares.setor` no YAML da empresa).")
+        st.info(f"{TRACO} {series.ticker} é o único do conjunto ({conjunto.origem}).")
+    else:
+        st.caption(f"Pares: {conjunto.origem}.")
     pares = dados.medidas(tickers, cadastro, base) if tickers else []
     financeira = p.plano.tipo == "financeira"
     chave = f"ibovespa_{series.ticker}"
@@ -360,8 +362,7 @@ def _grupos(
 ) -> list[tuple[str, grp.PainelGrupo, str, str]]:
     """Painéis dos pares e, se o usuário pediu a comparação, do Ibovespa."""
     grupos: list[tuple[str, grp.PainelGrupo, str, str]] = []
-    setor = dados.setor(p.premissas.pares.setor)
-    tickers = scmp.tickers_pares(p.premissas, p.empresa.tickers, setor)
+    tickers = dados.pares(p).tickers
     if tickers:
         painel = dados.painel(tickers, cadastro, base)
         grupos.append((ROTULO_PARES, painel, grafico.LARANJA, "dash"))

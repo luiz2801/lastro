@@ -16,7 +16,6 @@ from valuation.analise import proventos as prv
 from valuation.gui import acoes, cartoes, dados, grafico
 from valuation.saida import formato as fo
 from valuation.servicos import atualizacao as atu
-from valuation.servicos import comparacao as scmp
 from valuation.servicos import empresa as emp
 from valuation.servicos import historico_mercado as hm
 from valuation.servicos import proventos as sprv
@@ -27,19 +26,19 @@ ANOS = 10
 
 def _contra_pares(ticker: str, p: emp.Padronizada, base: dt.date) -> None:
     st.subheader("Dividend yield por ano: ativo e pares do setor")
-    setor = dados.setor(p.premissas.pares.setor)
-    pares = scmp.tickers_pares(p.premissas, p.empresa.tickers, setor)
+    conjunto = dados.pares(p)
+    pares = conjunto.tickers
     if not pares:
-        st.info(f"{TRACO} {ticker} sem pares definidos (`pares.setor` no YAML da empresa).")
+        st.info(f"{TRACO} {ticker} é o único do conjunto ({conjunto.origem}).")
         return
     ativo, _ = sprv.yield_por_ano(ticker, base, ANOS, dir_raw=cfg.DIR_RAW)
     grupo = sprv.yield_do_grupo(pares, base, ANOS, dir_raw=cfg.DIR_RAW)
     if ativo is not None and grupo.por_empresa:
         st.plotly_chart(grafico.yield_contra_pares(ativo, grupo.serie, ticker), width="stretch")
         st.caption(
-            f"Mediana de {len(grupo.por_empresa)} de {len(pares)} pares com proventos em disco "
-            f"(n por ano ao passar o mouse). O ano de {base.year} é parcial para todos. Mesmo "
-            "método do ativo: DPA do Yahoo ÷ Adj Close."
+            f"Mediana de {len(grupo.por_empresa)} de {len(pares)} pares ({conjunto.origem}) com "
+            f"proventos em disco (n por ano ao passar o mouse). O ano de {base.year} é parcial "
+            "para todos. Mesmo método do ativo: DPA do Yahoo ÷ Adj Close."
         )
     else:
         st.info(f"{TRACO} sem proventos dos pares em disco para a comparação.")
@@ -60,8 +59,8 @@ def _payout(ticker: str, p: emp.Padronizada, cadastro: pd.DataFrame, base: dt.da
     st.subheader("Payout por exercício")
     historico = sprv.payout_por_ano(p, dados.settings(), base, ANOS)
     if historico["payout"].notna().any():
-        setor = dados.setor(p.premissas.pares.setor)
-        pares = scmp.tickers_pares(p.premissas, p.empresa.tickers, setor)
+        conjunto = dados.pares(p)
+        pares = conjunto.tickers
         grupo = dados.payout_grupo(pares, cadastro, base, ANOS) if pares else None
         com_pares = grupo is not None and bool(grupo.por_empresa)
         st.plotly_chart(
@@ -77,8 +76,8 @@ def _payout(ticker: str, p: emp.Padronizada, cadastro: pd.DataFrame, base: dt.da
         )
         if com_pares and grupo is not None:
             st.caption(
-                f"Mediana de {len(grupo.por_empresa)} de {len(pares)} pares com demonstrações "
-                "em disco (n por ano ao passar o mouse)."
+                f"Mediana de {len(grupo.por_empresa)} de {len(pares)} pares ({conjunto.origem}) "
+                "com demonstrações em disco (n por ano ao passar o mouse)."
             )
         _pares_sem_demonstracoes(grupo, cadastro)
     else:

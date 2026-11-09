@@ -313,6 +313,18 @@ def painel(tickers: Sequence[str], cadastro_atual: pd.DataFrame, base: dt.date) 
     )
 
 
+def setor_do_ativo(p: emp.Padronizada) -> cfg.Setor | None:
+    """Conjunto curado do ativo (YAML ou `setores.yaml` pela classe da empresa)."""
+    return scmp.setor_do_conjunto(
+        p.premissas, p.empresa.tickers, cfg.carregar_setores(cfg.CAMINHO_SETORES)
+    )
+
+
+def pares(p: emp.Padronizada) -> scmp.ParesDoAtivo:
+    """Os outros do conjunto do ativo, com a origem (conjunto curado ou setor CVM)."""
+    return scmp.pares_do_ativo(p.premissas, p.empresa.tickers, setor_do_ativo(p), universo())
+
+
 def setor(chave: str | None) -> cfg.Setor | None:
     """Setor de `setores.yaml`; chave ausente vira `None`, com o motivo na tela."""
     if chave is None:

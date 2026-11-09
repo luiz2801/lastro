@@ -222,3 +222,61 @@ def test_cartoes_usam_o_ultimo_fechamento_ate_a_base(settings: Settings) -> None
     assert c.market_cap == 100.0
     assert c.dividend_yield == 0.05
     assert hm.cartoes(_series([10.0]), dt.date(2000, 1, 1)) is None
+
+
+def _universo_bancos() -> list[EmpresaUniverso]:
+    return [
+        EmpresaUniverso("BBDC3", SetorCVM.BANCOS, "financeira"),
+        EmpresaUniverso("BBDC4", SetorCVM.BANCOS, "financeira"),
+        EmpresaUniverso("ITUB4", SetorCVM.BANCOS, "financeira"),
+        EmpresaUniverso("BBAS3", SetorCVM.BANCOS, "financeira"),
+        EmpresaUniverso("BBSE3", SetorCVM.SEGURADORAS_E_CORRETORAS, "financeira"),
+        EmpresaUniverso("PETR4", SetorCVM.PETROLEO_E_GAS, "nao_financeira"),
+    ]
+
+
+def _sem_yaml(ticker: str, tipo: str = "financeira") -> pm.PremissasEmpresa:
+    return pm.premissas_padrao(ticker, tipo, (ticker,))
+
+
+def test_conjunto_curado_pela_classe_da_mesma_empresa() -> None:
+    """BBDC3 sem YAML (sem `pares.setor`) cai no conjunto que lista o BBDC4."""
+    bancos = Setor(
+        descricao="Bancos", tipo_modelo="financeira", commodity=False, pares=("ITUB4", "BBDC4")
+    )
+    outro = Setor(descricao="Outro", tipo_modelo="nao_financeira", commodity=False, pares=("X3",))
+    setores = {"outro": outro, "bancos": bancos}
+    proprios = ("BBDC3", "BBDC4")
+    assert scmp.setor_do_conjunto(_sem_yaml("BBDC3"), proprios, setores) is bancos
+    assert scmp.setor_do_conjunto(_sem_yaml("PETR4"), ("PETR4",), setores) is None
+    com_yaml = pm.premissas_padrao("BBDC3", "financeira", proprios).model_copy(
+        update={"pares": pm.Pares(setor="outro")}
+    )
+    assert scmp.setor_do_conjunto(com_yaml, proprios, setores) is outro  # o YAML manda
+
+
+def test_pares_do_ativo_usa_o_conjunto_curado_sem_as_proprias_classes() -> None:
+    bancos = Setor(
+        descricao="Bancos",
+        tipo_modelo="financeira",
+        commodity=False,
+        pares=("ITUB4", "BBAS3", "BBDC4"),
+    )
+    r = scmp.pares_do_ativo(_sem_yaml("BBDC3"), ("BBDC3", "BBDC4"), bancos, _universo_bancos())
+    assert r.tickers == ["ITUB4", "BBAS3"]
+    assert "Bancos" in r.origem and "setores.yaml" in r.origem
+
+
+def test_pares_do_ativo_sem_conjunto_curado_usa_o_setor_cvm_do_mesmo_tipo() -> None:
+    r = scmp.pares_do_ativo(_sem_yaml("BBDC3"), ("BBDC3", "BBDC4"), None, _universo_bancos())
+    assert r.tickers == ["ITUB4", "BBAS3"]  # sem BBDC4 (mesma empresa) nem seguradora
+    assert "Bancos" in r.origem and "universo" in r.origem
+
+
+def test_pares_do_ativo_unico_do_setor_ou_fora_do_universo_fica_vazio() -> None:
+    petr = scmp.pares_do_ativo(
+        _sem_yaml("PETR4", "nao_financeira"), ("PETR4",), None, _universo_bancos()
+    )
+    assert petr.tickers == []  # só há ele no setor
+    fora = scmp.pares_do_ativo(_sem_yaml("ZZZZ3"), ("ZZZZ3",), None, _universo_bancos())
+    assert fora.tickers == [] and "fora do universo" in fora.origem

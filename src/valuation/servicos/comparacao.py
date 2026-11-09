@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -42,6 +42,51 @@ def tickers_pares(
     fora = {cad.normalizar_ticker(t) for t in (*premissas.pares.excluir, *proprios)}
     unicos = dict.fromkeys(cad.normalizar_ticker(t) for t in candidatos)
     return [t for t in unicos if t not in fora]
+
+
+def setor_do_conjunto(
+    premissas: pm.PremissasEmpresa, proprios: Sequence[str], setores: Mapping[str, Setor]
+) -> Setor | None:
+    """Conjunto curado do ativo: `pares.setor` do YAML ou, sem ele, o de `setores.yaml` que traz
+    alguma classe da própria empresa (BBDC3 sem YAML cai no mesmo conjunto do BBDC4)."""
+    chave = premissas.pares.setor
+    if chave is not None:
+        return setores.get(chave)
+    meus = {cad.normalizar_ticker(t) for t in proprios}
+    return next(
+        (s for s in setores.values() if meus & {cad.normalizar_ticker(t) for t in s.pares}), None
+    )
+
+
+@dataclass(frozen=True)
+class ParesDoAtivo:
+    tickers: list[str]
+    origem: str  # de onde veio o conjunto, para a tela dizer
+
+
+def pares_do_ativo(
+    premissas: pm.PremissasEmpresa,
+    proprios: Sequence[str],
+    setor: Setor | None,
+    universo: Sequence[EmpresaUniverso],
+) -> ParesDoAtivo:
+    """Os outros do conjunto do ativo.
+
+    1. Conjunto curado (`setor`: `setores.yaml`, mais `incluir` e menos `excluir` da empresa).
+    2. Sem ele, o setor CVM do universo, só do mesmo tipo de modelo (financeiras separadas).
+    Em ambos, sem as classes da própria empresa. Lista vazia = o ativo é o único do conjunto.
+    """
+    curados = tickers_pares(premissas, tuple(proprios), setor)
+    if curados:
+        nome = setor.descricao if setor else "incluídos no YAML"
+        return ParesDoAtivo(curados, f"conjunto {nome} (setores.yaml)")
+    fora = {cad.normalizar_ticker(t) for t in proprios}
+    meu = next((e for e in universo if e.ticker in fora), None)
+    if meu is None:
+        return ParesDoAtivo([], "ativo fora do universo")
+    mesmo_tipo = [e for e in universo if e.tipo_modelo == meu.tipo_modelo]
+    do_setor = [e.ticker for e in mesmo_tipo if e.setor == meu.setor and e.ticker not in fora]
+    return ParesDoAtivo(do_setor, f"setor CVM {meu.setor.value} (universo)")
 
 
 def corte_fixo(settings: Settings, nome: str) -> float | None:

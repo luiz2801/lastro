@@ -177,11 +177,12 @@ def grupos_de_comparacao(
 ) -> dict[str, list[str]]:
     """Tickers de cada grupo, sem as classes do próprio ativo.
 
-    Pares: `setores.yaml` (+ incluir - excluir). Setor CVM: empresas do universo com o mesmo setor
+    Pares: o conjunto do ativo (`scmp.pares_do_ativo`: `setores.yaml` + incluir - excluir ou, sem
+    ele, o setor CVM). Setor CVM: empresas do universo com o mesmo setor
     do cadastro da CVM e do mesmo tipo de modelo. Ibovespa: o universo todo do mesmo tipo.
     """
     fora = {cad.normalizar_ticker(t) for t in (ticker, *proprios)}
-    pares = scmp.tickers_pares(premissas, (ticker, *proprios), setor_pares)
+    pares = scmp.pares_do_ativo(premissas, (ticker, *proprios), setor_pares, universo).tickers
     meu = next((e for e in universo if e.ticker in fora), None)
     if meu is None:
         return {GRUPO_PARES: pares, GRUPO_SETOR: [], GRUPO_MERCADO: []}

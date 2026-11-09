@@ -261,8 +261,15 @@ def test_aba_dividendos_sem_proventos_em_disco_orienta_a_atualizar(ambiente: Pat
     assert len(at.get("plotly_chart")) == 2  # sem proventos, a aba nem chega ao payout
 
 
-def _com_par(raiz: Path) -> None:
-    """WEGE3 com um par (PAR3) por `pares.incluir`; o par tem cotação, e proventos se pedido."""
+def _com_par(raiz: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """WEGE3 com um par (PAR3) por `pares.incluir`, num `setores.yaml` sem o WEGE3."""
+    setores = raiz / "setores.yaml"
+    setores.write_text(
+        "outro:\n  descricao: Outro\n  tipo_modelo: nao_financeira\n  commodity: false\n"
+        "  pares: [ZZZZ3]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cfg, "CAMINHO_SETORES", setores)
     pasta = raiz / "empresas"
     pasta.mkdir()
     (pasta / "WEGE3.yaml").write_text(
@@ -276,10 +283,12 @@ def _com_par(raiz: Path) -> None:
     )
 
 
-def test_aba_dividendos_compara_com_a_mediana_dos_pares(ambiente: Path) -> None:
+def test_aba_dividendos_compara_com_a_mediana_dos_pares(
+    ambiente: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _com_series(ambiente)
     _com_dividendos(ambiente)
-    _com_par(ambiente)
+    _com_par(ambiente, monkeypatch)
     indice = pd.DatetimeIndex(["2025-03-10"], name="data")
     pd.DataFrame({"valor": [2.0]}, index=indice).to_parquet(
         ambiente / "raw" / "precos" / "dividendos_PAR3.SA.parquet"
@@ -295,7 +304,7 @@ def test_aba_dividendos_par_sem_proventos_oferece_o_botao_e_chama_a_cli(
 ) -> None:
     _com_series(ambiente)
     _com_dividendos(ambiente)
-    _com_par(ambiente)
+    _com_par(ambiente, monkeypatch)
     pedidos: list[object] = []
 
     def registra(comandos: object, ao_ler: object = None) -> atu.Execucao:
@@ -328,7 +337,7 @@ def test_aba_dividendos_par_sem_demonstracoes_oferece_baixar_e_chama_a_cli(
 ) -> None:
     _com_series(ambiente)
     _com_dividendos(ambiente)
-    _com_par(ambiente)
+    _com_par(ambiente, monkeypatch)
     pedidos: list[object] = []
 
     def registra(comandos: object, ao_ler: object = None) -> atu.Execucao:

@@ -1,6 +1,6 @@
 # guia.md — Mapa do código para quem vai modificá-lo
 
-**Versão 1.59 — 2026-11-09**
+**Versão 1.60 — 2026-11-09**
 
 > Complementa o `CLAUDE.md` (especificação e roadmap) e as regras modulares em [`docs/regras/`](docs/regras/README.md)
 > ([`REGRAS_DADOS.md`](docs/regras/REGRAS_DADOS.md), [`REGRAS_CONTABIL.md`](docs/regras/REGRAS_CONTABIL.md),
@@ -55,7 +55,7 @@
 | CLI | `cli.py` | `gui`, `series`, `series-varios`, `versao`, `glossario`, `erp`, `cadastro buscar`, `atualizar`, `mercado`, `qa`, `historico`, `indicadores`, `cobertura`, `perfil`, `premissas sugerir`, `wacc`, `comparar`, `rodar`, `setores`, `rodar-setor`, `carteira lancar`, `carteira importar`, `carteira posicao`, `favoritos` (`adicionar`, `remover`, `atualizar`) |
 | Universo | `universo.py` | ✅ enum `SetorCVM` (33 setores do CSV) e empresas por setor (seção 3) |
 
-~11.900 linhas de código, 883 testes (872 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
+~11.900 linhas de código, 887 testes (876 passam, 11 golden pulados por motivo declarado; sem `data/` os golden são pulados), mypy `strict`,
 ruff (linha 100).
 
 Comandos: `make lint tipos testes` (tudo passa), `make cobertura`, `uv run valuation --help`.
@@ -1066,7 +1066,7 @@ conta de `arq.faixa_52_semanas`, market cap, DY) e `analisar_multiplo(series, no
 settings, base) -> AnaliseMultiplo` (série da janela, `filtro`, `atual` = último ponto sem preenchimento,
 `referencia`, `descartados` com o motivo, inclusive métrica ≤ 0, e `lacunas`).
 
-**`comparacao.py`**: `tickers_pares` (saiu de `cli.py`), `corte_fixo(settings, nome)`, `medir_de_hoje(p,
+**`comparacao.py`**: `tickers_pares` (saiu de `cli.py`), `setor_do_conjunto(premissas, proprios, setores) -> Setor | None` (`pares.setor` do YAML ou, sem ele, o conjunto de `setores.yaml` com alguma classe da própria empresa), `pares_do_ativo(premissas, proprios, setor, universo) -> ParesDoAtivo(tickers, origem)` (conjunto curado ou, se vazio, o setor CVM do universo do mesmo tipo de modelo; sem as classes da empresa; vazio = único do conjunto; **usado pela GUI e por `grupos_de_comparacao`; a CLI `comparar`/`rodar` continuam só com o curado**), `corte_fixo(settings, nome)`, `medir_de_hoje(p,
 settings, base, ...) -> Medida(ticker, fundamentos, motivo)` (market cap pelo último fechamento em disco,
 sem validação cruzada, e LTM do último balanço), `medir_varios`, `tickers_ibovespa(universo, financeira)`
 (mesmo tipo, holdings fora) e `referencia_do_grupo(medidas, nome, tipo, settings) -> ReferenciaGrupo(valor,
@@ -1085,7 +1085,7 @@ se o cache não servir: é o que torna barato ler dezenas de pares. A GUI usa as
 **dependem do perfil**), `ler_rodada(s)` -> `RodadaLida`, `referencia_valuation(rodadas, indicador, perfil, modelo, tipo)` ->
 `ReferenciaValuation(valor, n, sem_rodada, outro_perfil, anomalas)` (mesmo filtro de anomalias e mesma estatística dos gráficos;
 só entra quem tem o mesmo modelo e, nos indicadores do perfil, o mesmo perfil do ativo) e `grupos_de_comparacao` (pares
-= `scmp.tickers_pares`; setor CVM = universo com o mesmo `setor_cvm` e tipo de modelo; Ibovespa = universo do mesmo tipo, sem
+= `scmp.pares_do_ativo` (curado ou, sem ele, o setor CVM); setor CVM = universo com o mesmo `setor_cvm` e tipo de modelo; Ibovespa = universo do mesmo tipo, sem
 holdings e sem o próprio ativo).
 
 **`favoritas.py`**: `adicionar(ticker, universo, caminho)` (fora do universo ⇒ `ErroConfiguracao`) e `remover(ticker,
@@ -1146,7 +1146,7 @@ usar o relógio e passa `agora`/`base` para baixo.
   (verde, pontilhada, só depois do botão), com "k de m em disco", quem ficou de fora e o botão "Baixar séries" (único
   caminho de rede dessas linhas). Pares
   aparecem ao abrir; o Ibovespa só no botão, porque mede dezenas de empresas (40 s na primeira vez, com 63 empresas).
-- `dividendos.py` (aba Dividendos, só lê o disco): cartões dos 12 meses (`prv.dpa_12m`: DPA e yield), gráfico do yield por ano do ativo contra a **mediana dos pares do setor** (`scmp.tickers_pares`; só os pares com proventos em disco, `n` no hover, expander dos que faltam e botão "Baixar proventos dos pares" que roda `proventos --anos 10` de cada um; sem Ibovespa, só mediana), gráfico e tabela do **payout por exercício** (ativo e mediana dos pares com demonstrações em disco, `dados.payout_grupo` com cache pelo mtime das demonstrações; expander dos pares sem payout e botão "Baixar demonstrações dos pares"). Em não financeiras, `dividendos_pagos` ausente conta como 0 (`OPCIONAIS` de `nf.metricas`), então o payout sai 0% em vez de lacuna; nas financeiras é NaN, barras do DPA por ano (`grafico.dpa_anual`, ano parcial em cinza), tabela por ano (DPA, nº de proventos, Adj Close, yield) e tabela por data ex, de `hm.dividendos_em_disco` + `series.cotacao`. Sem proventos em disco: orienta a clicar em Atualizar (o `series` baixa `YFinanceProvider.dividendos`; falha vira aviso, não erro). Sem tipo (JCP) nem data de pagamento; yield sobre `Adj Close`.
+- `dividendos.py` (aba Dividendos, só lê o disco): cartões dos 12 meses (`prv.dpa_12m`: DPA e yield), gráfico do yield por ano do ativo contra a **mediana dos pares do setor** (`dados.pares(p)` → `scmp.pares_do_ativo`, com a origem na legenda; só os pares com proventos em disco, `n` no hover, expander dos que faltam e botão "Baixar proventos dos pares" que roda `proventos --anos 10` de cada um; sem Ibovespa, só mediana), gráfico e tabela do **payout por exercício** (ativo e mediana dos pares com demonstrações em disco, `dados.payout_grupo` com cache pelo mtime das demonstrações; expander dos pares sem payout e botão "Baixar demonstrações dos pares"). Em não financeiras, `dividendos_pagos` ausente conta como 0 (`OPCIONAIS` de `nf.metricas`), então o payout sai 0% em vez de lacuna; nas financeiras é NaN, barras do DPA por ano (`grafico.dpa_anual`, ano parcial em cinza), tabela por ano (DPA, nº de proventos, Adj Close, yield) e tabela por data ex, de `hm.dividendos_em_disco` + `series.cotacao`. Sem proventos em disco: orienta a clicar em Atualizar (o `series` baixa `YFinanceProvider.dividendos`; falha vira aviso, não erro). Sem tipo (JCP) nem data de pagamento; yield sobre `Adj Close`.
 - `aba_valuation.py`: só lê `saida/`, em **três visuais** sobre os mesmos números (ADR 0026), escolhidos por um `st.radio`
   (`visual_valuation`): **Cartões** (principal: Valor por ação, Decisão, Custo de capital, Múltiplos de mercado, Checagens,
   football field e ponte), **Faixa de preço** (faixa com a escala dos cenários, preço e preço máximo, e blocos compactos) e

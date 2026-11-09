@@ -180,7 +180,7 @@ def _montar_comparacao(
         ticker,
         padronizada.empresa.tickers,
         padronizada.premissas,
-        dados.setor(padronizada.premissas.pares.setor),
+        dados.setor_do_ativo(padronizada),
         dados.universo(),
     )
     todos = list(dict.fromkeys(t for lista in grupos.values() for t in lista))

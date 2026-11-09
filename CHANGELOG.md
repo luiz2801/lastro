@@ -2,6 +2,13 @@
 
 ## [Não lançado]
 
+### Pares por conjunto na GUI (BBDC3 sem pares)
+- A GUI (Geral, Dividendos e o grupo "Pares" do Valuation) deixa de exigir `pares.setor` no YAML: o conjunto do ativo é o do
+  YAML, ou o de `setores.yaml` que traz alguma classe da empresa (BBDC3 cai no conjunto `bancos`, pelo BBDC4) ou, sem
+  conjunto curado, o setor CVM do universo do mesmo tipo de modelo. A legenda diz a origem; sem outro no conjunto, avisa
+  que o ativo é o único. `scmp.setor_do_conjunto`, `scmp.pares_do_ativo`, `dados.pares`, `dados.setor_do_ativo`.
+  A CLI (`comparar`, `rodar`) segue só com os pares curados.
+
 ### Payout por exercício na aba Dividendos
 - Aba Dividendos: gráfico e tabela do payout (dividendos e JCP pagos da DFC ÷ lucro da controladora) dos exercícios encerrados,
   com a mediana dos pares que têm demonstrações em disco (`n` no hover), lista dos pares sem payout e botão "Baixar
