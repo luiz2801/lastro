@@ -18,6 +18,7 @@
    - **Regra de Ouro**: **Nunca** altere valores de referência em `tests/golden/referencias.yaml` simplesmente para fazer um teste quebrado passar. Se houver divergência, verifique primeiro a fórmula, a escala ou o mapeamento de contas. Qualquer alteração em golden tests exige justificativa baseada no documento da companhia.
 4. **Passagem Obrigatória no Portão de Qualidade**:
    - Nenhum commit deve ser realizado se `make lint tipos testes` não passar com 100% de sucesso.
+   - Rode-o **antes de cada commit**, mesmo de documentação, e de novo entre commits de uma sequência; um resultado de antes de editar não vale.
 
 ---
 

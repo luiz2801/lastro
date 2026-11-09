@@ -37,7 +37,8 @@ que foi decidido e o que depende dele.
 ## Política de commits
 
 **Antes de todo commit, `make lint tipos testes` passa.** Não faça commit com lint, mypy ou testes
-falhando, nem sem tê-los rodado. Se não for possível rodar, não faça o commit: avise e peça ao
+falhando, nem sem tê-los rodado **antes daquele commit**, no estado exato do que vai nele. Vale
+também para commit só de documentação, e para cada commit de uma sequência (rode de novo entre eles). Se não for possível rodar, não faça o commit: avise e peça ao
 usuário que rode ou autorize explicitamente.
 
 **Commit ao concluir uma aplicação 100% integrada.** Quando uma mudança está inteira (código,
