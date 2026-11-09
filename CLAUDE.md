@@ -849,6 +849,9 @@ Modo em lote/screening, SOTP/NAV para holdings, Monte Carlo, deck de commodities
    financeiras (Fase 10; a CVM traz IFRS consolidado, não o lucro recorrente gerencial).
 10. Setor `seguradoras`: separar holdings de seguros (BBSE3, CXSE3) das operadoras (PSSA3,
     IRBR3)? Juntas, o P/VP dos pares distorce o valor das operadoras (`guia.md`, armadilha 38).
+11. Melhorias de UI das referências Investidor10/Status Invest: escopo, fonte de dividendos,
+    limiares de cor/checklist e DY × Selic/CDI (`docs/backlog.md`, seção "Melhorias de UI inspiradas
+    em Investidor10 e Status Invest"; próxima entrega, ADR 0027).
 
 ---
 

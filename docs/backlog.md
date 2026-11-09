@@ -1106,3 +1106,43 @@ nova (mesmo princípio da Etapa 9).
   posição) na mesma entrega, como manda o `CONTRIBUTING.md`.
 - Testes com transações sintéticas (`tests/sintetico.py`), sem rede.
 - Nova dependência (`openpyxl`) entra em `pyproject.toml` só na Etapa C1.
+
+## Melhorias de UI inspiradas em Investidor10 e Status Invest (registrado em 2026-11-06)
+
+Origem: `melhorias-ui.md` (comparação do app com as páginas de ITUB4 das duas referências). Só
+a análise de viabilidade foi feita; **nada implementado**. Próxima entrega, com ADR 0027 depois das
+respostas abaixo.
+
+### Viável sem dado novo
+
+| Item | O quê | Onde |
+|---|---|---|
+| Hero | Preço grande, variação, 52 semanas, P/L, P/VP e DY junto ao título (hoje `st.title` + `st.metric`) | `gui/ativo.py`, `gui/cartoes.py` |
+| Aba Geral em cartões | `cartoes.cartao()`/`secao()` no lugar de `st.metric`, com Setor e Ibov como sublinhas (infra do ADR 0026) | `gui/geral.py` |
+| Comparação embutida | Mover a comparação com pares para os cartões; tabela colapsada | `gui/geral.py` |
+| Rentabilidade por período | 1M, 3M, 6M, 1A, 2A e 5A abaixo do gráfico de cotação | `gui/grafico.py` |
+| Pills de período + YTD | CSS no `st.radio`; período `YTD` em `serie_multiplos` | `gui/app.py` |
+| Macro na sidebar | Selic, IPCA e CDI (de `data/macro.py`) | `gui/app.py` |
+| Aba Empresa | Dados cadastrais (setor, CNPJ, classes) | `gui/empresa.py` (novo) |
+| Aba Resultados | Receita, EBITDA e lucro por período (anual/trimestral), de `contabil/` | `gui/resultados.py` (novo) |
+
+### Com ressalva
+
+- **Aba Dividendos:** data com, data de pagamento e tipo (dividendo × JCP) **não têm fonte
+  gratuita** hoje (só o DY e os splits em `data/precos.py`). yfinance dá data e valor por ação.
+  Viável: gráfico anual, total de 12M e tabela data/valor. Exige fonte nova no adaptador, com cache.
+- **Valuation no hero:** o valor ponderado só existe após rodar; ler do resultado em cache e
+  definir o que mostrar sem resultado.
+- **Cores na tabela de histórico e checklist semaforizado:** exigem limiares de "bom/ruim" por
+  indicador (decisão de negócio).
+
+### Perguntas a responder antes de implementar (regra 7; mudam o que a tela mostra)
+
+1. **Escopo:** pacote visual (hero, cartões na Geral, rentabilidade, pills, macro), abas novas
+   (Resultados, Empresa, Dividendos reduzida) ou tudo em etapas? Recomendação: começar pelo pacote
+   visual sem limiares nem dado novo.
+2. **Dividendos:** aceitar só data, valor, total anual e total de 12M via yfinance, sem tipo nem
+   data de pagamento?
+3. **Limiares:** posso propor os limiares de cor e do checklist (ex.: ROE > 15% verde) para você
+   revisar antes?
+4. **DY × Selic/CDI** no cartão de DY entra na primeira entrega?
