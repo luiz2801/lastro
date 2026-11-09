@@ -191,6 +191,57 @@ class YFinanceProvider:
             bruto.to_numpy(dtype="float64"), index=indice.normalize().rename("data"), name="fator"
         )
 
+    def dividendos(self, simbolo: str) -> pd.Series:
+        """Proventos em dinheiro por data ex (`Ticker.dividends`), R$ por ação.
+
+        O Yahoo já ajusta o valor pelos splits (mesma base do `Close`) e não separa dividendo de
+        JCP nem informa a data de pagamento.
+        """
+        parquet = _caminho_dividendos(simbolo, self._dir)
+        meta = parquet.with_suffix(".meta.json")
+        if parquet.is_file() and meta.is_file() and not self._forcar:
+            baixado = dt.datetime.fromisoformat(json.loads(meta.read_text())["baixado_em"])
+            if self._agora - baixado < self._ttl:
+                return _ler_dividendos(parquet)
+        try:
+            bruto = self._baixar_dividendos(simbolo)
+        except ErroPrecos:
+            if parquet.is_file() and not self._forcar:
+                logger.warning(
+                    "yfinance falhou para %s; usando dividendos vencidos do cache", simbolo
+                )
+                return _ler_dividendos(parquet)
+            raise
+        self._dir.mkdir(parents=True, exist_ok=True)
+        bruto.to_frame("valor").to_parquet(parquet)
+        meta.write_text(
+            json.dumps({"simbolo": simbolo, "baixado_em": self._agora.isoformat()}),
+            encoding="utf-8",
+        )
+        return bruto
+
+    def _baixar_dividendos(self, simbolo: str) -> pd.Series:
+        import yfinance as yf
+
+        try:
+            bruto = yf.Ticker(simbolo).dividends
+        except Exception as e:  # yfinance levanta tipos variados
+            raise ErroPrecos(f"yfinance não devolveu os dividendos de {simbolo}: {e}") from e
+        indice = pd.DatetimeIndex(bruto.index)
+        if indice.tz is not None:
+            indice = indice.tz_localize(None)
+        return pd.Series(
+            bruto.to_numpy(dtype="float64"), index=indice.normalize().rename("data"), name="valor"
+        )
+
+
+def _caminho_dividendos(simbolo: str, dir_cache: Path) -> Path:
+    return dir_cache / f"dividendos_{_nome_arquivo(simbolo)}.parquet"
+
+
+def _ler_dividendos(caminho: Path) -> pd.Series:
+    return pd.read_parquet(caminho)["valor"]
+
 
 def _caminho_splits(simbolo: str, dir_cache: Path) -> Path:
     return dir_cache / f"splits_{_nome_arquivo(simbolo)}.parquet"

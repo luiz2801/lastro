@@ -316,6 +316,21 @@ flowchart TD
   N --> O
 ```
 
+
+## 5b. Proventos por ano (`proventos`)
+
+Comando de consulta, sem gravação de saída; só usa o yfinance (com cache em `data/raw/precos/`).
+
+```mermaid
+flowchart TD
+  A[proventos TICKER --anos --data-base] --> B[YFinanceProvider.dividendos: cache com TTL, cópia vencida se falhar]
+  A --> C[YFinanceProvider.historico: Adj Close]
+  B --> D[prv.dpa_anual: soma das datas ex por ano-calendário até a data-base]
+  C --> D
+  D --> E[Tabela por ano: DPA, nº, Adj Close, DY; ano da data-base parcial]
+  B --> F[Tabela por data ex]
+```
+
 ## GUI: abrir um ativo (ADR 0022 e 0023)
 
 Abrir a página só lê o que está em disco. A rede vem do clique, ou do caso de ativo sem nenhum cache.

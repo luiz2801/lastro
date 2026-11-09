@@ -242,6 +242,7 @@ Cada preço é conferido em duas fontes (`yfinance` e `brapi`); ver ADR 0004. Va
 | Item | Esperado | Status | Observado |
 |---|---|---|---|
 | yfinance ações | `PETR4.SA` | ✅ | `history(auto_adjust=False)` traz `Close`, `Adj Close`, `Volume`; índice com fuso `-03:00` (removido na leitura) |
+| yfinance dividendos | `Ticker.dividends` | ✅ | Valor por ação por data ex, ajustado por splits (mesma base do `Close`); índice com fuso (removido). Sem tipo (dividendo × JCP) nem data de pagamento. Validado em 2026-11-09 com WEGE3 |
 | Ibovespa | `^BVSP` | ✅ | fechamento 169.186 em 2026-10-29 |
 | Dólar | `BRL=X` | ✅ | 5,3872 em 2026-10-30; índice em UTC |
 | brapi sem token | `/api/quote/PETR4` | ✅ | funciona só para PETR4, VALE3, MGLU3 e ITUB4 (campos `regularMarketPrice`, `regularMarketTime`, `marketCap`) |

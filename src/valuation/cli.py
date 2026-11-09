@@ -24,6 +24,7 @@ from rich.table import Table
 from valuation import __version__
 from valuation.analise import cenarios as cen
 from valuation.analise import decisao as dec
+from valuation.analise import proventos as prv
 from valuation.analise import sensibilidade as sens
 from valuation.carteira import ErroCarteira
 from valuation.carteira import arquivo as carteira_arq
@@ -735,6 +736,73 @@ def indicadores(
     if explicar:
         chaves = [d[2] for d in serie.definicoes.values()]
         _legenda(gl.legenda_indicadores(chaves, mercado_mostrado))
+    console.print("Estudo pessoal; não é recomendação de investimento.")
+
+
+@app.command()
+def proventos(
+    ticker: str = typer.Argument(..., help="Ex.: PETR4."),
+    anos: int = typer.Option(5, "--anos", min=1, help="Quantos anos-calendário mostrar."),
+    data_base: str | None = typer.Option(
+        None, "--data-base", help="AAAA-MM-DD (padrão: settings)."
+    ),
+    forcar: bool = typer.Option(False, "--forcar", help="Ignora o cache e consulta as APIs."),
+) -> None:
+    """Proventos por data ex e DPA e dividend yield por ano (fonte: yfinance; sem JCP nem tipo)."""
+    agora = dt.datetime.now(dt.UTC)
+    try:
+        settings = carregar_settings()
+        base = (
+            dt.date.fromisoformat(data_base)
+            if data_base
+            else settings.resolver_data_base(agora.date())
+        )
+    except ValueError as e:
+        raise _erro(f"--data-base inválida: {e}") from e
+    except ErroConfiguracao as e:
+        raise _erro(str(e)) from e
+    simbolo = prc.simbolo_yahoo(cad.normalizar_ticker(ticker))
+    yf = prc.YFinanceProvider(
+        DIR_RAW / "precos",
+        dt.timedelta(hours=settings.cache_ttl_horas.precos),
+        agora,
+        forcar=forcar,
+    )
+    inicio = dt.date(base.year - anos, 12, 1)
+    try:
+        dividendos = yf.dividendos(simbolo)
+        historico = yf.historico(simbolo, inicio, base)
+    except ErroDadosExternos as e:
+        raise _erro(str(e)) from e
+
+    por_ano = prv.dpa_anual(dividendos, historico, base, anos)
+    tabela = Table(title=f"Proventos por ano — {ticker.upper()} (até {base.isoformat()})")
+    for coluna in ("Ano", "DPA (R$)", "Proventos", "Adj Close (R$)", "Dividend yield"):
+        tabela.add_column(coluna, justify="right")
+    for ano, linha in por_ano.iterrows():
+        rotulo = f"{ano} (parcial)" if linha["parcial"] else str(ano)
+        tabela.add_row(
+            rotulo,
+            fo.brl(linha["dpa"]),
+            str(linha["n_proventos"]),
+            fo.brl(linha["preco"]),
+            fo.formatar(linha["dividend_yield"], "%"),
+        )
+    console.print(tabela)
+
+    janela = (dividendos.index >= pd.Timestamp(inicio)) & (dividendos.index <= pd.Timestamp(base))
+    recentes = dividendos[janela]
+    detalhe = Table(title="Proventos por data ex")
+    detalhe.add_column("Data ex")
+    detalhe.add_column("Valor por ação (R$)", justify="right")
+    for data, valor in recentes.items():
+        detalhe.add_row(pd.Timestamp(str(data)).date().isoformat(), fo.brl(float(valor)))
+    console.print(detalhe)
+    console.print(
+        "[yellow]Aviso:[/] o yield usa o Adj Close (ajustado por dividendos): nos anos antigos "
+        "fica acima do yield sobre o preço da época. O Yahoo não separa dividendo de JCP nem "
+        "informa a data de pagamento."
+    )
     console.print("Estudo pessoal; não é recomendação de investimento.")
 
 

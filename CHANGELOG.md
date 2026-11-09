@@ -2,6 +2,12 @@
 
 ## [Não lançado]
 
+### Proventos por ano (`valuation proventos`)
+- `YFinanceProvider.dividendos` (cache com TTL, cópia vencida em falha) e `analise/proventos.py` (`dpa_anual`, puro).
+- Comando `proventos TICKER [--anos N] [--data-base] [--forcar]`: DPA e dividend yield por ano-calendário (DPA = soma das datas
+  ex do ano; yield = DPA ÷ último `Adj Close` do ano, escolha do usuário; ano corrente parcial) e tabela por data ex. Sem JCP,
+  tipo nem data de pagamento (o Yahoo não traz).
+
 ### Aba Valuation em cartões, com comparação por setor e mercado (ADR 0026)
 - Aba Valuation redesenhada em três visuais (Cartões, Faixa de preço, Gráficos), com os números de antes; as tabelas de custo de
   capital e checagens viraram cartões. Cartões em HTML (`gui/cartoes.py`), no estilo das referências do usuário.
