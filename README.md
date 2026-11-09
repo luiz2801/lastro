@@ -32,7 +32,7 @@ make lint tipos testes                       # ruff, mypy strict e pytest (sem r
 make cobertura                               # testes com cobertura por linha
 
 make gui                                     # GUI local em 127.0.0.1 (grupo opcional `gui`)
-uv run valuation series PETR4                # cotação de 10 anos, splits e ITR antigos para a GUI
+uv run valuation series PETR4                # cotação de 10 anos, splits, proventos e ITR antigos para a GUI
 uv run valuation series-varios PRIO3 RECV3    # o mesmo para vários, lendo cada zip da CVM uma vez
 uv run valuation versao
 uv run valuation erp                         # ERP implícito do Ibovespa (grava e informa)
@@ -44,6 +44,7 @@ uv run valuation qa PETR4                    # controles de qualidade; sai com 1
 uv run valuation historico PETR4             # métricas anuais + LTM (R$ milhões)
 uv run valuation historico PETR4 --trimestral
 uv run valuation indicadores PETR4           # margens, dívida/EBITDA, ROE, ROIC e múltiplos de mercado
+uv run valuation proventos PETR4 --anos 5     # DPA e dividend yield por ano e proventos por data ex (yfinance)
 uv run valuation cobertura --tickers PETR4,VALE3,WEGE3
 uv run valuation mercado PETR4               # preço, market cap, Ibovespa, dólar, Selic, IPCA, Rf
 uv run valuation perfil                      # questionário de perfil (--mostrar, --refazer)
@@ -168,7 +169,7 @@ Pilotos: PETR4, VALE3 e WEGE3.
   winsorização, quartis, aviso de poucos pares e de escala implausível; valor implícito do alvo;
   beta por comparáveis, estrutura-alvo do setor, minoritários pelo P/VP e g implícito no múltiplo
   de saída; `valuation comparar TICKER` e múltiplos no `rodar`.
-- **Testes**: 855 (844 passam, 11 golden pulados por motivo declarado; sem `data/`, os golden também são pulados), mypy strict e ruff limpos.
+- **Testes**: 877 (866 passam, 11 golden pulados por motivo declarado; sem `data/`, os golden também são pulados), mypy strict e ruff limpos.
 - **Universo**: `config/universo_ibovespa.csv` com os 76 ativos da carteira de 30/10/26 da B3;
   `valuation atualizar --tudo` baixa os dados de todos (holdings só avisam).
 - **Financeiras** (Fase 10): plano de contas de bancos e seguradoras (25 companhias
@@ -189,7 +190,7 @@ Pilotos: PETR4, VALE3 e WEGE3.
 - **GUI local** (Sprint GUI 1, ADR 0022 e 0023): `uv sync --group gui && uv run valuation gui` abre
   `http://127.0.0.1:8501`. Barra lateral com busca, favoritas e perfil do investidor na tela; por ativo, cotação,
   múltiplos em série com a média dos pares e do Ibovespa, tratamento de anomalias, indicadores de endividamento, liquidez e
-  caixa, e o valuation do último `rodar`. Abrir não usa rede; a abertura leva menos de 1 s de cálculo com o cache em disco. Múltiplos em série só desde 31/03/2020, porque a CVM não publica a quantidade de ações antes.
+  caixa, o valuation do último `rodar` e a aba Dividendos (DPA e yield por ano, total de 12 meses, proventos por data ex e yield contra a mediana dos pares do setor; yfinance, sem JCP nem data de pagamento). Abrir não usa rede; a abertura leva menos de 1 s de cálculo com o cache em disco. Múltiplos em série só desde 31/03/2020, porque a CVM não publica a quantidade de ações antes.
 - **Ainda não**: o que está na seção 12 do `guia.md` (Fase 11, extensões).
 
 ## Decisões que completam ou divergem do `CLAUDE.md`

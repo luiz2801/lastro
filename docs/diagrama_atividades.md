@@ -331,6 +331,20 @@ flowchart TD
   B --> F[Tabela por data ex]
 ```
 
+A aba **Dividendos** da GUI usa os mesmos cálculos, só lendo o disco (sem rede):
+
+```mermaid
+flowchart TD
+  S[series TICKER ou Atualizar: baixa também os proventos] --> C[(cache data/raw/precos)]
+  C --> A[Aba Dividendos: dpa_12m, dpa_anual, tabela por data ex]
+  C --> P[sprv.yield_do_grupo: yield por ano de cada par em disco]
+  P --> M[prv.mediana_do_grupo: mediana e n por ano]
+  A --> G[Gráfico: yield do ativo e mediana dos pares]
+  M --> G
+  P -->|par sem proventos| X[Lista dos que faltam + botão Baixar proventos dos pares]
+  X -->|proventos --anos 10 de cada um| C
+```
+
 ## GUI: abrir um ativo (ADR 0022 e 0023)
 
 Abrir a página só lê o que está em disco. A rede vem do clique, ou do caso de ativo sem nenhum cache.
