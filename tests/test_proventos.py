@@ -11,6 +11,7 @@ import pytest
 from valuation.analise import proventos as prv
 from valuation.data import precos as prc
 from valuation.data.precos import ErroPrecos
+from valuation.servicos import proventos as sprv
 
 AGORA = dt.datetime(2026, 11, 4, 12, tzinfo=dt.UTC)
 TTL = dt.timedelta(hours=12)
@@ -111,3 +112,42 @@ def test_dividendos_falha_usa_copia_vencida_ou_erro(
     _yf_falso(monkeypatch, RuntimeError("fora do ar"))
     depois = AGORA + dt.timedelta(days=30)
     assert _provedor(tmp_path, depois).dividendos("WEGE3.SA").iloc[0] == 0.25
+
+
+def test_mediana_do_grupo_ignora_nan_e_conta_n() -> None:
+    nan = float("nan")
+    yields = {
+        "A": pd.Series([0.02, 0.04], index=[2025, 2026]),
+        "B": pd.Series([0.06, nan], index=[2025, 2026]),
+        "C": pd.Series([0.10, 0.08], index=[2025, 2026]),
+    }
+    g = prv.mediana_do_grupo(yields)
+    assert g["valor"].tolist() == pytest.approx([0.06, 0.06])  # 2026: mediana de 0,04 e 0,08
+    assert g["n"].tolist() == [3, 2]
+    assert prv.mediana_do_grupo({}).empty
+
+
+def _grava(raiz: Path, simbolo: str, dividendos: bool, cotacao: bool) -> None:
+    pasta = raiz / "precos"
+    pasta.mkdir(parents=True, exist_ok=True)
+    if dividendos:
+        indice = pd.DatetimeIndex(["2025-03-10", "2026-03-10"], name="data")
+        pd.DataFrame({"valor": [1.0, 2.0]}, index=indice).to_parquet(
+            pasta / f"dividendos_{simbolo}.parquet"
+        )
+    if cotacao:
+        indice = pd.DatetimeIndex(["2025-12-30", "2026-09-30"], name="data")
+        pd.DataFrame({"close": 10.0, "adj_close": 10.0, "volume": 1.0}, index=indice).to_parquet(
+            pasta / f"yf_{simbolo}_20160101_20261030.parquet"
+        )
+
+
+def test_yield_do_grupo_so_com_o_que_esta_em_disco(tmp_path: Path) -> None:
+    _grava(tmp_path, "AAAA3.SA", dividendos=True, cotacao=True)
+    _grava(tmp_path, "BBBB3.SA", dividendos=False, cotacao=True)
+    _grava(tmp_path, "CCCC3.SA", dividendos=True, cotacao=False)
+    g = sprv.yield_do_grupo(["AAAA3", "BBBB3", "CCCC3"], dt.date(2026, 10, 1), 2, dir_raw=tmp_path)
+    assert list(g.por_empresa) == ["AAAA3"]
+    assert g.faltam == {"BBBB3": "sem proventos em disco", "CCCC3": "sem cotação em disco"}
+    assert g.serie["valor"].tolist() == pytest.approx([0.1, 0.2])  # 1/10 em 2025; 2/10 em 2026
+    assert g.serie["n"].tolist() == [1, 1]

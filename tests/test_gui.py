@@ -261,6 +261,57 @@ def test_aba_dividendos_sem_proventos_em_disco_orienta_a_atualizar(ambiente: Pat
     assert len(at.get("plotly_chart")) == 2
 
 
+def _com_par(raiz: Path) -> None:
+    """WEGE3 com um par (PAR3) por `pares.incluir`; o par tem cotação, e proventos se pedido."""
+    pasta = raiz / "empresas"
+    pasta.mkdir()
+    (pasta / "WEGE3.yaml").write_text(
+        "ticker: WEGE3\ntipo_modelo: nao_financeira\nclasses_acao: [WEGE3]\n"
+        "pares:\n  incluir: [PAR3]\n",
+        encoding="utf-8",
+    )
+    indice = pd.date_range(end="2026-10-30", periods=24, freq="ME", name="data")
+    pd.DataFrame({"close": 20.0, "adj_close": 20.0, "volume": 1.0}, index=indice).to_parquet(
+        raiz / "raw" / "precos" / "yf_PAR3.SA_20161030_20261030.parquet"
+    )
+
+
+def test_aba_dividendos_compara_com_a_mediana_dos_pares(ambiente: Path) -> None:
+    _com_series(ambiente)
+    _com_dividendos(ambiente)
+    _com_par(ambiente)
+    indice = pd.DatetimeIndex(["2025-03-10"], name="data")
+    pd.DataFrame({"valor": [2.0]}, index=indice).to_parquet(
+        ambiente / "raw" / "precos" / "dividendos_PAR3.SA.parquet"
+    )
+    at = _abrir("WEGE3")
+    assert not at.exception
+    assert len(at.get("plotly_chart")) == 4  # + yield do ativo contra os pares
+    assert "Mediana de 1 de 1 pares" in " ".join(c.value for c in at.caption)
+
+
+def test_aba_dividendos_par_sem_proventos_oferece_o_botao_e_chama_a_cli(
+    ambiente: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _com_series(ambiente)
+    _com_dividendos(ambiente)
+    _com_par(ambiente)
+    pedidos: list[object] = []
+
+    def registra(comandos: object, ao_ler: object = None) -> atu.Execucao:
+        pedidos.append(comandos)
+        return atu.Execucao(ok=False, saida=[], falhou_em="x")
+
+    monkeypatch.setattr(atu, "executar", registra)
+    at = _abrir("WEGE3")
+    assert not at.exception
+    assert len(at.get("plotly_chart")) == 3  # sem par com proventos, sem a comparação
+    botao = next(b for b in at.button if b.label == "Baixar proventos dos pares")
+    botao.click().run()
+    assert pedidos
+    assert pedidos[0] == atu.baixar_proventos(["PAR3"], 10)
+
+
 def test_seletores_trocam_sem_rede(ambiente: Path) -> None:
     _com_series(ambiente)
     at = _abrir("WEGE3")

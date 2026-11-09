@@ -32,6 +32,11 @@ def baixar_series_grupo(tickers: Sequence[str], sem_demonstracoes: Sequence[str]
     return [*comandos, comando("series-varios", *tickers)]
 
 
+def baixar_proventos(tickers: Sequence[str], anos: int) -> list[Comando]:
+    """`proventos` de cada empresa: baixa (e cacheia) proventos e cotação, sem demonstrações."""
+    return [comando("proventos", t, "--anos", str(anos)) for t in tickers]
+
+
 def rodar_valuation(ticker: str, perfil: str | None = None) -> list[Comando]:
     if perfil is None:
         return [comando("rodar", ticker)]

@@ -2,6 +2,12 @@
 
 ## [Não lançado]
 
+### Dividendos: comparação com os pares do setor
+- Aba Dividendos: gráfico do dividend yield por ano do ativo contra a **mediana dos pares do setor** (mesmo método: DPA do Yahoo
+  ÷ Adj Close; `n` por ano; ano corrente parcial). Só entram os pares com proventos em disco; botão "Baixar proventos dos pares"
+  (`proventos --anos 10` de cada um). Sem Ibovespa, a pedido do usuário. `analise/proventos.mediana_do_grupo`,
+  `servicos/proventos.py`, `atu.baixar_proventos`.
+
 ### Aba Dividendos na GUI
 - Nova aba "Dividendos" na página do ativo: cartões de DPA e dividend yield dos últimos 12 meses, barras do DPA por ano
   (ano corrente parcial), tabela por ano e por data ex. Só lê o disco; yield sobre `Adj Close`, como no comando.

@@ -460,3 +460,32 @@ def dpa_anual(tabela: pd.DataFrame) -> go.Figure:
     figura = _layout(figura, "R$ por ação")
     figura.update_layout(showlegend=False)
     return figura
+
+
+def yield_contra_pares(ativo: pd.Series, grupo: pd.DataFrame, ticker: str) -> go.Figure:
+    """Dividend yield por ano: o ativo (azul) contra a mediana dos pares (laranja, tracejada)."""
+    figura = go.Figure()
+    figura.add_trace(
+        go.Scatter(
+            x=[str(a) for a in ativo.index],
+            y=ativo,
+            mode="lines+markers",
+            name=ticker,
+            line={"color": AZUL, "width": 2},
+            hovertemplate="%{x}<br>%{y:.2%}<extra></extra>",
+        )
+    )
+    figura.add_trace(
+        go.Scatter(
+            x=[str(a) for a in grupo.index],
+            y=grupo["valor"],
+            mode="lines+markers",
+            name="Mediana dos pares",
+            line={"color": LARANJA, "width": 2, "dash": "dash"},
+            customdata=grupo["n"],
+            hovertemplate="%{x}<br>%{y:.2%} (n = %{customdata:.0f})<extra></extra>",
+        )
+    )
+    figura = _layout(figura, "Dividend yield", ".0%")
+    figura.update_layout(hovermode="x")
+    return figura

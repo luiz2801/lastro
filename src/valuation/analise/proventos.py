@@ -68,3 +68,18 @@ def dpa_12m(
     ate = historico.loc[historico.index <= base, "adj_close"].dropna()
     preco = float(ate.iloc[-1]) if not ate.empty else float("nan")
     return dpa, (dpa / preco if preco > 0 else float("nan"))
+
+
+def mediana_do_grupo(yields: dict[str, pd.Series]) -> pd.DataFrame:
+    """Mediana do dividend yield por ano entre as empresas do grupo.
+
+    `yields`: ticker -> yield por ano (índice = ano; NaN = sem dado). Colunas: `valor` (NaN se
+    nenhuma empresa tem o ano) e `n` (empresas com yield no ano). Ano parcial entra como qualquer
+    outro: o corrente fica abaixo do anual para todos.
+    """
+    if not yields:
+        return pd.DataFrame({"valor": [], "n": []}, index=pd.Index([], name="ano"), dtype="float64")
+    tabela = pd.DataFrame(yields).sort_index()
+    saida = pd.DataFrame({"valor": tabela.median(axis=1), "n": tabela.count(axis=1)})
+    saida.index.name = "ano"
+    return saida

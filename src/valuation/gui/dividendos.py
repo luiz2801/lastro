@@ -13,15 +13,52 @@ import streamlit as st
 
 from valuation import config as cfg
 from valuation.analise import proventos as prv
-from valuation.gui import cartoes, grafico
+from valuation.gui import acoes, cartoes, dados, grafico
 from valuation.saida import formato as fo
+from valuation.servicos import atualizacao as atu
+from valuation.servicos import comparacao as scmp
+from valuation.servicos import empresa as emp
 from valuation.servicos import historico_mercado as hm
+from valuation.servicos import proventos as sprv
 
 TRACO = "—"
 ANOS = 10
 
 
-def mostrar(ticker: str, series: hm.SeriesMercado | None, base: dt.date) -> None:
+def _contra_pares(ticker: str, p: emp.Padronizada, base: dt.date) -> None:
+    st.subheader("Dividend yield por ano: ativo e pares do setor")
+    setor = dados.setor(p.premissas.pares.setor)
+    pares = scmp.tickers_pares(p.premissas, p.empresa.tickers, setor)
+    if not pares:
+        st.info(f"{TRACO} {ticker} sem pares definidos (`pares.setor` no YAML da empresa).")
+        return
+    ativo, _ = sprv.yield_por_ano(ticker, base, ANOS, dir_raw=cfg.DIR_RAW)
+    grupo = sprv.yield_do_grupo(pares, base, ANOS, dir_raw=cfg.DIR_RAW)
+    if ativo is not None and grupo.por_empresa:
+        st.plotly_chart(grafico.yield_contra_pares(ativo, grupo.serie, ticker), width="stretch")
+        st.caption(
+            f"Mediana de {len(grupo.por_empresa)} de {len(pares)} pares com proventos em disco "
+            f"(n por ano ao passar o mouse). O ano de {base.year} é parcial para todos. Mesmo "
+            "método do ativo: DPA do Yahoo ÷ Adj Close."
+        )
+    else:
+        st.info(f"{TRACO} sem proventos dos pares em disco para a comparação.")
+    if grupo.faltam:
+        with st.expander(f"Pares sem proventos em disco ({len(grupo.faltam)})"):
+            for par, razao in grupo.faltam.items():
+                st.write(f"{par}: {razao}")
+        if st.button("Baixar proventos dos pares", key=f"baixar_proventos_{ticker}"):
+            execucao = acoes.executar(
+                "Baixando proventos dos pares", atu.baixar_proventos(list(grupo.faltam), ANOS)
+            )
+            if execucao.ok:
+                st.rerun()
+            acoes.mostrar_falha(execucao)
+
+
+def mostrar(
+    ticker: str, series: hm.SeriesMercado | None, base: dt.date, p: emp.Padronizada
+) -> None:
     dividendos = hm.dividendos_em_disco(ticker, dir_raw=cfg.DIR_RAW)
     if series is None or dividendos is None:
         st.info(
@@ -56,6 +93,8 @@ def mostrar(ticker: str, series: hm.SeriesMercado | None, base: dt.date) -> None
         }
     ).iloc[::-1]
     st.dataframe(tabela, hide_index=True, width="stretch")
+
+    _contra_pares(ticker, p, base)
 
     st.subheader("Proventos por data ex")
     ate_base = dividendos[dividendos.index <= pd.Timestamp(base)]
